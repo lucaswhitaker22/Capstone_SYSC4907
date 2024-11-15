@@ -2,82 +2,93 @@ import sqlite3
 import csv
 import os
 
-# Database file name
 DB_NAME = 'course_scheduler.db'
 
-# CSV file paths
 CSV_FILES = {
-    'course': './sample_data/courses.csv',
-    'program': './sample_data/programs.csv',
-    'programrequirement': './sample_data/program_requirements.csv',
-    'room': './sample_data/rooms.csv',
-    'section': './sample_data/sections.csv',
-    'timeslot': './sample_data/timeslots.csv'
+    'Course': './sample_data/courses.csv',
+    'Program': './sample_data/programs.csv',
+    'CourseOffering': './sample_data/course_offerings.csv',
+    'ProgramRequirement': './sample_data/program_requirements.csv',
+    'Block': './sample_data/blocks.csv',
+    'BlockSchedule': './sample_data/block_schedules.csv'
 }
 
-# SQL statements to create tables
 CREATE_TABLES = {
     'Course': '''
     CREATE TABLE Course (
         course_id VARCHAR(10) PRIMARY KEY,
         course_name VARCHAR(100) NOT NULL,
-        course_type VARCHAR(20) NOT NULL,
+        course_type VARCHAR(20) NOT NULL,  -- CORE, ELECTIVE_B, ELECTIVE_C
         department VARCHAR(20) NOT NULL,
-        credits DECIMAL(2,1) NOT NULL,
-        has_lab BOOLEAN DEFAULT false,
-        has_tutorial BOOLEAN DEFAULT false
+        credits DECIMAL(2,1) NOT NULL
     )
     ''',
     'Program': '''
     CREATE TABLE Program (
         program_id VARCHAR(10) PRIMARY KEY,
         program_name VARCHAR(100) NOT NULL,
-        department VARCHAR(50) NOT NULL,
-        year INTEGER DEFAULT 1
+        total_enrollment INTEGER NOT NULL,
+        blocks_20_count INTEGER NOT NULL,
+        blocks_10_count INTEGER NOT NULL
     )
+    ''',
+    'CourseOffering': '''
+        CREATE TABLE CourseOffering (
+            offering_id INTEGER PRIMARY KEY,
+            course_id VARCHAR(10) REFERENCES Course(course_id),
+            section_type VARCHAR(20) NOT NULL,
+            section_code VARCHAR(5) NOT NULL,
+            day_of_week INTEGER NOT NULL,
+            start_time TIME NOT NULL,
+            end_time TIME NOT NULL,
+            capacity INTEGER NOT NULL,
+            current_enrollment INTEGER DEFAULT 0,
+            term VARCHAR(10) NOT NULL,
+            academic_year VARCHAR(9) NOT NULL,
+            status VARCHAR(20) DEFAULT 'ACTIVE',  -- ACTIVE, CANCELLED, FULL
+            UNIQUE(course_id, section_type, section_code, term, academic_year)
+        )
     ''',
     'ProgramRequirement': '''
     CREATE TABLE ProgramRequirement (
         program_id VARCHAR(10) REFERENCES Program(program_id),
         course_id VARCHAR(10) REFERENCES Course(course_id),
-        term VARCHAR(10) NOT NULL,
-        is_required BOOLEAN DEFAULT true,
+        term VARCHAR(10) NOT NULL,          -- FALL, WINTER
+        sequence_order INTEGER NOT NULL,     -- For prerequisite ordering
         PRIMARY KEY (program_id, course_id, term)
     )
     ''',
-    'Room': '''
-    CREATE TABLE Room (
-        room_id INTEGER PRIMARY KEY,
-        building VARCHAR(50) NOT NULL,
-        room_number VARCHAR(20) NOT NULL,
-        capacity INTEGER NOT NULL,
-        room_type VARCHAR(20) NOT NULL,
-        UNIQUE(building, room_number)
+    'Block': '''
+        CREATE TABLE Block (
+            block_id VARCHAR(20) PRIMARY KEY,
+            program_id VARCHAR(10) REFERENCES Program(program_id),
+            block_size INTEGER NOT NULL CHECK (block_size IN (10, 20)),
+            term VARCHAR(10) NOT NULL,
+            academic_year VARCHAR(9) NOT NULL,
+            schedule_rating DECIMAL(5,2),
+            early_starts INTEGER,           -- Count of 8:30 starts
+            late_ends INTEGER,             -- Count of after 18:00 ends
+            long_breaks INTEGER,           -- Count of >3 hour breaks
+            consecutive_days INTEGER,      -- Count of consecutive full days
+            status VARCHAR(20) DEFAULT 'DRAFT',  -- DRAFT, PUBLISHED, LOCKED
+            UNIQUE(program_id, block_id, term, academic_year)
+        )
+    ''',
+    'BlockSchedule': '''
+    CREATE TABLE BlockSchedule (
+        block_id VARCHAR(20) REFERENCES Block(block_id),
+        offering_id INTEGER REFERENCES CourseOffering(offering_id),
+        PRIMARY KEY (block_id, offering_id)
     )
     ''',
-    'Section': '''
-    CREATE TABLE Section (
-        section_id INTEGER PRIMARY KEY,
-        course_id VARCHAR(10) REFERENCES Course(course_id),
-        section_code VARCHAR(5) NOT NULL,
-        type VARCHAR(20) NOT NULL,
-        capacity INTEGER NOT NULL,
-        room_id INTEGER REFERENCES Room(room_id),
-        term VARCHAR(10) NOT NULL,
-        academic_year VARCHAR(9) NOT NULL,
-        parent_section_id INTEGER REFERENCES Section(section_id),
-        UNIQUE(course_id, section_code, term, academic_year)
-    )
-    ''',
-    'TimeSlot': '''
-    CREATE TABLE TimeSlot (
-        timeslot_id INTEGER PRIMARY KEY,
-        section_id INTEGER REFERENCES Section(section_id),
-        day_of_week INTEGER NOT NULL,
-        start_time TIME NOT NULL,
-        end_time TIME NOT NULL,
-        UNIQUE(section_id, day_of_week, start_time)
-    )
+    'BlockEnrollment': '''
+CREATE TABLE BlockEnrollment (
+    block_id VARCHAR(20) REFERENCES Block(block_id),
+    current_enrollment INTEGER NOT NULL DEFAULT 0,
+    max_enrollment INTEGER NOT NULL,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (block_id)
+)
     '''
 }
 

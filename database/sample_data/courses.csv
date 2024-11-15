@@ -1,18 +1,13 @@
-course_id,course_name,course_type,department,credits,has_lab,has_tutorial
-MATH1004,Calculus for Engineering,CORE,MATH,0.5,false,true
-CHEM1101,Chemistry for Engineering,CORE,CHEM,0.5,true,true
-ECOR1045,Foundations of Programming,CORE,ECOR,0.5,true,true
-ECOR1047,Introduction to Software Development,CORE,ECOR,0.5,true,true
-ECOR1046,Mechanics,CORE,ECOR,0.5,true,true
-ECOR1048,Dynamics,CORE,ECOR,0.5,true,true
-ECOR1055,Engineering Dynamics and Mechanisms,CORE,ECOR,0.5,true,true
-ECOR1057,Engineering Analysis,CORE,ECOR,0.5,false,true
-MATH1104,Linear Algebra for Engineering,CORE,MATH,0.5,false,true
-PHYS1004,Introductory Electromagnetism and Wave Motion,CORE,PHYS,0.5,true,true
-ECOR1041,Digital Systems,CORE,ECOR,0.5,true,true
-ECOR1043,Data Structures,CORE,ECOR,0.5,true,true
-ECOR1042,Object-Oriented Programming,CORE,ECOR,0.5,true,true
-ECOR1044,Computer Architecture,CORE,ECOR,0.5,true,true
-ECOR1056,Professional Practice,CORE,ECOR,0.5,false,true
-ELECB001,Basic Science Elective,ELECTIVE_B,SCIE,0.5,false,false
-ELECC001,Complementary Studies Elective,ELECTIVE_C,COMP,0.5,false,false
+course_id,course_name,course_type,department,credits
+MATH1004,Calculus,CORE,MATH,0.5
+CHEM1101,Chemistry,CORE,CHEM,0.5
+ARCH1000,Architecture,CORE,ARCH,0.5
+ECOR1041,Digital Systems,CORE,ECOR,0.5
+ECOR1043,Circuits,CORE,ECOR,0.5
+ECOR1042,Systems,CORE,ECOR,0.5
+ECOR1044,Mechanics,CORE,ECOR,0.5
+ECOR1055,Programming,CORE,ECOR,0.5
+ECOR1057,Engineering Analysis,CORE,ECOR,0.5
+MATH1104,Linear Algebra,CORE,MATH,0.5
+PHYS1004,Physics,CORE,PHYS,0.5
+ElectiveB,Basic Science Elective,ELECTIVE_B,GEN,0.5
