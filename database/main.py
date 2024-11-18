@@ -18,8 +18,6 @@ CREATE_TABLES = {
     CREATE TABLE Course (
         course_id VARCHAR(10) PRIMARY KEY,
         course_name VARCHAR(100) NOT NULL,
-        course_type VARCHAR(20) NOT NULL,  -- CORE, ELECTIVE_B, ELECTIVE_C
-        department VARCHAR(20) NOT NULL,
         credits DECIMAL(2,1) NOT NULL
     )
     ''',
@@ -45,7 +43,7 @@ CREATE_TABLES = {
             current_enrollment INTEGER DEFAULT 0,
             term VARCHAR(10) NOT NULL,
             academic_year VARCHAR(9) NOT NULL,
-            status VARCHAR(20) DEFAULT 'ACTIVE',  -- ACTIVE, CANCELLED, FULL
+            status VARCHAR(20) DEFAULT 'OPEN',  -- OPEN, FULL
             UNIQUE(course_id, section_type, section_code, term, academic_year)
         )
     ''',
@@ -54,7 +52,6 @@ CREATE_TABLES = {
         program_id VARCHAR(10) REFERENCES Program(program_id),
         course_id VARCHAR(10) REFERENCES Course(course_id),
         term VARCHAR(10) NOT NULL,          -- FALL, WINTER
-        sequence_order INTEGER NOT NULL,     -- For prerequisite ordering
         PRIMARY KEY (program_id, course_id, term)
     )
     ''',
@@ -80,15 +77,6 @@ CREATE_TABLES = {
         offering_id INTEGER REFERENCES CourseOffering(offering_id),
         PRIMARY KEY (block_id, offering_id)
     )
-    ''',
-    'BlockEnrollment': '''
-CREATE TABLE BlockEnrollment (
-    block_id VARCHAR(20) REFERENCES Block(block_id),
-    current_enrollment INTEGER NOT NULL DEFAULT 0,
-    max_enrollment INTEGER NOT NULL,
-    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (block_id)
-)
     '''
 }
 
