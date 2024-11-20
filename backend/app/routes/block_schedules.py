@@ -1,8 +1,8 @@
-# app/routes/block_schedules.py
 from flask import Blueprint, jsonify, request, current_app
 from app.models import BlockSchedule, Block, CourseOffering
 from app.database import db
 from http import HTTPStatus
+from .conflicts import has_time_conflict
 import logging
 
 bp = Blueprint('schedules', __name__, url_prefix='/api/schedules')
@@ -17,7 +17,6 @@ def add_offering_to_block(block_id):
                 'message': 'offering_id is required'
             }), HTTPStatus.BAD_REQUEST
 
-        # Log the incoming request
         current_app.logger.info(f"Adding offering to block: {block_id}, offering_id: {data['offering_id']}")
         
         # Check if block exists
@@ -29,33 +28,51 @@ def add_offering_to_block(block_id):
             }), HTTPStatus.NOT_FOUND
 
         # Check if offering exists
-        offering = CourseOffering.query.get(data['offering_id'])
-        if not offering:
+        new_offering = CourseOffering.query.get(data['offering_id'])
+        if not new_offering:
             return jsonify({
                 'error': 'Not Found',
                 'message': f'Offering {data["offering_id"]} not found'
             }), HTTPStatus.NOT_FOUND
         
-        # Check for scheduling conflicts
+        # Get existing offerings in block
         existing_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
-        for schedule in existing_schedules:
-            if (schedule.course_offering.day_of_week == offering.day_of_week and
-                ((offering.start_time >= schedule.course_offering.start_time and 
-                  offering.start_time < schedule.course_offering.end_time) or
-                 (offering.end_time > schedule.course_offering.start_time and 
-                  offering.end_time <= schedule.course_offering.end_time))):
-                return jsonify({
-                    'error': 'Conflict',
-                    'message': 'Time conflict detected'
-                }), HTTPStatus.CONFLICT
+        existing_offerings = [schedule.course_offering for schedule in existing_schedules]
         
-        block_schedule = BlockSchedule(block_id=block_id, offering_id=offering.offering_id)
+        # Check for conflicts using the conflicts module
+        conflicts = []
+        for existing_offering in existing_offerings:
+            if has_time_conflict(existing_offering, new_offering):
+                conflicts.append({
+                    'existing_offering_id': existing_offering.offering_id,
+                    'existing_course_id': existing_offering.course_id,
+                    'existing_time': f"{existing_offering.start_time.strftime('%H:%M')}-{existing_offering.end_time.strftime('%H:%M')}",
+                    'new_offering_id': new_offering.offering_id,
+                    'new_course_id': new_offering.course_id,
+                    'new_time': f"{new_offering.start_time.strftime('%H:%M')}-{new_offering.end_time.strftime('%H:%M')}",
+                    'day_of_week': new_offering.day_of_week
+                })
+        
+        if conflicts:
+            return jsonify({
+                'error': 'Conflict',
+                'message': 'Time conflicts detected',
+                'conflicts': conflicts
+            }), HTTPStatus.CONFLICT
+        
+        block_schedule = BlockSchedule(block_id=block_id, offering_id=new_offering.offering_id)
         db.session.add(block_schedule)
         db.session.commit()
         
         return jsonify({
             'block_id': block_schedule.block_id,
-            'offering_id': block_schedule.offering_id
+            'offering_id': block_schedule.offering_id,
+            'course_id': new_offering.course_id,
+            'section_type': new_offering.section_type,
+            'section_code': new_offering.section_code,
+            'day_of_week': new_offering.day_of_week,
+            'start_time': new_offering.start_time.strftime('%H:%M'),
+            'end_time': new_offering.end_time.strftime('%H:%M')
         }), HTTPStatus.CREATED
 
     except Exception as e:

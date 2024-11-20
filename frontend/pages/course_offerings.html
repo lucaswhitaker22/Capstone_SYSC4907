@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Course Offerings</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Course Offerings</h1>
+        <table id="offeringsTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)">Course ID</th>
+                    <th onclick="sortTable(1)">Section Type</th>
+                    <th onclick="sortTable(2)">Section Code</th>
+                    <th onclick="sortTable(3)">Day</th>
+                    <th onclick="sortTable(4)">Time</th>
+                    <th onclick="sortTable(5)">Capacity</th>
+                    <th onclick="sortTable(6)">Enrollment</th>
+                    <th onclick="sortTable(7)">Term</th>
+                    <th onclick="sortTable(8)">Status</th>
+                </tr>
+            </thead>
+            <tbody id="offeringsBody">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function getDayName(day) {
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            return days[day - 1];
+        }
+
+        async function fetchOfferings() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/offerings');
+                const offerings = await response.json();
+                
+                const tbody = document.getElementById('offeringsBody');
+                tbody.innerHTML = '';
+
+                offerings.forEach(offering => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${offering.course_id}</td>
+                        <td>${offering.section_type}</td>
+                        <td>${offering.section_code}</td>
+                        <td>${getDayName(offering.day_of_week)}</td>
+                        <td>${offering.start_time}-${offering.end_time}</td>
+                        <td>${offering.capacity}</td>
+                        <td>${offering.current_enrollment}</td>
+                        <td>${offering.term} ${offering.academic_year}</td>
+                        <td>${offering.status}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error fetching offerings:', error);
+            }
+        }
+
+        function sortTable(n) {
+            const table = document.getElementById("offeringsTable");
+            let switching = true;
+            let dir = "asc";
+            let switchcount = 0;
+
+            while (switching) {
+                switching = false;
+                const rows = table.rows;
+
+                for (let i = 1; i < (rows.length - 1); i++) {
+                    let shouldSwitch = false;
+                    const x = rows[i].getElementsByTagName("TD")[n];
+                    const y = rows[i + 1].getElementsByTagName("TD")[n];
+
+                    if (dir === "asc") {
+                        if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    } else if (dir === "desc") {
+                        if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    }
+
+                    if (shouldSwitch) {
+                        rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                        switching = true;
+                        switchcount++;
+                    }
+                }
+
+                if (switchcount === 0 && dir === "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+
+        // Fetch offerings when page loads
+        document.addEventListener('DOMContentLoaded', fetchOfferings);
+    </script>
+</body>
+</html>

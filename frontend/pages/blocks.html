@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Block List</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .view-schedule {
+            background-color: #4CAF50;
+            color: white;
+            padding: 4px 8px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .view-schedule:hover {
+            background-color: #45a049;
+        }
+        .status-badge {
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+        }
+        .status-DRAFT {
+            background-color: #ffd700;
+        }
+        .status-PUBLISHED {
+            background-color: #90EE90;
+        }
+        .status-LOCKED {
+            background-color: #FFB6C1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Blocks</h1>
+        <table id="blocksTable">
+            <thead>
+                <tr>
+                    <th onclick="sortTable(0)">Block ID</th>
+                    <th onclick="sortTable(1)">Program</th>
+                    <th onclick="sortTable(2)">Term</th>
+                    <th onclick="sortTable(3)">Academic Year</th>
+                    <th onclick="sortTable(4)">Block Size</th>
+                    <th onclick="sortTable(5)">Rating</th>
+                    <th onclick="sortTable(6)">Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="blocksBody">
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function fetchBlocks() {
+            try {
+                const response = await fetch('http://127.0.0.1:5000/api/blocks');
+                const blocks = await response.json();
+                
+                const tbody = document.getElementById('blocksBody');
+                tbody.innerHTML = '';
+
+                blocks.forEach(block => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${block.block_id}</td>
+                        <td>${block.program_id}</td>
+                        <td>${block.term}</td>
+                        <td>${block.academic_year}</td>
+                        <td>${block.block_size} students</td>
+                        <td>${block.schedule_rating ? block.schedule_rating + '/100' : 'Not rated'}</td>
+                        <td><span class="status-badge status-${block.status}">${block.status}</span></td>
+                        <td>
+                            <button class="view-schedule" onclick="viewSchedule('${block.block_id}')">
+                                View Schedule
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error fetching blocks:', error);
+            }
+        }
+
+        function viewSchedule(blockId) {
+            window.open(`schedule.html?blockId=${blockId}`, '_blank');
+        }
+
+        function sortTable(n) {
+            const table = document.getElementById("blocksTable");
+            let switching = true;
+            let dir = "asc";
+            let switchcount = 0;
+
+            while (switching) {
+                switching = false;
+                const rows = table.rows;
+
+                for (let i = 1; i < (rows.length - 1); i++) {
+                    let shouldSwitch = false;
+                    const x = rows[i].getElementsByTagName("TD")[n];
+                    const y = rows[i + 1].getElementsByTagName("TD")[n];
+
+                    if (dir === "asc") {
+                        if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    } else if (dir === "desc") {
+                        if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
+                            shouldSwitch = true;
+                            break;
+                        }
+                    }
+
+                    if (shouldSwitch) {
+                        rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                        switching = true;
+                        switchcount++;
+                    }
+                }
+
+                if (switchcount === 0 && dir === "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchBlocks);
+    </script>
+</body>
+</html>
