@@ -1,0 +1,151 @@
+# app/models/__init__.py
+from .course import Course
+from .program import Program
+from .course_offering import CourseOffering
+from .program_requirement import ProgramRequirement
+from .block import Block
+from .block_schedule import BlockSchedule
+
+__all__ = [
+    'Course',
+    'Program',
+    'CourseOffering',
+    'ProgramRequirement',
+    'Block',
+    'BlockSchedule'
+]# app/models/block.py
+from app import db
+
+class Block(db.Model):
+    __tablename__ = 'block'
+
+    block_id = db.Column(db.String(20), primary_key=True)
+    program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), nullable=False)
+    block_size = db.Column(db.Integer, nullable=False)
+    term = db.Column(db.String(10), nullable=False)
+    academic_year = db.Column(db.String(9), nullable=False)
+    schedule_rating = db.Column(db.Numeric(5,2))
+    early_starts = db.Column(db.Integer)
+    late_ends = db.Column(db.Integer)
+    long_breaks = db.Column(db.Integer)
+    consecutive_days = db.Column(db.Integer)
+    status = db.Column(db.String(20), default='DRAFT')
+
+    # Relationships
+    block_schedules = db.relationship('BlockSchedule', backref='block', lazy=True)
+
+    __table_args__ = (
+        db.CheckConstraint('block_size IN (10, 20)', name='check_block_size'),
+        db.UniqueConstraint('program_id', 'block_id', 'term', 'academic_year', 
+                          name='unique_block'),
+    )
+
+    def __repr__(self):
+        return f'<Block {self.block_id}>'# app/models/block_schedule.py
+from app import db
+
+class BlockSchedule(db.Model):
+    __tablename__ = 'block_schedule'
+
+    block_id = db.Column(db.String(20), db.ForeignKey('block.block_id'), primary_key=True)
+    offering_id = db.Column(db.Integer, db.ForeignKey('course_offering.offering_id'), primary_key=True)
+
+    def __repr__(self):
+        return f'<BlockSchedule {self.block_id} {self.offering_id}>'# app/models/course.py
+from app import db
+
+class Course(db.Model):
+    __tablename__ = 'course'
+
+    course_id = db.Column(db.String(10), primary_key=True)
+    course_name = db.Column(db.String(100), nullable=False)
+    credits = db.Column(db.Numeric(2,1), nullable=False)
+
+    # Relationships
+    offerings = db.relationship('CourseOffering', backref='course', lazy=True)
+    program_requirements = db.relationship('ProgramRequirement', backref='course', lazy=True)
+
+    def __repr__(self):
+        return f'<Course {self.course_id}>'# app/models/course_offering.py
+from app import db
+
+class CourseOffering(db.Model):
+    __tablename__ = 'course_offering'
+
+    offering_id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.String(10), db.ForeignKey('course.course_id'), nullable=False)
+    section_type = db.Column(db.String(20), nullable=False)
+    section_code = db.Column(db.String(5), nullable=False)
+    day_of_week = db.Column(db.Integer, nullable=False)
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time, nullable=False)
+    capacity = db.Column(db.Integer, nullable=False)
+    current_enrollment = db.Column(db.Integer, default=0)
+    term = db.Column(db.String(10), nullable=False)
+    academic_year = db.Column(db.String(9), nullable=False)
+    status = db.Column(db.String(20), default='OPEN')
+
+    # Relationships
+    block_schedules = db.relationship('BlockSchedule', backref='course_offering', lazy=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('course_id', 'section_type', 'section_code', 
+                          'term', 'academic_year', name='unique_section'),
+    )
+
+    def __repr__(self):
+        return f'<CourseOffering {self.course_id} {self.section_code}>'# app/models/enums.py
+from enum import Enum
+
+class SectionType(str, Enum):
+    LECTURE = 'LECTURE'
+    LAB = 'LAB'
+    TUTORIAL = 'TUTORIAL'
+
+class Term(str, Enum):
+    FALL = 'FALL'
+    WINTER = 'WINTER'
+
+class BlockStatus(str, Enum):
+    DRAFT = 'DRAFT'
+    PUBLISHED = 'PUBLISHED'
+    LOCKED = 'LOCKED'
+
+class OfferingStatus(str, Enum):
+    OPEN = 'OPEN'
+    FULL = 'FULL'
+    CANCELLED = 'CANCELLED'# app/models/mixins.py
+from datetime import datetime
+from app import db
+
+class TimestampMixin:
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)# app/models/program.py
+from app import db
+
+class Program(db.Model):
+    __tablename__ = 'program'
+
+    program_id = db.Column(db.String(10), primary_key=True)
+    program_name = db.Column(db.String(100), nullable=False)
+    total_enrollment = db.Column(db.Integer, nullable=False)
+    blocks_20_count = db.Column(db.Integer, nullable=False)
+    blocks_10_count = db.Column(db.Integer, nullable=False)
+
+    # Relationships
+    blocks = db.relationship('Block', backref='program', lazy=True)
+    program_requirements = db.relationship('ProgramRequirement', backref='program', lazy=True)
+
+    def __repr__(self):
+        return f'<Program {self.program_id}>'# app/models/program_requirement.py
+from app import db
+
+class ProgramRequirement(db.Model):
+    __tablename__ = 'program_requirement'
+
+    program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), primary_key=True)
+    course_id = db.Column(db.String(10), db.ForeignKey('course.course_id'), primary_key=True)
+    term = db.Column(db.String(10), primary_key=True)
+
+    def __repr__(self):
+        return f'<ProgramRequirement {self.program_id} {self.course_id}>'

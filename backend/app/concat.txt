@@ -21,7 +21,7 @@ def create_app(config_class=Config):
 
     from app.routes import (
         courses_bp, programs_bp, offerings_bp,
-        blocks_bp, requirements_bp, schedules_bp, conflicts_bp
+        blocks_bp, requirements_bp, schedules_bp
     )
     
     app.register_blueprint(courses_bp)
@@ -30,6 +30,11 @@ def create_app(config_class=Config):
     app.register_blueprint(blocks_bp)
     app.register_blueprint(requirements_bp)
     app.register_blueprint(schedules_bp)
-    app.register_blueprint(conflicts_bp)
 
-    return app
+    return app# app/database.py
+from flask_sqlalchemy import SQLAlchemy
+from flask_marshmallow import Marshmallow
+
+# Initialize extensions
+db = SQLAlchemy()
+ma = Marshmallow()

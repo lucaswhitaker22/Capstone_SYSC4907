@@ -5,6 +5,8 @@ from .course_offerings import bp as offerings_bp
 from .blocks import bp as blocks_bp
 from .program_requirements import bp as requirements_bp
 from .block_schedules import bp as schedules_bp
+from .conflicts import bp as conflicts_bp
+
 
 __all__ = [
     'courses_bp',
@@ -12,5 +14,6 @@ __all__ = [
     'offerings_bp',
     'blocks_bp',
     'requirements_bp',
-    'schedules_bp'
+    'schedules_bp',
+    'conflicts_bp'
 ]
