@@ -1,0 +1,934 @@
+--- File: ./app/database.py ---
+# app/database.py
+from flask_sqlalchemy import SQLAlchemy
+from flask_marshmallow import Marshmallow
+
+# Initialize extensions
+db = SQLAlchemy()
+ma = Marshmallow()
+
+
+--- File: ./app/models/block.py ---
+# app/models/block.py
+from app import db
+
+class Block(db.Model):
+    __tablename__ = 'block'
+
+    block_id = db.Column(db.String(20), primary_key=True)
+    program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), nullable=False)
+    block_size = db.Column(db.Integer, nullable=False)
+    term = db.Column(db.String(10), nullable=False)
+    academic_year = db.Column(db.String(9), nullable=False)
+    schedule_rating = db.Column(db.Numeric(5,2))
+    early_starts = db.Column(db.Integer)
+    late_ends = db.Column(db.Integer)
+    long_breaks = db.Column(db.Integer)
+    consecutive_days = db.Column(db.Integer)
+    status = db.Column(db.String(20), default='DRAFT')
+
+    # Relationships
+    block_schedules = db.relationship('BlockSchedule', backref='block', lazy=True)
+
+    __table_args__ = (
+        db.CheckConstraint('block_size IN (10, 20)', name='check_block_size'),
+        db.UniqueConstraint('program_id', 'block_id', 'term', 'academic_year', 
+                          name='unique_block'),
+    )
+
+    def __repr__(self):
+        return f'<Block {self.block_id}>'
+
+
+--- File: ./app/models/block_schedule.py ---
+# app/models/block_schedule.py
+from app import db
+
+class BlockSchedule(db.Model):
+    __tablename__ = 'block_schedule'
+
+    block_id = db.Column(db.String(20), db.ForeignKey('block.block_id'), primary_key=True)
+    offering_id = db.Column(db.Integer, db.ForeignKey('course_offering.offering_id'), primary_key=True)
+
+    def __repr__(self):
+        return f'<BlockSchedule {self.block_id} {self.offering_id}>'
+
+
+--- File: ./app/models/course.py ---
+# app/models/course.py
+from app import db
+
+class Course(db.Model):
+    __tablename__ = 'course'
+
+    course_id = db.Column(db.String(10), primary_key=True)
+    course_name = db.Column(db.String(100), nullable=False)
+    credits = db.Column(db.Numeric(2,1), nullable=False)
+
+    # Relationships
+    offerings = db.relationship('CourseOffering', backref='course', lazy=True)
+    program_requirements = db.relationship('ProgramRequirement', backref='course', lazy=True)
+
+    def __repr__(self):
+        return f'<Course {self.course_id}>'
+
+
+--- File: ./app/models/course_offering.py ---
+# app/models/course_offering.py
+from app import db
+
+class CourseOffering(db.Model):
+    __tablename__ = 'course_offering'
+
+    offering_id = db.Column(db.Integer, primary_key=True)
+    course_id = db.Column(db.String(10), db.ForeignKey('course.course_id'), nullable=False)
+    section_type = db.Column(db.String(20), nullable=False)
+    section_code = db.Column(db.String(5), nullable=False)
+    day_of_week = db.Column(db.Integer, nullable=False)
+    start_time = db.Column(db.Time, nullable=False)
+    end_time = db.Column(db.Time, nullable=False)
+    capacity = db.Column(db.Integer, nullable=False)
+    current_enrollment = db.Column(db.Integer, default=0)
+    term = db.Column(db.String(10), nullable=False)
+    academic_year = db.Column(db.String(9), nullable=False)
+    status = db.Column(db.String(20), default='OPEN')
+
+    # Relationships
+    block_schedules = db.relationship('BlockSchedule', backref='course_offering', lazy=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('course_id', 'section_type', 'section_code', 
+                          'term', 'academic_year', name='unique_section'),
+    )
+
+    def __repr__(self):
+        return f'<CourseOffering {self.course_id} {self.section_code}>'
+
+
+--- File: ./app/models/enums.py ---
+# app/models/enums.py
+from enum import Enum
+
+class SectionType(str, Enum):
+    LECTURE = 'LECTURE'
+    LAB = 'LAB'
+    TUTORIAL = 'TUTORIAL'
+
+class Term(str, Enum):
+    FALL = 'FALL'
+    WINTER = 'WINTER'
+
+class BlockStatus(str, Enum):
+    DRAFT = 'DRAFT'
+    PUBLISHED = 'PUBLISHED'
+    LOCKED = 'LOCKED'
+
+class OfferingStatus(str, Enum):
+    OPEN = 'OPEN'
+    FULL = 'FULL'
+    CANCELLED = 'CANCELLED'
+
+
+--- File: ./app/models/mixins.py ---
+# app/models/mixins.py
+from datetime import datetime
+from app import db
+
+class TimestampMixin:
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+
+--- File: ./app/models/program.py ---
+# app/models/program.py
+from app import db
+
+class Program(db.Model):
+    __tablename__ = 'program'
+
+    program_id = db.Column(db.String(10), primary_key=True)
+    program_name = db.Column(db.String(100), nullable=False)
+    total_enrollment = db.Column(db.Integer, nullable=False)
+    blocks_20_count = db.Column(db.Integer, nullable=False)
+    blocks_10_count = db.Column(db.Integer, nullable=False)
+
+    # Relationships
+    blocks = db.relationship('Block', backref='program', lazy=True)
+    program_requirements = db.relationship('ProgramRequirement', backref='program', lazy=True)
+
+    def __repr__(self):
+        return f'<Program {self.program_id}>'
+
+
+--- File: ./app/models/program_requirement.py ---
+# app/models/program_requirement.py
+from app import db
+
+class ProgramRequirement(db.Model):
+    __tablename__ = 'program_requirement'
+
+    program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), primary_key=True)
+    course_id = db.Column(db.String(10), db.ForeignKey('course.course_id'), primary_key=True)
+    term = db.Column(db.String(10), primary_key=True)
+
+    def __repr__(self):
+        return f'<ProgramRequirement {self.program_id} {self.course_id}>'
+
+
+--- File: ./app/models/__init__.py ---
+# app/models/__init__.py
+from .course import Course
+from .program import Program
+from .course_offering import CourseOffering
+from .program_requirement import ProgramRequirement
+from .block import Block
+from .block_schedule import BlockSchedule
+
+__all__ = [
+    'Course',
+    'Program',
+    'CourseOffering',
+    'ProgramRequirement',
+    'Block',
+    'BlockSchedule'
+]
+
+
+--- File: ./app/routes/blocks.py ---
+# app/routes/blocks.py
+from flask import Blueprint, jsonify, request
+from app.models import Block, BlockSchedule
+from app import db
+from http import HTTPStatus
+
+bp = Blueprint('blocks', __name__, url_prefix='/api/blocks')
+
+@bp.route('/', methods=['GET'])
+def get_blocks():
+    blocks = Block.query.all()
+    return jsonify([{
+        'block_id': b.block_id,
+        'program_id': b.program_id,
+        'block_size': b.block_size,
+        'term': b.term,
+        'academic_year': b.academic_year,
+        'schedule_rating': float(b.schedule_rating) if b.schedule_rating else None,
+        'status': b.status
+    } for b in blocks]), HTTPStatus.OK
+
+@bp.route('/<block_id>', methods=['GET'])
+def get_block(block_id):
+    block = Block.query.get_or_404(block_id)
+    return jsonify({
+        'block_id': block.block_id,
+        'program_id': block.program_id,
+        'block_size': block.block_size,
+        'term': block.term,
+        'academic_year': block.academic_year,
+        'schedule_rating': float(block.schedule_rating) if block.schedule_rating else None,
+        'early_starts': block.early_starts,
+        'late_ends': block.late_ends,
+        'long_breaks': block.long_breaks,
+        'consecutive_days': block.consecutive_days,
+        'status': block.status
+    }), HTTPStatus.OK
+
+@bp.route('/', methods=['POST'])
+def create_block():
+    data = request.get_json()
+    block = Block(**data)
+    db.session.add(block)
+    db.session.commit()
+    
+    return jsonify({
+        'block_id': block.block_id,
+        'program_id': block.program_id,
+        'block_size': block.block_size,
+        'term': block.term,
+        'academic_year': block.academic_year,
+        'status': block.status
+    }), HTTPStatus.CREATED
+
+@bp.route('/<block_id>/schedule', methods=['GET'])
+def get_block_schedule(block_id):
+    block_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+    return jsonify([{
+        'offering_id': bs.offering_id,
+        'course_id': bs.course_offering.course_id,
+        'section_type': bs.course_offering.section_type,
+        'section_code': bs.course_offering.section_code,
+        'day_of_week': bs.course_offering.day_of_week,
+        'start_time': bs.course_offering.start_time.strftime('%H:%M'),
+        'end_time': bs.course_offering.end_time.strftime('%H:%M')
+    } for bs in block_schedules]), HTTPStatus.OK
+
+
+--- File: ./app/routes/block_schedules.py ---
+from flask import Blueprint, jsonify, request, current_app
+from app.models import BlockSchedule, Block, CourseOffering
+from app.database import db
+from http import HTTPStatus
+from .conflicts import has_time_conflict
+import logging
+
+bp = Blueprint('schedules', __name__, url_prefix='/api/schedules')
+
+@bp.route('/block/<block_id>', methods=['POST'])
+def add_offering_to_block(block_id):
+    try:
+        data = request.get_json()
+        if not data or 'offering_id' not in data:
+            return jsonify({
+                'error': 'Bad Request',
+                'message': 'offering_id is required'
+            }), HTTPStatus.BAD_REQUEST
+
+        current_app.logger.info(f"Adding offering to block: {block_id}, offering_id: {data['offering_id']}")
+        
+        # Check if block exists
+        block = Block.query.get(block_id)
+        if not block:
+            return jsonify({
+                'error': 'Not Found',
+                'message': f'Block {block_id} not found'
+            }), HTTPStatus.NOT_FOUND
+
+        # Check if offering exists
+        new_offering = CourseOffering.query.get(data['offering_id'])
+        if not new_offering:
+            return jsonify({
+                'error': 'Not Found',
+                'message': f'Offering {data["offering_id"]} not found'
+            }), HTTPStatus.NOT_FOUND
+        
+        # Get existing offerings in block
+        existing_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        existing_offerings = [schedule.course_offering for schedule in existing_schedules]
+        
+        # Check for conflicts using the conflicts module
+        conflicts = []
+        for existing_offering in existing_offerings:
+            if has_time_conflict(existing_offering, new_offering):
+                conflicts.append({
+                    'existing_offering_id': existing_offering.offering_id,
+                    'existing_course_id': existing_offering.course_id,
+                    'existing_time': f"{existing_offering.start_time.strftime('%H:%M')}-{existing_offering.end_time.strftime('%H:%M')}",
+                    'new_offering_id': new_offering.offering_id,
+                    'new_course_id': new_offering.course_id,
+                    'new_time': f"{new_offering.start_time.strftime('%H:%M')}-{new_offering.end_time.strftime('%H:%M')}",
+                    'day_of_week': new_offering.day_of_week
+                })
+        
+        if conflicts:
+            return jsonify({
+                'error': 'Conflict',
+                'message': 'Time conflicts detected',
+                'conflicts': conflicts
+            }), HTTPStatus.CONFLICT
+        
+        block_schedule = BlockSchedule(block_id=block_id, offering_id=new_offering.offering_id)
+        db.session.add(block_schedule)
+        db.session.commit()
+        
+        return jsonify({
+            'block_id': block_schedule.block_id,
+            'offering_id': block_schedule.offering_id,
+            'course_id': new_offering.course_id,
+            'section_type': new_offering.section_type,
+            'section_code': new_offering.section_code,
+            'day_of_week': new_offering.day_of_week,
+            'start_time': new_offering.start_time.strftime('%H:%M'),
+            'end_time': new_offering.end_time.strftime('%H:%M')
+        }), HTTPStatus.CREATED
+
+    except Exception as e:
+        current_app.logger.error(f"Error adding offering to block: {str(e)}")
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+--- File: ./app/routes/conflicts.py ---
+# app/routes/conflicts.py
+from flask import Blueprint, jsonify, request
+from app.models import CourseOffering, BlockSchedule
+from http import HTTPStatus
+
+bp = Blueprint('conflicts', __name__, url_prefix='/api/conflicts')
+
+@bp.route('/offerings/<offering1_id>/<offering2_id>', methods=['GET'])
+def check_offering_conflict(offering1_id, offering2_id):
+    offering1 = CourseOffering.query.get_or_404(offering1_id)
+    offering2 = CourseOffering.query.get_or_404(offering2_id)
+    
+    has_conflict = has_time_conflict(offering1, offering2)
+    
+    return jsonify({
+        'has_conflict': has_conflict,
+        'offering1': offering1.course_id,
+        'offering2': offering2.course_id
+    }), HTTPStatus.OK
+
+@bp.route('/schedule/conflicts', methods=['POST'])
+def check_schedule_conflicts():
+    data = request.get_json()
+    offering_ids = data.get('offering_ids', [])
+    
+    conflicts = _find_schedule_conflicts(offering_ids)
+    
+    return jsonify({
+        'conflicts': conflicts
+    }), HTTPStatus.OK
+
+@bp.route('/schedule/check-course', methods=['POST'])
+def check_course_conflicts():
+    data = request.get_json()
+    schedule_offering_ids = data.get('schedule_offering_ids', [])
+    new_offering_id = data.get('new_offering_id')
+    
+    # Get the offerings
+    schedule_offerings = CourseOffering.query.filter(
+        CourseOffering.offering_id.in_(schedule_offering_ids)
+    ).all()
+    new_offering = CourseOffering.query.get_or_404(new_offering_id)
+    
+    conflicts = []
+    for existing_offering in schedule_offerings:
+        if has_time_conflict(existing_offering, new_offering):
+            conflicts.append({
+                'existing_offering_id': existing_offering.offering_id,
+                'existing_course_id': existing_offering.course_id,
+                'existing_time': f"{existing_offering.start_time.strftime('%H:%M')}-{existing_offering.end_time.strftime('%H:%M')}",
+                'new_offering_id': new_offering.offering_id,
+                'new_course_id': new_offering.course_id,
+                'new_time': f"{new_offering.start_time.strftime('%H:%M')}-{new_offering.end_time.strftime('%H:%M')}",
+                'day_of_week': new_offering.day_of_week
+            })
+    
+    return jsonify({'conflicts': conflicts}), HTTPStatus.OK
+
+def has_time_conflict(offering1, offering2):
+    # Only check conflicts on the same day
+    if offering1.day_of_week != offering2.day_of_week:
+        return False
+    
+    # Convert times to comparable format
+    start1 = offering1.start_time
+    end1 = offering1.end_time
+    start2 = offering2.start_time
+    end2 = offering2.end_time
+    
+    # Check for any overlap
+    return (
+        (start1 <= end2 and end1 >= start2) or  # offering1 overlaps with offering2
+        (start2 <= end1 and end2 >= start1)      # offering2 overlaps with offering1
+    )
+
+def _find_schedule_conflicts(offering_ids):
+    offerings = [CourseOffering.query.get(id) for id in offering_ids]
+    conflicts = []
+    
+    for i, offering1 in enumerate(offerings):
+        for offering2 in offerings[i+1:]:
+            if has_time_conflict(offering1, offering2):
+                conflicts.append({
+                    'offering1_id': offering1.offering_id,
+                    'offering2_id': offering2.offering_id,
+                    'course1_id': offering1.course_id,
+                    'course2_id': offering2.course_id,
+                    'day': offering1.day_of_week,
+                    'time1': f"{offering1.start_time}-{offering1.end_time}",
+                    'time2': f"{offering2.start_time}-{offering2.end_time}"
+                })
+    
+    return conflicts
+
+def _find_course_conflicts(schedule_offering_ids, new_offering_id):
+    schedule_offerings = [CourseOffering.query.get(id) for id in schedule_offering_ids]
+    new_offering = CourseOffering.query.get_or_404(new_offering_id)
+    
+    conflicts = []
+    
+    for existing_offering in schedule_offerings:
+        if has_time_conflict(existing_offering, new_offering):
+            conflicts.append({
+                'existing_offering_id': existing_offering.offering_id,
+                'existing_course_id': existing_offering.course_id,
+                'new_offering_id': new_offering.offering_id,
+                'new_course_id': new_offering.course_id,
+                'day': new_offering.day_of_week,
+                'existing_time': f"{existing_offering.start_time}-{existing_offering.end_time}",
+                'new_time': f"{new_offering.start_time}-{new_offering.end_time}"
+            })
+    
+    return conflicts
+
+
+--- File: ./app/routes/courses.py ---
+# app/routes/courses.py
+from flask import Blueprint, jsonify, request
+from app.models import Course
+from app import db
+from http import HTTPStatus
+
+bp = Blueprint('courses', __name__, url_prefix='/api/courses')
+
+@bp.route('/', methods=['GET'])
+def get_courses():
+    courses = Course.query.all()
+    return jsonify([{
+        'course_id': c.course_id,
+        'course_name': c.course_name,
+        'credits': float(c.credits)
+    } for c in courses]), HTTPStatus.OK
+
+@bp.route('/<course_id>', methods=['GET'])
+def get_course(course_id):
+    course = Course.query.get_or_404(course_id)
+    return jsonify({
+        'course_id': course.course_id,
+        'course_name': course.course_name,
+        'credits': float(course.credits)
+    }), HTTPStatus.OK
+
+@bp.route('/', methods=['POST'])
+def create_course():
+    data = request.get_json()
+    
+    if Course.query.get(data['course_id']):
+        return jsonify({'error': 'Course already exists'}), HTTPStatus.CONFLICT
+    
+    course = Course(
+        course_id=data['course_id'],
+        course_name=data['course_name'],
+        credits=data['credits']
+    )
+    
+    db.session.add(course)
+    db.session.commit()
+    
+    return jsonify({
+        'course_id': course.course_id,
+        'course_name': course.course_name,
+        'credits': float(course.credits)
+    }), HTTPStatus.CREATED
+
+@bp.route('/<course_id>', methods=['PUT'])
+def update_course(course_id):
+    course = Course.query.get_or_404(course_id)
+    data = request.get_json()
+    
+    course.course_name = data.get('course_name', course.course_name)
+    course.credits = data.get('credits', course.credits)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'course_id': course.course_id,
+        'course_name': course.course_name,
+        'credits': float(course.credits)
+    }), HTTPStatus.OK
+
+@bp.route('/<course_id>', methods=['DELETE'])
+def delete_course(course_id):
+    course = Course.query.get_or_404(course_id)
+    db.session.delete(course)
+    db.session.commit()
+    return '', HTTPStatus.NO_CONTENT
+
+
+--- File: ./app/routes/course_offerings.py ---
+# app/routes/course_offerings.py
+from flask import Blueprint, jsonify, request
+from app.models import CourseOffering
+from app import db
+from http import HTTPStatus
+from datetime import datetime
+
+bp = Blueprint('offerings', __name__, url_prefix='/api/offerings')
+
+@bp.route('/', methods=['GET'])
+def get_offerings():
+    offerings = CourseOffering.query.all()
+    return jsonify([{
+        'offering_id': o.offering_id,
+        'course_id': o.course_id,
+        'section_type': o.section_type,
+        'section_code': o.section_code,
+        'day_of_week': o.day_of_week,
+        'start_time': o.start_time.strftime('%H:%M'),
+        'end_time': o.end_time.strftime('%H:%M'),
+        'capacity': o.capacity,
+        'current_enrollment': o.current_enrollment,
+        'term': o.term,
+        'academic_year': o.academic_year,
+        'status': o.status
+    } for o in offerings]), HTTPStatus.OK
+
+@bp.route('/', methods=['POST'])
+def create_offering():
+    data = request.get_json()
+    
+    # Convert time strings to Time objects
+    data['start_time'] = datetime.strptime(data['start_time'], '%H:%M').time()
+    data['end_time'] = datetime.strptime(data['end_time'], '%H:%M').time()
+    
+    offering = CourseOffering(**data)
+    db.session.add(offering)
+    db.session.commit()
+    
+    return jsonify({
+        'offering_id': offering.offering_id,
+        'course_id': offering.course_id,
+        'section_type': offering.section_type,
+        'section_code': offering.section_code,
+        'day_of_week': offering.day_of_week,
+        'start_time': offering.start_time.strftime('%H:%M'),
+        'end_time': offering.end_time.strftime('%H:%M'),
+        'capacity': offering.capacity,
+        'current_enrollment': offering.current_enrollment,
+        'term': offering.term,
+        'academic_year': offering.academic_year,
+        'status': offering.status
+    }), HTTPStatus.CREATED
+
+
+--- File: ./app/routes/programs.py ---
+# app/routes/programs.py
+from flask import Blueprint, jsonify, request
+from app.models import Program
+from app import db
+from http import HTTPStatus
+
+bp = Blueprint('programs', __name__, url_prefix='/api/programs')
+
+@bp.route('/', methods=['GET'])
+def get_programs():
+    programs = Program.query.all()
+    return jsonify([{
+        'program_id': p.program_id,
+        'program_name': p.program_name,
+        'total_enrollment': p.total_enrollment,
+        'blocks_20_count': p.blocks_20_count,
+        'blocks_10_count': p.blocks_10_count
+    } for p in programs]), HTTPStatus.OK
+
+@bp.route('/<program_id>', methods=['GET'])
+def get_program(program_id):
+    program = Program.query.get_or_404(program_id)
+    return jsonify({
+        'program_id': program.program_id,
+        'program_name': program.program_name,
+        'total_enrollment': program.total_enrollment,
+        'blocks_20_count': program.blocks_20_count,
+        'blocks_10_count': program.blocks_10_count
+    }), HTTPStatus.OK
+
+@bp.route('/', methods=['POST'])
+def create_program():
+    data = request.get_json()
+    
+    if Program.query.get(data['program_id']):
+        return jsonify({'error': 'Program already exists'}), HTTPStatus.CONFLICT
+    
+    program = Program(**data)
+    db.session.add(program)
+    db.session.commit()
+    
+    return jsonify({
+        'program_id': program.program_id,
+        'program_name': program.program_name,
+        'total_enrollment': program.total_enrollment,
+        'blocks_20_count': program.blocks_20_count,
+        'blocks_10_count': program.blocks_10_count
+    }), HTTPStatus.CREATED
+
+
+--- File: ./app/routes/program_requirements.py ---
+# app/routes/program_requirements.py
+from flask import Blueprint, jsonify, request
+from app.models import ProgramRequirement
+from app import db
+from http import HTTPStatus
+
+bp = Blueprint('requirements', __name__, url_prefix='/api/requirements')
+
+@bp.route('/program/<program_id>', methods=['GET'])
+def get_program_requirements(program_id):
+    requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
+    return jsonify([{
+        'program_id': r.program_id,
+        'course_id': r.course_id,
+        'term': r.term
+    } for r in requirements]), HTTPStatus.OK
+
+@bp.route('/', methods=['POST'])
+def create_requirement():
+    data = request.get_json()
+    requirement = ProgramRequirement(**data)
+    db.session.add(requirement)
+    db.session.commit()
+    
+    return jsonify({
+        'program_id': requirement.program_id,
+        'course_id': requirement.course_id,
+        'term': requirement.term
+    }), HTTPStatus.CREATED
+
+
+--- File: ./app/routes/__init__.py ---
+# app/routes/__init__.py
+from .courses import bp as courses_bp
+from .programs import bp as programs_bp
+from .course_offerings import bp as offerings_bp
+from .blocks import bp as blocks_bp
+from .program_requirements import bp as requirements_bp
+from .block_schedules import bp as schedules_bp
+from .conflicts import bp as conflicts_bp
+
+
+__all__ = [
+    'courses_bp',
+    'programs_bp',
+    'offerings_bp',
+    'blocks_bp',
+    'requirements_bp',
+    'schedules_bp',
+    'conflicts_bp'
+]
+
+
+--- File: ./app/__init__.py ---
+# app/__init__.py
+from flask import Flask
+from flask_cors import CORS
+from config import Config
+from app.database import db, ma
+import logging
+from logging.handlers import RotatingFileHandler
+import os
+
+def create_app(config_class=Config):
+    # Create and configure the app
+    app = Flask(__name__)
+    app.config.from_object(config_class)
+
+    # Initialize CORS
+    CORS(app)
+
+    # Initialize extensions
+    db.init_app(app)
+    ma.init_app(app)
+
+    from app.routes import (
+        courses_bp, programs_bp, offerings_bp,
+        blocks_bp, requirements_bp, schedules_bp, conflicts_bp
+    )
+    
+    app.register_blueprint(courses_bp)
+    app.register_blueprint(programs_bp)
+    app.register_blueprint(offerings_bp)
+    app.register_blueprint(blocks_bp)
+    app.register_blueprint(requirements_bp)
+    app.register_blueprint(schedules_bp)
+    app.register_blueprint(conflicts_bp)
+
+    return app
+
+
+--- File: ./config.py ---
+# config.py
+import os
+from datetime import timedelta
+
+basedir = os.path.abspath(os.path.dirname(__file__))
+
+class Config:
+    # Basic Flask config
+    SECRET_KEY = 'dev-secret-key'
+    
+    # SQLAlchemy config
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'app.db')
+    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # API config
+    JSON_SORT_KEYS = False
+    
+    # Pagination config
+    ITEMS_PER_PAGE = 20
+
+class DevelopmentConfig(Config):
+    DEBUG = True
+    SQLALCHEMY_ECHO = True
+
+class ProductionConfig(Config):
+    DEBUG = False
+
+class TestingConfig(Config):
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+
+
+--- File: ./run.py ---
+# run.py
+from app import create_app
+from app.database import db
+from app.models import Course, Program, CourseOffering, Block, BlockSchedule, ProgramRequirement
+import csv
+from datetime import datetime
+import click
+import os
+
+app = create_app()
+
+def parse_time(time_str):
+    """Convert time string to datetime.time object"""
+    return datetime.strptime(time_str, '%H:%M').time()
+
+@app.cli.command("init-db")
+def init_db():
+    """Initialize the database."""
+    with app.app_context():
+        db.create_all()
+        print('Database initialized.')
+
+@app.cli.command("seed-db")
+def seed_db():
+    """Seed the database with sample data."""
+    # Ensure we're in the correct directory
+    base_dir = os.path.abspath(os.path.dirname(__file__))
+    
+    with app.app_context():
+        try:
+            # Clear existing data
+            BlockSchedule.query.delete()
+            Block.query.delete()
+            CourseOffering.query.delete()
+            ProgramRequirement.query.delete()
+            Course.query.delete()
+            Program.query.delete()
+            
+            # Seed Programs
+            programs_file = os.path.join(base_dir, 'sample_data', 'programs.csv')
+            with open(programs_file, 'r') as file:
+                csv_reader = csv.DictReader(file)
+                for row in csv_reader:
+                    program = Program(
+                        program_id=row['program_id'],
+                        program_name=row['program_name'],
+                        total_enrollment=int(row['total_enrollment']),
+                        blocks_20_count=int(row['blocks_20_count']),
+                        blocks_10_count=int(row['blocks_10_count'])
+                    )
+                    db.session.add(program)
+            
+            # Seed Courses
+            courses_file = os.path.join(base_dir, 'sample_data', 'courses.csv')
+            with open(courses_file, 'r') as file:
+                csv_reader = csv.DictReader(file)
+                for row in csv_reader:
+                    course = Course(
+                        course_id=row['course_id'],
+                        course_name=row['course_name'],
+                        credits=float(row['credits'])
+                    )
+                    db.session.add(course)
+            
+            # Seed Course Offerings
+            offerings_file = os.path.join(base_dir, 'sample_data', 'course_offerings.csv')
+            with open(offerings_file, 'r') as file:
+                csv_reader = csv.DictReader(file)
+                for row in csv_reader:
+                    offering = CourseOffering(
+                        offering_id=int(row['offering_id']),
+                        course_id=row['course_id'],
+                        section_type=row['section_type'],
+                        section_code=row['section_code'],
+                        day_of_week=int(row['day_of_week']),
+                        start_time=parse_time(row['start_time']),
+                        end_time=parse_time(row['end_time']),
+                        capacity=int(row['capacity']),
+                        current_enrollment=int(row['current_enrollment']),
+                        term=row['term'],
+                        academic_year=row['academic_year'],
+                        status=row['status']
+                    )
+                    db.session.add(offering)
+            
+            # Seed Program Requirements
+            requirements_file = os.path.join(base_dir, 'sample_data', 'program_requirements.csv')
+            with open(requirements_file, 'r') as file:
+                csv_reader = csv.DictReader(file)
+                for row in csv_reader:
+                    if row['course_id'] != 'ElectiveB':  # Skip electives for now
+                        requirement = ProgramRequirement(
+                            program_id=row['program_id'],
+                            course_id=row['course_id'],
+                            term=row['term']
+                        )
+                        db.session.add(requirement)
+
+            # Seed Blocks
+            blocks_file = os.path.join(base_dir, 'sample_data', 'blocks.csv')
+            with open(blocks_file, 'r') as file:
+                csv_reader = csv.DictReader(file)
+                for row in csv_reader:
+                    block = Block(
+                        block_id=row['block_id'],
+                        program_id=row['program_id'],
+                        block_size=int(row['block_size']),
+                        term=row['term'],
+                        academic_year=row['academic_year'],
+                        schedule_rating=float(row['schedule_rating']) if row['schedule_rating'] else None,
+                        early_starts=int(row['early_starts']) if row['early_starts'] else 0,
+                        late_ends=int(row['late_ends']) if row['late_ends'] else 0,
+                        long_breaks=int(row['long_breaks']) if row['long_breaks'] else 0,
+                        consecutive_days=int(row['consecutive_days']) if row['consecutive_days'] else 0,
+                        status=row['status']
+                    )
+                    db.session.add(block)
+
+            # Seed Block Schedules
+            schedules_file = os.path.join(base_dir, 'sample_data', 'block_schedules.csv')
+            with open(schedules_file, 'r') as file:
+                csv_reader = csv.DictReader(file)
+                for row in csv_reader:
+                    block_schedule = BlockSchedule(
+                        block_id=row['block_id'],
+                        offering_id=int(row['offering_id'])
+                    )
+                    db.session.add(block_schedule)
+            
+            # Commit all changes
+            db.session.commit()
+            print('Database seeded successfully.')
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f'Error seeding database: {str(e)}')
+            raise
+
+@app.cli.command("clear-db")
+def clear_db():
+    """Clear all data from the database."""
+    with app.app_context():
+        try:
+            BlockSchedule.query.delete()
+            Block.query.delete()
+            CourseOffering.query.delete()
+            ProgramRequirement.query.delete()
+            Course.query.delete()
+            Program.query.delete()
+            db.session.commit()
+            print('Database cleared successfully.')
+        except Exception as e:
+            db.session.rollback()
+            print(f'Error clearing database: {str(e)}')
+            raise
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+
