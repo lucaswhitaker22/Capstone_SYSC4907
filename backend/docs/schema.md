@@ -1,85 +1,86 @@
-## Core Tables
-![alt text](image.png)
+## Database Schema Documentation
+
+The backend uses SQLAlchemy ORM to define the following database schema:
+
 ### Course
-This table stores information about individual courses offered by the institution.
-- **course_id**: Unique identifier for each course (e.g., ECOR1041)
-- **course_name**: Full name of the course
-- **credits**: Number of credits for the course
+
+Represents academic courses.
+
+- `course_id` (String, Primary Key): Unique identifier for the course
+- `course_name` (String): Name of the course
+- `credits` (Numeric): Number of credits for the course
 
 ### Program
-Stores information about academic programs and their block requirements.
-- **program_id**: Unique identifier for each program (e.g., ARCH)
-- **program_name**: Full name of the program
-- **total_enrollment**: Total number of students in the program
-- **blocks_20_count**: Number of 20-student blocks needed
-- **blocks_10_count**: Number of 10-student blocks needed
+
+Represents academic programs.
+
+- `program_id` (String, Primary Key): Unique identifier for the program
+- `program_name` (String): Name of the program
+- `total_enrollment` (Integer): Total number of students enrolled in the program
+- `blocks_20_count` (Integer): Number of 20-student blocks in the program
+- `blocks_10_count` (Integer): Number of 10-student blocks in the program
 
 ### CourseOffering
-Represents specific sections of courses with their scheduling details.
-- **offering_id**: Unique identifier for each course offering
-- **course_id**: Reference to the Course table
-- **section_type**: Type of section (e.g., LECTURE, LAB, TUTORIAL)
-- **section_code**: Specific code for the section (e.g., A1, B2)
-- **day_of_week**: Day of the week (1-5 for Monday to Friday)
-- **start_time**: Start time of the class
-- **end_time**: End time of the class
-- **capacity**: Maximum number of students
-- **current_enrollment**: Current number of enrolled students
-- **term**: Academic term (e.g., FALL, WINTER)
-- **academic_year**: Academic year (e.g., 2024-2025)
-- **status**: Section status (default: OPEN, can be FULL)
+
+Represents specific offerings of courses.
+
+- `offering_id` (Integer, Primary Key): Unique identifier for the offering
+- `course_id` (String, Foreign Key): Reference to the Course
+- `section_type` (String): Type of section (e.g., LECTURE, LAB, TUTORIAL)
+- `section_code` (String): Code for the section
+- `day_of_week` (Integer): Day of the week for the offering
+- `start_time` (Time): Start time of the offering
+- `end_time` (Time): End time of the offering
+- `capacity` (Integer): Maximum capacity of the offering
+- `current_enrollment` (Integer): Current number of enrolled students
+- `term` (String): Term of the offering (e.g., FALL, WINTER)
+- `academic_year` (String): Academic year of the offering
+- `status` (String): Status of the offering (e.g., OPEN, FULL, CANCELLED)
 
 ### ProgramRequirement
-Links courses to programs, specifying required courses for each term.
-- **program_id**: Reference to the Program table
-- **course_id**: Reference to the Course table
-- **term**: Term when the course should be taken
+
+Represents course requirements for programs.
+
+- `program_id` (String, Foreign Key, Primary Key): Reference to the Program
+- `course_id` (String, Foreign Key, Primary Key): Reference to the Course
+- `term` (String, Primary Key): Term in which the course is required
 
 ### Block
-Represents groups of students (10 or 20) with their schedule quality metrics.
-- **block_id**: Unique identifier for each block
-- **program_id**: Reference to the Program table
-- **block_size**: Size of the block (10 or 20 students)
-- **term**: Academic term
-- **academic_year**: Academic year
-- **schedule_rating**: Quality rating of the schedule
-- **early_starts**: Count of 8:30 AM starts
-- **late_ends**: Count of after 18:00 ends
-- **long_breaks**: Count of breaks longer than 3 hours
-- **consecutive_days**: Count of consecutive full days
-- **status**: Block status (default: DRAFT, can be PUBLISHED, LOCKED)
+
+Represents blocks of courses.
+
+- `block_id` (String, Primary Key): Unique identifier for the block
+- `program_id` (String, Foreign Key): Reference to the Program
+- `block_size` (Integer): Size of the block (10 or 20)
+- `term` (String): Term of the block
+- `academic_year` (String): Academic year of the block
+- `schedule_rating` (Numeric): Rating of the block's schedule
+- `early_starts` (Integer): Number of early start times in the block
+- `late_ends` (Integer): Number of late end times in the block
+- `long_breaks` (Integer): Number of long breaks in the block
+- `consecutive_days` (Integer): Number of consecutive days in the block
+- `status` (String): Status of the block (e.g., DRAFT, PUBLISHED, LOCKED)
 
 ### BlockSchedule
-Links blocks to specific course offerings, forming complete schedules.
-- **block_id**: Reference to the Block table
-- **offering_id**: Reference to the CourseOffering table
 
-## Key Features
+Represents the schedule of courses within a block.
 
-1. **Block-Based Scheduling**
-   - Supports both 20 and 10-student blocks
-   - Tracks schedule quality metrics
-   - Manages block status (DRAFT, PUBLISHED, LOCKED)
+- `block_id` (String, Foreign Key, Primary Key): Reference to the Block
+- `offering_id` (Integer, Foreign Key, Primary Key): Reference to the CourseOffering
 
-2. **Schedule Quality Assessment**
-   - Tracks early morning starts (8:30 AM)
-   - Monitors late evening ends (after 18:00)
-   - Counts long breaks between classes (>3 hours)
-   - Tracks consecutive full days
+## Relationships
 
-3. **Enrollment Management**
-   - Tracks current enrollment in course offerings
-   - Enforces capacity limits
-   - Monitors offering status (OPEN, FULL)
+- Course has many CourseOfferings (one-to-many)
+- Program has many Blocks (one-to-many)
+- Program has many ProgramRequirements (one-to-many)
+- Course has many ProgramRequirements (one-to-many)
+- Block has many BlockSchedules (one-to-many)
+- CourseOffering has many BlockSchedules (one-to-many)
 
-4. **Program Requirements**
-   - Specifies term-specific course requirements for each program
+## Constraints
 
-5. **Course Offering Management**
-   - Supports different section types (LECTURE, LAB, TUTORIAL)
-   - Manages detailed scheduling information (day, time, capacity)
-   - Tracks academic terms and years
+- Block size is constrained to be either 10 or 20
+- Unique constraint on (program_id, block_id, term, academic_year) for Block
+- Unique constraint on (course_id, section_type, section_code, term, academic_year) for CourseOffering
 
-6. **Unique Constraints**
-   - Ensures unique course offerings per course, section type, code, term, and academic year
-   - Guarantees unique blocks per program, term, and academic year
+This schema provides a comprehensive structure for managing academic programs, courses, course offerings, and block schedules, allowing for efficient querying and management of the academic scheduling system[1].

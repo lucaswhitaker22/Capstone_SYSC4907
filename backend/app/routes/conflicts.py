@@ -91,23 +91,3 @@ def _find_schedule_conflicts(offering_ids):
                 })
     
     return conflicts
-
-def _find_course_conflicts(schedule_offering_ids, new_offering_id):
-    schedule_offerings = [CourseOffering.query.get(id) for id in schedule_offering_ids]
-    new_offering = CourseOffering.query.get_or_404(new_offering_id)
-    
-    conflicts = []
-    
-    for existing_offering in schedule_offerings:
-        if has_time_conflict(existing_offering, new_offering):
-            conflicts.append({
-                'existing_offering_id': existing_offering.offering_id,
-                'existing_course_id': existing_offering.course_id,
-                'new_offering_id': new_offering.offering_id,
-                'new_course_id': new_offering.course_id,
-                'day': new_offering.day_of_week,
-                'existing_time': f"{existing_offering.start_time}-{existing_offering.end_time}",
-                'new_time': f"{new_offering.start_time}-{new_offering.end_time}"
-            })
-    
-    return conflicts

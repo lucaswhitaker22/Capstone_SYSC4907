@@ -39,6 +39,16 @@ def get_block(block_id):
 @bp.route('/', methods=['POST'])
 def create_block():
     data = request.get_json()
+    
+    # Validate required fields
+    required_fields = ['block_id', 'program_id', 'block_size', 'term', 'academic_year']
+    if not data or not all(field in data for field in required_fields):
+        return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
+    
+    # Check if block already exists
+    if Block.query.get(data['block_id']):
+        return jsonify({'error': 'Block already exists'}), HTTPStatus.CONFLICT
+        
     block = Block(**data)
     db.session.add(block)
     db.session.commit()
@@ -51,6 +61,33 @@ def create_block():
         'academic_year': block.academic_year,
         'status': block.status
     }), HTTPStatus.CREATED
+
+@bp.route('/<block_id>', methods=['PUT'])
+def update_block(block_id):
+    block = Block.query.get_or_404(block_id)
+    data = request.get_json()
+    
+    # Update fields if provided
+    for field in ['program_id', 'block_size', 'term', 'academic_year', 'status']:
+        if field in data:
+            setattr(block, field, data[field])
+    
+    db.session.commit()
+    return jsonify({
+        'block_id': block.block_id,
+        'program_id': block.program_id,
+        'block_size': block.block_size,
+        'term': block.term,
+        'academic_year': block.academic_year,
+        'status': block.status
+    }), HTTPStatus.OK
+
+@bp.route('/<block_id>', methods=['DELETE'])
+def delete_block(block_id):
+    block = Block.query.get_or_404(block_id)
+    db.session.delete(block)
+    db.session.commit()
+    return '', HTTPStatus.NO_CONTENT
 
 @bp.route('/<block_id>/schedule', methods=['GET'])
 def get_block_schedule(block_id):

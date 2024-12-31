@@ -1,9 +1,9 @@
+# app/routes/schedules.py
 from flask import Blueprint, jsonify, request, current_app
 from app.models import BlockSchedule, Block, CourseOffering
-from app.database import db
+from app import db
 from http import HTTPStatus
 from .conflicts import has_time_conflict
-import logging
 
 bp = Blueprint('schedules', __name__, url_prefix='/api/schedules')
 
@@ -17,8 +17,6 @@ def add_offering_to_block(block_id):
                 'message': 'offering_id is required'
             }), HTTPStatus.BAD_REQUEST
 
-        current_app.logger.info(f"Adding offering to block: {block_id}, offering_id: {data['offering_id']}")
-        
         # Check if block exists
         block = Block.query.get(block_id)
         if not block:
@@ -35,11 +33,22 @@ def add_offering_to_block(block_id):
                 'message': f'Offering {data["offering_id"]} not found'
             }), HTTPStatus.NOT_FOUND
         
+        # Check if offering already in block
+        existing_schedule = BlockSchedule.query.filter_by(
+            block_id=block_id, 
+            offering_id=data['offering_id']
+        ).first()
+        if existing_schedule:
+            return jsonify({
+                'error': 'Conflict',
+                'message': 'Offering already exists in block'
+            }), HTTPStatus.CONFLICT
+
         # Get existing offerings in block
         existing_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
         existing_offerings = [schedule.course_offering for schedule in existing_schedules]
         
-        # Check for conflicts using the conflicts module
+        # Check for time conflicts
         conflicts = []
         for existing_offering in existing_offerings:
             if has_time_conflict(existing_offering, new_offering):
@@ -76,7 +85,6 @@ def add_offering_to_block(block_id):
         }), HTTPStatus.CREATED
 
     except Exception as e:
-        current_app.logger.error(f"Error adding offering to block: {str(e)}")
         db.session.rollback()
         return jsonify({
             'error': 'Internal Server Error',
