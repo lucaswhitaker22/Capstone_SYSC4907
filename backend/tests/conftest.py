@@ -3,7 +3,6 @@ import pytest
 from app import create_app, db
 import warnings
 from sqlalchemy import exc as sa_exc
-from app.models import Course, Program, ProgramRequirement
 
 @pytest.fixture
 def app():
