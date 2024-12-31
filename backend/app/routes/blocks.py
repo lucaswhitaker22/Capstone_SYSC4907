@@ -44,23 +44,33 @@ def create_block():
     required_fields = ['block_id', 'program_id', 'block_size', 'term', 'academic_year']
     if not data or not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
-    
+        
+    # Validate block size before attempting insert
+    if data['block_size'] not in (10, 20):
+        return jsonify({'error': 'Block size must be 10 or 20'}), HTTPStatus.BAD_REQUEST
+        
     # Check if block already exists
     if Block.query.get(data['block_id']):
         return jsonify({'error': 'Block already exists'}), HTTPStatus.CONFLICT
         
-    block = Block(**data)
-    db.session.add(block)
-    db.session.commit()
-    
-    return jsonify({
-        'block_id': block.block_id,
-        'program_id': block.program_id,
-        'block_size': block.block_size,
-        'term': block.term,
-        'academic_year': block.academic_year,
-        'status': block.status
-    }), HTTPStatus.CREATED
+    try:
+        block = Block(**data)
+        db.session.add(block)
+        db.session.commit()
+        
+        return jsonify({
+            'block_id': block.block_id,
+            'program_id': block.program_id,
+            'block_size': block.block_size,
+            'term': block.term,
+            'academic_year': block.academic_year,
+            'status': block.status
+        }), HTTPStatus.CREATED
+        
+    except IntegrityError as e:
+        db.session.rollback()
+        return jsonify({'error': 'Invalid block data'}), HTTPStatus.BAD_REQUEST
+
 
 @bp.route('/<block_id>', methods=['PUT'])
 def update_block(block_id):
