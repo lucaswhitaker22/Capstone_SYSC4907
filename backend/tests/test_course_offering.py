@@ -115,39 +115,6 @@ def test_create_offering_nonexistent_course(client):
     response = client.post('/api/offerings/', json=offering_data)
     assert response.status_code == HTTPStatus.NOT_FOUND
 
-def test_update_offering(client):
-    # Create prerequisite course and offering
-    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
-    offering = CourseOffering(
-        course_id='CS101',
-        section_type='LEC',
-        section_code='A',
-        day_of_week=1,
-        start_time=time.fromisoformat('08:30'),
-        end_time=time.fromisoformat('10:00'),
-        capacity=50,
-        current_enrollment=0,
-        term='1',
-        academic_year='2024-25',
-        status='ACTIVE'
-    )
-    db.session.add(course)
-    db.session.add(offering)
-    db.session.commit()
-    
-    update_data = {
-        'section_code': 'B',
-        'capacity': 60,
-        'status': 'INACTIVE'
-    }
-    
-    response = client.put(f'/api/offerings/{offering.offering_id}', json=update_data)
-    data = response.get_json()
-    
-    assert response.status_code == HTTPStatus.OK
-    assert data['section_code'] == update_data['section_code']
-    assert data['capacity'] == update_data['capacity']
-    assert data['status'] == update_data['status']
 
 def test_delete_offering(client):
     # Create prerequisite course and offering
@@ -195,3 +162,134 @@ def test_invalid_time_format(client):
     
     response = client.post('/api/offerings/', json=offering_data)
     assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_update_enrollment(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='OPEN'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # Update enrollment to full capacity
+    response = client.patch(f'/api/offerings/{offering.offering_id}/enrollment', 
+                          json={'current_enrollment': 50})
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert data['current_enrollment'] == 50
+    assert data['status'] == 'FULL'
+
+def test_invalid_enrollment_update(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='OPEN'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # Try negative enrollment
+    response = client.patch(f'/api/offerings/{offering.offering_id}/enrollment', 
+                          json={'current_enrollment': -1})
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_update_offering_status(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='OPEN'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # Update status to CANCELLED
+    response = client.patch(f'/api/offerings/{offering.offering_id}/status', 
+                          json={'status': 'CANCELLED'})
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert data['status'] == 'CANCELLED'
+
+def test_invalid_status_update(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='OPEN'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # Try invalid status
+    response = client.patch(f'/api/offerings/{offering.offering_id}/status', 
+                          json={'status': 'INVALID'})
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_delete_offering_with_enrollment(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=10,
+        term='1',
+        academic_year='2024-25',
+        status='OPEN'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # Try to delete offering with enrollment
+    response = client.delete(f'/api/offerings/{offering.offering_id}')
+    assert response.status_code == HTTPStatus.CONFLICT

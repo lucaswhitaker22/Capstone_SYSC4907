@@ -97,21 +97,40 @@ def create_offering():
 
 @bp.route('/<int:offering_id>', methods=['PUT'])
 def update_offering(offering_id):
-    offering = CourseOffering.query.get_or_404(offering_id)
-    data = request.get_json()
-    
     try:
-        if 'start_time' in data:
-            data['start_time'] = datetime.strptime(data['start_time'], '%H:%M').time()
-        if 'end_time' in data:
-            data['end_time'] = datetime.strptime(data['end_time'], '%H:%M').time()
+        offering = CourseOffering.query.get_or_404(offering_id)
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
             
-        for field in ['section_type', 'section_code', 'day_of_week', 'capacity', 
-                     'current_enrollment', 'term', 'academic_year', 'status']:
+        # Convert time strings if provided
+        if 'start_time' in data:
+            try:
+                data['start_time'] = datetime.strptime(data['start_time'], '%H:%M').time()
+            except ValueError:
+                return jsonify({'error': 'Invalid start_time format. Use HH:MM'}), HTTPStatus.BAD_REQUEST
+                
+        if 'end_time' in data:
+            try:
+                data['end_time'] = datetime.strptime(data['end_time'], '%H:%M').time()
+            except ValueError:
+                return jsonify({'error': 'Invalid end_time format. Use HH:MM'}), HTTPStatus.BAD_REQUEST
+        
+        # Validate day_of_week if provided
+        if 'day_of_week' in data and not 1 <= data['day_of_week'] <= 7:
+            return jsonify({'error': 'day_of_week must be between 1 and 7'}), HTTPStatus.BAD_REQUEST
+            
+        updateable_fields = ['section_type', 'section_code', 'day_of_week', 
+                           'start_time', 'end_time', 'capacity', 'term', 
+                           'academic_year']
+        
+        for field in updateable_fields:
             if field in data:
                 setattr(offering, field, data[field])
                 
         db.session.commit()
+        
         return jsonify({
             'offering_id': offering.offering_id,
             'course_id': offering.course_id,
@@ -127,15 +146,86 @@ def update_offering(offering_id):
             'status': offering.status
         }), HTTPStatus.OK
             
-    except ValueError:
-        return jsonify({'error': 'Invalid time format. Use HH:MM'}), HTTPStatus.BAD_REQUEST
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<int:offering_id>/enrollment', methods=['PATCH'])
+def update_enrollment(offering_id):
+    try:
+        offering = CourseOffering.query.get_or_404(offering_id)
+        data = request.get_json()
+        
+        if 'current_enrollment' not in data:
+            return jsonify({'error': 'current_enrollment is required'}), HTTPStatus.BAD_REQUEST
+            
+        if not isinstance(data['current_enrollment'], int) or data['current_enrollment'] < 0:
+            return jsonify({'error': 'Invalid enrollment count'}), HTTPStatus.BAD_REQUEST
+            
+        # Update enrollment and status
+        offering.current_enrollment = data['current_enrollment']
+        
+        # Auto-update status based on enrollment
+        if offering.current_enrollment >= offering.capacity:
+            offering.status = 'FULL'
+        elif offering.current_enrollment == 0:
+            offering.status = 'OPEN'
+            
+        db.session.commit()
+        
+        return jsonify({
+            'offering_id': offering.offering_id,
+            'current_enrollment': offering.current_enrollment,
+            'capacity': offering.capacity,
+            'status': offering.status
+        }), HTTPStatus.OK
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<int:offering_id>/status', methods=['PATCH'])
+def update_status(offering_id):
+    try:
+        offering = CourseOffering.query.get_or_404(offering_id)
+        data = request.get_json()
+        
+        if 'status' not in data:
+            return jsonify({'error': 'status is required'}), HTTPStatus.BAD_REQUEST
+            
+        valid_statuses = ['OPEN', 'FULL', 'CANCELLED']
+        if data['status'] not in valid_statuses:
+            return jsonify({
+                'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
+            }), HTTPStatus.BAD_REQUEST
+            
+        offering.status = data['status']
+        db.session.commit()
+        
+        return jsonify({
+            'offering_id': offering.offering_id,
+            'status': offering.status
+        }), HTTPStatus.OK
+            
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @bp.route('/<int:offering_id>', methods=['DELETE'])
 def delete_offering(offering_id):
-    offering = CourseOffering.query.get_or_404(offering_id)
-    db.session.delete(offering)
-    db.session.commit()
-    return '', HTTPStatus.NO_CONTENT
+    try:
+        offering = CourseOffering.query.get_or_404(offering_id)
+        
+        # Prevent deletion if offering has enrollments
+        if offering.current_enrollment > 0:
+            return jsonify({
+                'error': 'Cannot delete offering with active enrollments'
+            }), HTTPStatus.CONFLICT
+            
+        db.session.delete(offering)
+        db.session.commit()
+        return '', HTTPStatus.NO_CONTENT
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
