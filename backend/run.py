@@ -23,111 +23,71 @@ def init_db():
 @app.cli.command("seed-db")
 def seed_db():
     """Seed the database with sample data."""
-    # Ensure we're in the correct directory
     base_dir = os.path.abspath(os.path.dirname(__file__))
     
     with app.app_context():
         try:
             # Clear existing data
-            BlockSchedule.query.delete()
-            Block.query.delete()
-            CourseOffering.query.delete()
-            ProgramRequirement.query.delete()
-            Course.query.delete()
-            Program.query.delete()
+            models_to_clear = [
+                BlockSchedule, Block, CourseOffering, 
+                ProgramRequirement, Course, Program
+            ]
+            for model in models_to_clear:
+                model.query.delete()
             
-            # Seed Programs
-            programs_file = os.path.join(base_dir, 'sample_data', 'programs.csv')
-            with open(programs_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    program = Program(
-                        program_id=row['program_id'],
-                        program_name=row['program_name'],
-                        total_enrollment=int(row['total_enrollment']),
-                        blocks_20_count=int(row['blocks_20_count']),
-                        blocks_10_count=int(row['blocks_10_count'])
-                    )
-                    db.session.add(program)
-            
-            # Seed Courses
-            courses_file = os.path.join(base_dir, 'sample_data', 'courses.csv')
-            with open(courses_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    course = Course(
-                        course_id=row['course_id'],
-                        course_name=row['course_name'],
-                        credits=float(row['credits'])
-                    )
-                    db.session.add(course)
-            
-            # Seed Course Offerings
-            offerings_file = os.path.join(base_dir, 'sample_data', 'course_offerings.csv')
-            with open(offerings_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    offering = CourseOffering(
-                        offering_id=int(row['offering_id']),
-                        course_id=row['course_id'],
-                        section_type=row['section_type'],
-                        section_code=row['section_code'],
-                        day_of_week=int(row['day_of_week']),
-                        start_time=parse_time(row['start_time']),
-                        end_time=parse_time(row['end_time']),
-                        capacity=int(row['capacity']),
-                        current_enrollment=int(row['current_enrollment']),
-                        term=row['term'],
-                        academic_year=row['academic_year'],
-                        status=row['status']
-                    )
-                    db.session.add(offering)
-            
-            # Seed Program Requirements
-            requirements_file = os.path.join(base_dir, 'sample_data', 'program_requirements.csv')
-            with open(requirements_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    if row['course_id'] != 'ElectiveB':  # Skip electives for now
-                        requirement = ProgramRequirement(
-                            program_id=row['program_id'],
-                            course_id=row['course_id'],
-                            term=row['term']
-                        )
-                        db.session.add(requirement)
+            # Define data files mapping
+            data_files = {
+                (Program, 'programs.csv'): {
+                    'program_id': str,
+                    'program_name': str,
+                    'total_enrollment': int,
+                    'blocks_20_count': int,
+                    'blocks_10_count': int
+                },
+                (Course, 'courses.csv'): {
+                    'course_id': str,
+                    'course_name': str,
+                    'credits': float
+                },
+                (CourseOffering, 'course_offerings.csv'): {
+                    'offering_id': int,
+                    'course_id': str,
+                    'section_type': str,
+                    'section_code': str,
+                    'day_of_week': int,
+                    'start_time': parse_time,
+                    'end_time': parse_time,
+                    'capacity': int,
+                    'current_enrollment': int,
+                    'term': str,
+                    'academic_year': str,
+                    'status': str
+                }
+            }
 
-            # Seed Blocks
-            blocks_file = os.path.join(base_dir, 'sample_data', 'blocks.csv')
-            with open(blocks_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    block = Block(
-                        block_id=row['block_id'],
-                        program_id=row['program_id'],
-                        block_size=int(row['block_size']),
-                        term=row['term'],
-                        academic_year=row['academic_year'],
-                        schedule_rating=float(row['schedule_rating']) if row['schedule_rating'] else None,
-                        early_starts=int(row['early_starts']) if row['early_starts'] else 0,
-                        late_ends=int(row['late_ends']) if row['late_ends'] else 0,
-                        long_breaks=int(row['long_breaks']) if row['long_breaks'] else 0,
-                        consecutive_days=int(row['consecutive_days']) if row['consecutive_days'] else 0,
-                        status=row['status']
-                    )
-                    db.session.add(block)
+            # Seed data using the mapping
+            for (model, filename), field_types in data_files.items():
+                file_path = os.path.join(base_dir, 'sample_data', filename)
+                with open(file_path, 'r') as file:
+                    for row in csv.DictReader(file):
+                        processed_data = {
+                            field: converter(row[field]) 
+                            for field, converter in field_types.items()
+                        }
+                        db.session.add(model(**processed_data))
 
-            # Seed Block Schedules
-            schedules_file = os.path.join(base_dir, 'sample_data', 'block_schedules.csv')
-            with open(schedules_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    block_schedule = BlockSchedule(
-                        block_id=row['block_id'],
-                        offering_id=int(row['offering_id'])
-                    )
-                    db.session.add(block_schedule)
-            
-            # Commit all changes
+            # Seed program requirements
+            with open(os.path.join(base_dir, 'sample_data', 'program_requirements.csv'), 'r') as file:
+                for row in csv.DictReader(file):
+                    if row['course_id'] != 'ElectiveB':
+                        db.session.add(ProgramRequirement(**row))
+
+            # Seed blocks and schedules
+            for filename, model in [('blocks.csv', Block), ('block_schedules.csv', BlockSchedule)]:
+                with open(os.path.join(base_dir, 'sample_data', filename), 'r') as file:
+                    for row in csv.DictReader(file):
+                        db.session.add(model(**row))
+
             db.session.commit()
             print('Database seeded successfully.')
             

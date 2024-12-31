@@ -1,11 +1,42 @@
-# app/routes/schedules.py
 from flask import Blueprint, jsonify, request, current_app
 from app.models import BlockSchedule, Block, CourseOffering
-from app import db
+from app.database import db
 from http import HTTPStatus
 from .conflicts import has_time_conflict
+import logging
 
 bp = Blueprint('schedules', __name__, url_prefix='/api/schedules')
+
+@bp.route('/block/<block_id>', methods=['GET'])
+def get_block_schedule(block_id):
+    try:
+        block = Block.query.get(block_id)
+        if not block:
+            return jsonify({
+                'error': 'Not Found',
+                'message': f'Block {block_id} not found'
+            }), HTTPStatus.NOT_FOUND
+            
+        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        offerings = []
+        for schedule in schedules:
+            offering = schedule.course_offering
+            offerings.append({
+                'offering_id': offering.offering_id,
+                'course_id': offering.course_id,
+                'section_type': offering.section_type,
+                'section_code': offering.section_code,
+                'day_of_week': offering.day_of_week,
+                'start_time': offering.start_time.strftime('%H:%M'),
+                'end_time': offering.end_time.strftime('%H:%M')
+            })
+        return jsonify(offerings), HTTPStatus.OK
+    except Exception as e:
+        current_app.logger.error(f"Error getting block schedule: {str(e)}")
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @bp.route('/block/<block_id>', methods=['POST'])
 def add_offering_to_block(block_id):
@@ -17,6 +48,8 @@ def add_offering_to_block(block_id):
                 'message': 'offering_id is required'
             }), HTTPStatus.BAD_REQUEST
 
+        current_app.logger.info(f"Adding offering to block: {block_id}, offering_id: {data['offering_id']}")
+        
         # Check if block exists
         block = Block.query.get(block_id)
         if not block:
@@ -33,22 +66,11 @@ def add_offering_to_block(block_id):
                 'message': f'Offering {data["offering_id"]} not found'
             }), HTTPStatus.NOT_FOUND
         
-        # Check if offering already in block
-        existing_schedule = BlockSchedule.query.filter_by(
-            block_id=block_id, 
-            offering_id=data['offering_id']
-        ).first()
-        if existing_schedule:
-            return jsonify({
-                'error': 'Conflict',
-                'message': 'Offering already exists in block'
-            }), HTTPStatus.CONFLICT
-
         # Get existing offerings in block
         existing_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
         existing_offerings = [schedule.course_offering for schedule in existing_schedules]
         
-        # Check for time conflicts
+        # Check for conflicts using the conflicts module
         conflicts = []
         for existing_offering in existing_offerings:
             if has_time_conflict(existing_offering, new_offering):
@@ -85,7 +107,64 @@ def add_offering_to_block(block_id):
         }), HTTPStatus.CREATED
 
     except Exception as e:
+        current_app.logger.error(f"Error adding offering to block: {str(e)}")
         db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+    
+
+@bp.route('/block/<block_id>/offering/<offering_id>', methods=['DELETE'])
+def remove_offering_from_block(block_id, offering_id):
+    try:
+        schedule = BlockSchedule.query.filter_by(
+            block_id=block_id,
+            offering_id=offering_id
+        ).first()
+        
+        if not schedule:
+            return jsonify({
+                'error': 'Not Found',
+                'message': 'Schedule entry not found'
+            }), HTTPStatus.NOT_FOUND
+            
+        db.session.delete(schedule)
+        db.session.commit()
+        
+        return '', HTTPStatus.NO_CONTENT
+    except Exception as e:
+        current_app.logger.error(f"Error removing offering from block: {str(e)}")
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/block/<block_id>/validate', methods=['GET'])
+def validate_block_schedule(block_id):
+    try:
+        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        offerings = [schedule.course_offering for schedule in schedules]
+        
+        conflicts = []
+        for i, offering1 in enumerate(offerings):
+            for offering2 in offerings[i+1:]:
+                if has_time_conflict(offering1, offering2):
+                    conflicts.append({
+                        'offering1_id': offering1.offering_id,
+                        'offering1_course': offering1.course_id,
+                        'offering2_id': offering2.offering_id,
+                        'offering2_course': offering2.course_id,
+                        'day_of_week': offering1.day_of_week
+                    })
+        
+        return jsonify({
+            'valid': len(conflicts) == 0,
+            'conflicts': conflicts
+        }), HTTPStatus.OK
+    except Exception as e:
+        current_app.logger.error(f"Error validating block schedule: {str(e)}")
         return jsonify({
             'error': 'Internal Server Error',
             'message': str(e)
