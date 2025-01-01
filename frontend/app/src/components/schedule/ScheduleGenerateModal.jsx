@@ -11,20 +11,45 @@ const ScheduleGenerateModal = ({ show, blocks, onHide, onGenerate }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}/generate`, {
-        method: 'POST'
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}`, {
+        method: 'GET'
       });
       
       if (response.ok) {
         const data = await response.json();
         setGeneratedSchedule(data);
-        await onGenerate();
       } else {
         const errorData = await response.json();
         setError(errorData.message || 'Failed to generate schedule');
       }
     } catch (error) {
       setError('Error generating schedule');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ schedule: generatedSchedule })
+      });
+      
+      if (response.ok) {
+        await onGenerate();
+        handleClose();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || 'Failed to save schedule');
+      }
+    } catch (error) {
+      setError('Error saving schedule');
     } finally {
       setIsLoading(false);
     }
@@ -75,7 +100,7 @@ const ScheduleGenerateModal = ({ show, blocks, onHide, onGenerate }) => {
 
         {generatedSchedule && (
           <div className="mt-4">
-            <h5>Generated Schedule:</h5>
+            <h5>Generated Schedule Preview:</h5>
             <ListGroup>
               {generatedSchedule.map((offering, index) => (
                 <ListGroup.Item key={index}>
@@ -92,28 +117,39 @@ const ScheduleGenerateModal = ({ show, blocks, onHide, onGenerate }) => {
       </Modal.Body>
       <Modal.Footer>
         <Button variant="secondary" onClick={handleClose}>
-          Close
+          Cancel
         </Button>
-        <Button
-          variant="primary"
-          onClick={handleGenerate}
-          disabled={!selectedBlock || isLoading}
-        >
-          {isLoading ? (
-            <>
-              <Spinner
-                as="span"
-                animation="border"
-                size="sm"
-                role="status"
-                className="me-2"
-              />
-              Generating...
-            </>
-          ) : (
-            'Generate Schedule'
-          )}
-        </Button>
+        {!generatedSchedule ? (
+          <Button
+            variant="primary"
+            onClick={handleGenerate}
+            disabled={!selectedBlock || isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
+                Generating...
+              </>
+            ) : (
+              'Preview Schedule'
+            )}
+          </Button>
+        ) : (
+          <Button
+            variant="success"
+            onClick={handleSave}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
+                Saving...
+              </>
+            ) : (
+              'Save Schedule'
+            )}
+          </Button>
+        )}
       </Modal.Footer>
     </Modal>
   );

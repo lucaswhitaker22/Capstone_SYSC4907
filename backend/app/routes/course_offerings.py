@@ -7,7 +7,7 @@ from datetime import datetime
 
 bp = Blueprint('offerings', __name__, url_prefix='/api/offerings')
 
-@bp.route('/', methods=['GET'])
+@bp.route('/', methods=['GET'],  strict_slashes=False)
 def get_offerings():
     offerings = CourseOffering.query.all()
     return jsonify([{
@@ -25,7 +25,7 @@ def get_offerings():
         'status': o.status
     } for o in offerings]), HTTPStatus.OK
 
-@bp.route('/<int:offering_id>', methods=['GET'])
+@bp.route('/<int:offering_id>', methods=['GET'], strict_slashes=False)
 def get_offering(offering_id):
     offering = CourseOffering.query.get_or_404(offering_id)
     return jsonify({
@@ -43,7 +43,7 @@ def get_offering(offering_id):
         'status': offering.status
     }), HTTPStatus.OK
 
-@bp.route('/', methods=['POST'])
+@bp.route('/', methods=['POST'], strict_slashes=False)
 def create_offering():
     try:
         data = request.get_json()
@@ -95,7 +95,7 @@ def create_offering():
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<int:offering_id>', methods=['PUT'])
+@bp.route('/<int:offering_id>', methods=['PUT'], strict_slashes=False)
 def update_offering(offering_id):
     try:
         offering = CourseOffering.query.get_or_404(offering_id)
@@ -150,7 +150,7 @@ def update_offering(offering_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<int:offering_id>/enrollment', methods=['PATCH'])
+@bp.route('/<int:offering_id>/enrollment', methods=['PATCH'], strict_slashes=False)
 def update_enrollment(offering_id):
     try:
         offering = CourseOffering.query.get_or_404(offering_id)
@@ -184,7 +184,7 @@ def update_enrollment(offering_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<int:offering_id>/status', methods=['PATCH'])
+@bp.route('/<int:offering_id>/status', methods=['PATCH'], strict_slashes=False)
 def update_status(offering_id):
     try:
         offering = CourseOffering.query.get_or_404(offering_id)
@@ -211,7 +211,7 @@ def update_status(offering_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<int:offering_id>', methods=['DELETE'])
+@bp.route('/<int:offering_id>', methods=['DELETE'], strict_slashes=False)
 def delete_offering(offering_id):
     try:
         offering = CourseOffering.query.get_or_404(offering_id)
@@ -229,3 +229,108 @@ def delete_offering(offering_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+    
+
+@bp.route('/bulk', methods=['POST'], strict_slashes=False)
+def create_offerings_bulk():
+    try:
+        data = request.get_json()
+        if not data or 'offerings' not in data:
+            return jsonify({
+                'error': 'No offerings provided'
+            }), HTTPStatus.BAD_REQUEST
+
+        offerings_data = data['offerings']
+        created_offerings = []
+        errors = []
+
+        # Validate all offerings before creating any
+        for offering_data in offerings_data:
+            # Check required fields
+            required_fields = [
+                'course_id', 'section_type', 'section_code', 
+                'day_of_week', 'start_time', 'end_time', 
+                'capacity', 'term', 'academic_year'
+            ]
+            if not all(k in offering_data for k in required_fields):
+                errors.append(f"Missing required fields for offering {offering_data.get('offering_id', 'Unknown')}")
+                continue
+
+            # Validate course exists
+            if not Course.query.get(offering_data['course_id']):
+                errors.append(f"Course {offering_data['course_id']} does not exist")
+                continue
+
+            # Validate section_type
+            valid_types = ['LECTURE', 'LAB', 'TUTORIAL']
+            if offering_data['section_type'] not in valid_types:
+                errors.append(f"Invalid section_type for offering {offering_data['offering_id']}")
+                continue
+
+            # Validate day_of_week
+            try:
+                day = int(offering_data['day_of_week'])
+                if not 1 <= day <= 5:
+                    errors.append(f"day_of_week must be between 1 and 5 for offering {offering_data['offering_id']}")
+                    continue
+            except ValueError:
+                errors.append(f"Invalid day_of_week for offering {offering_data['offering_id']}")
+                continue
+
+            # Validate times
+            try:
+                start_time = datetime.strptime(offering_data['start_time'], '%H:%M').time()
+                end_time = datetime.strptime(offering_data['end_time'], '%H:%M').time()
+                if end_time <= start_time:
+                    errors.append(f"End time must be after start time for offering {offering_data['offering_id']}")
+                    continue
+            except ValueError:
+                errors.append(f"Invalid time format for offering {offering_data['offering_id']}")
+                continue
+
+            # Validate capacity
+            try:
+                capacity = int(offering_data['capacity'])
+                if capacity <= 0:
+                    errors.append(f"Capacity must be positive for offering {offering_data['offering_id']}")
+                    continue
+            except ValueError:
+                errors.append(f"Invalid capacity for offering {offering_data['offering_id']}")
+                continue
+
+        # If there are validation errors, return them
+        if errors and not created_offerings:
+            return jsonify({
+                'error': 'Validation failed',
+                'errors': errors
+            }), HTTPStatus.BAD_REQUEST
+
+        # Create validated offerings
+        for offering_data in offerings_data:
+            if str(offering_data.get('offering_id')) not in [e.split()[-1] for e in errors]:
+                # Convert times to proper format
+                offering_data['start_time'] = datetime.strptime(offering_data['start_time'], '%H:%M').time()
+                offering_data['end_time'] = datetime.strptime(offering_data['end_time'], '%H:%M').time()
+                
+                # Set default values
+                offering_data['status'] = offering_data.get('status', 'OPEN')
+                offering_data['current_enrollment'] = offering_data.get('current_enrollment', 0)
+
+                offering = CourseOffering(**offering_data)
+                db.session.add(offering)
+                created_offerings.append(offering_data['offering_id'])
+
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Offerings created successfully',
+            'created': created_offerings,
+            'errors': errors
+        }), HTTPStatus.CREATED if created_offerings else HTTPStatus.BAD_REQUEST
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR

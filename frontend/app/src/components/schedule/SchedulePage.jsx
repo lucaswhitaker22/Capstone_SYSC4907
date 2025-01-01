@@ -93,8 +93,43 @@ const SchedulePage = () => {
     setShowEditModal(true);
   };
 
-  const handleGenerateSchedule = () => {
-    setShowGenerateModal(true);
+  const handleGenerateSchedule = async (blockId) => {
+    try {
+      const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        await fetchAllSchedules();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Error generating schedule');
+      }
+    } catch (error) {
+      console.error('Error generating schedule:', error);
+      alert('Error generating schedule');
+    }
+  };
+
+
+  const handleDeleteSchedule = async (blockId) => {
+    if (window.confirm('Are you sure you want to delete this schedule?')) {
+      try {
+        const response = await fetch(`${API_URL}/schedules/block/${blockId}`, {
+          method: 'DELETE'
+        });
+        
+        if (response.ok) {
+          await fetchAllSchedules();
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error deleting schedule');
+        }
+      } catch (error) {
+        console.error('Error deleting schedule:', error);
+        alert('Error deleting schedule');
+      }
+    }
   };
 
   const handleValidateSchedule = async (blockId) => {
@@ -126,6 +161,8 @@ const SchedulePage = () => {
         onView={handleViewSchedule}
         onEdit={handleEditSchedule}
         onValidate={handleValidateSchedule}
+        onDelete={handleDeleteSchedule}
+        onGenerate={handleGenerateSchedule}
         isLoading={isLoading}
       />
 

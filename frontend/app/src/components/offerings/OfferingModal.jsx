@@ -17,6 +17,21 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
 
   const [formData, setFormData] = useState(initialFormData);
   const [validated, setValidated] = useState(false);
+  const [courses, setCourses] = useState([]);
+
+  // Fetch courses for dropdown
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:5000/api/courses/');
+        const data = await response.json();
+        setCourses(data);
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+      }
+    };
+    fetchCourses();
+  }, []);
 
   useEffect(() => {
     if (offering) {
@@ -49,7 +64,6 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     const form = e.currentTarget;
-    
     if (form.checkValidity()) {
       onSave({
         ...formData,
@@ -72,17 +86,23 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Course ID</Form.Label>
-                <Form.Control
-                  type="text"
+                <Form.Label>Course</Form.Label>
+                <Form.Select
                   name="course_id"
                   value={formData.course_id}
                   onChange={handleChange}
                   required
                   disabled={offering}
-                />
+                >
+                  <option value="">Select a course...</option>
+                  {courses.map(course => (
+                    <option key={course.course_id} value={course.course_id}>
+                      {course.course_id} - {course.course_name}
+                    </option>
+                  ))}
+                </Form.Select>
                 <Form.Control.Feedback type="invalid">
-                  Please provide a course ID.
+                  Please select a course.
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
@@ -102,20 +122,26 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
               </Form.Group>
             </Col>
           </Row>
-
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Section Code</Form.Label>
-                <Form.Control
-                  type="text"
+                <Form.Select
                   name="section_code"
                   value={formData.section_code}
                   onChange={handleChange}
                   required
-                />
+                  disabled={!formData.course_id}
+                >
+                  <option value="">Select a section code...</option>
+                  {['A', 'B', 'C', 'D', 'E', 'F'].map(code => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </Form.Select>
                 <Form.Control.Feedback type="invalid">
-                  Please provide a section code.
+                  Please select a section code.
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>

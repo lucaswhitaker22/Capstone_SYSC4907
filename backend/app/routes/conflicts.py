@@ -5,7 +5,7 @@ from http import HTTPStatus
 
 bp = Blueprint('conflicts', __name__, url_prefix='/api/conflicts')
 
-@bp.route('/offerings/<offering1_id>/<offering2_id>', methods=['GET'])
+@bp.route('/offerings/<offering1_id>/<offering2_id>', methods=['GET'], strict_slashes=False)
 def check_offering_conflict(offering1_id, offering2_id):
     offering1 = CourseOffering.query.get_or_404(offering1_id)
     offering2 = CourseOffering.query.get_or_404(offering2_id)
@@ -18,7 +18,7 @@ def check_offering_conflict(offering1_id, offering2_id):
         'offering2': offering2.course_id
     }), HTTPStatus.OK
 
-@bp.route('/schedule/conflicts', methods=['POST'])
+@bp.route('/schedule/conflicts', methods=['POST'], strict_slashes=False)
 def check_schedule_conflicts():
     data = request.get_json()
     offering_ids = data.get('offering_ids', [])
@@ -29,7 +29,7 @@ def check_schedule_conflicts():
         'conflicts': conflicts
     }), HTTPStatus.OK
 
-@bp.route('/schedule/check-course', methods=['POST'])
+@bp.route('/schedule/check-course', methods=['POST'], strict_slashes=False)
 def check_course_conflicts():
     data = request.get_json()
     schedule_offering_ids = data.get('schedule_offering_ids', [])

@@ -1,0 +1,114 @@
+import React, { useState, useEffect } from 'react';
+import { Container, Table, Button, Badge } from 'react-bootstrap';
+import CourseModal from './CoursesModal';
+import CourseUploadModal from './CourseUploadModal';
+const CoursesPage = () => {
+  const [courses, setCourses] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [error, setError] = useState(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+
+  const fetchCourses = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/courses/');
+      const data = await response.json();
+      setCourses(data);
+    } catch (error) {
+      setError('Error fetching courses');
+    }
+  };
+
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+  const handleDelete = async (courseId) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/courses/${courseId}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        fetchCourses();
+      }
+    } catch (error) {
+      setError('Error deleting course');
+    }
+  };
+
+  const handleEdit = (course) => {
+    setSelectedCourse(course);
+    setShowModal(true);
+  };
+
+  return (
+    <Container className="py-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1>Courses</h1>
+        <Button variant="outline-primary" className="me-2" onClick={() => setShowUploadModal(true)}>
+      Upload CSV
+    </Button>
+        <Button variant="primary" onClick={() => setShowModal(true)}>
+          Add Course
+        </Button>
+      </div>
+
+      <Table striped bordered hover responsive>
+        <thead>
+          <tr>
+            <th>Course ID</th>
+            <th>Course Name</th>
+            <th>Credits</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {courses.map((course) => (
+            <tr key={course.course_id}>
+              <td>{course.course_id}</td>
+              <td>{course.course_name}</td>
+              <td>{course.credits}</td>
+              <td>
+                <Button 
+                  variant="outline-primary" 
+                  size="sm" 
+                  className="me-2"
+                  onClick={() => handleEdit(course)}
+                >
+                  Edit
+                </Button>
+                <Button 
+                  variant="outline-danger" 
+                  size="sm"
+                  onClick={() => {
+                    handleDelete(course.course_id);
+                  }}
+                >
+                  Delete
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+
+      <CourseModal 
+        show={showModal}
+        onHide={() => {
+          setShowModal(false);
+          setSelectedCourse(null);
+        }}
+        course={selectedCourse}
+        onSave={fetchCourses}
+      />
+
+    <CourseUploadModal
+    show={showUploadModal}
+    onHide={() => setShowUploadModal(false)}
+    onSave={fetchCourses}
+    />
+    </Container>
+  );
+};
+
+export default CoursesPage;

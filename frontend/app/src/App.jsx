@@ -7,6 +7,7 @@ import BlocksPage from './components/blocks/BlocksPage';
 import ProgramsPage from './components/programs/ProgramsPage';
 import ConflictsPage from './components/conflicts/ConflictsPage';
 import SchedulePage from './components/schedule/SchedulePage';
+import CoursesPage from './components/courses/CoursesPage';
 const App = () => {
   return (
     <BrowserRouter>
@@ -15,6 +16,8 @@ const App = () => {
         <Routes>
           <Route path="/offerings" element={<OfferingsPage />} />
           <Route path="/blocks" element={<BlocksPage/>} />
+          <Route path="/courses" element={<CoursesPage/>} />
+
           <Route path="/programs" element={<ProgramsPage/>} />
           <Route path="/conflicts" element={<ConflictsPage/>} />
           <Route path="/schedule" element={<SchedulePage/>} />

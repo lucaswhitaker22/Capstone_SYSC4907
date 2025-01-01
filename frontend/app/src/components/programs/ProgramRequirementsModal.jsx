@@ -2,30 +2,44 @@ import React, { useEffect, useState } from 'react';
 import { Modal, Form, Button, Table, Row, Col } from 'react-bootstrap';
 
 const ProgramRequirementsModal = ({ show, programId, onHide }) => {
-  const [requirements, setRequirements] = useState([]);
-  const [newRequirement, setNewRequirement] = useState({
-    course_id: '',
-    term: ''
-  });
-  const [isLoading, setIsLoading] = useState(true);
+    const [requirements, setRequirements] = useState([]);
+    const [courses, setCourses] = useState([]); // Add courses state
+    const [newRequirement, setNewRequirement] = useState({
+      course_id: '',
+      term: ''
+    });
+    const [isLoading, setIsLoading] = useState(true);
 
-  const fetchRequirements = async () => {
+    const fetchRequirements = async () => {
+        try {
+          const response = await fetch(`http://127.0.0.1:5000/api/requirements/program/${programId}`);
+          if (response.ok) {
+            const data = await response.json();
+            setRequirements(data);
+          }
+        } catch (error) {
+          console.error('Error fetching requirements:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+    
+  // Add function to fetch courses
+  const fetchCourses = async () => {
     try {
-      const response = await fetch(`http://127.0.0.1:5000/api/requirements/program/${programId}`);
+      const response = await fetch('http://127.0.0.1:5000/api/courses');
       if (response.ok) {
         const data = await response.json();
-        setRequirements(data);
+        setCourses(data);
       }
     } catch (error) {
-      console.error('Error fetching requirements:', error);
-    } finally {
-      setIsLoading(false);
+      console.error('Error fetching courses:', error);
     }
   };
-
   useEffect(() => {
     if (show && programId) {
       fetchRequirements();
+      fetchCourses(); // Fetch courses when modal opens
     }
   }, [show, programId]);
 
@@ -99,16 +113,22 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Course ID</Form.Label>
-                <Form.Control
-                  type="text"
+                <Form.Label>Course</Form.Label>
+                <Form.Select
                   value={newRequirement.course_id}
                   onChange={(e) => setNewRequirement(prev => ({
                     ...prev,
                     course_id: e.target.value
                   }))}
                   required
-                />
+                >
+                  <option value="">Select a course...</option>
+                  {courses.map(course => (
+                    <option key={course.course_id} value={course.course_id}>
+                      {course.course_id} - {course.course_name}
+                    </option>
+                  ))}
+                </Form.Select>
               </Form.Group>
             </Col>
             <Col md={4}>

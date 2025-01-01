@@ -7,7 +7,7 @@ import logging
 
 bp = Blueprint('schedules', __name__, url_prefix='/api/schedules')
 
-@bp.route('/block/<block_id>', methods=['GET'])
+@bp.route('/block/<block_id>', methods=['GET'], strict_slashes=False)
 def get_block_schedule(block_id):
     try:
         block = Block.query.get(block_id)
@@ -38,7 +38,33 @@ def get_block_schedule(block_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/block/<block_id>', methods=['POST'])
+@bp.route('/block/<block_id>', methods=['DELETE'], strict_slashes=False)
+def delete_block_schedule(block_id):
+    try:
+        # Check if block exists
+        block = Block.query.get_or_404(block_id)
+        
+        # Check if block is locked
+        if block.status == 'LOCKED':
+            return jsonify({
+                'error': 'Cannot delete schedule of locked block'
+            }), HTTPStatus.FORBIDDEN
+
+        # Delete all schedule entries for the block
+        BlockSchedule.query.filter_by(block_id=block_id).delete()
+        db.session.commit()
+        
+        return '', HTTPStatus.NO_CONTENT
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@bp.route('/block/<block_id>', methods=['POST'], strict_slashes=False)
 def add_offering_to_block(block_id):
     try:
         data = request.get_json()
@@ -114,7 +140,7 @@ def add_offering_to_block(block_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
     
-@bp.route('/block/<block_id>/generate', methods=['POST'])
+@bp.route('/block/<block_id>/generate', methods=['POST'], strict_slashes=False)
 def generate_block_schedule(block_id):
     try:
         # Get block and validate
@@ -178,7 +204,7 @@ def generate_block_schedule(block_id):
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
     
-@bp.route('/block/<block_id>/offering/<offering_id>', methods=['DELETE'])
+@bp.route('/block/<block_id>/offering/<offering_id>', methods=['DELETE'], strict_slashes=False)
 def remove_offering_from_block(block_id, offering_id):
     try:
         schedule = BlockSchedule.query.filter_by(
@@ -204,7 +230,7 @@ def remove_offering_from_block(block_id, offering_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/block/<block_id>/validate', methods=['GET'])
+@bp.route('/block/<block_id>/validate', methods=['GET'], strict_slashes=False)
 def validate_block_schedule(block_id):
     try:
         schedules = BlockSchedule.query.filter_by(block_id=block_id).all()

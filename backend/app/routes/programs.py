@@ -6,7 +6,7 @@ from http import HTTPStatus
 
 bp = Blueprint('programs', __name__, url_prefix='/api/programs')
 
-@bp.route('/', methods=['GET'])
+@bp.route('/', methods=['GET'], strict_slashes=False)
 def get_programs():
     try:
         programs = Program.query.all()
@@ -23,7 +23,7 @@ def get_programs():
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<program_id>', methods=['GET'])
+@bp.route('/<program_id>', methods=['GET'], strict_slashes=False)
 def get_program(program_id):
     program = Program.query.get_or_404(program_id)
     return jsonify({
@@ -77,7 +77,7 @@ def create_program():
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<program_id>', methods=['PUT'])
+@bp.route('/<program_id>', methods=['PUT'], strict_slashes=False)
 def update_program(program_id):
     program = Program.query.get_or_404(program_id)
     data = request.get_json()
@@ -110,14 +110,14 @@ def update_program(program_id):
         'blocks_10_count': program.blocks_10_count
     }), HTTPStatus.OK
 
-@bp.route('/<program_id>', methods=['DELETE'])
+@bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
 def delete_program(program_id):
     program = Program.query.get_or_404(program_id)
     db.session.delete(program)
     db.session.commit()
     return '', HTTPStatus.NO_CONTENT
 
-@bp.route('/<program_id>/enrollment', methods=['PATCH'])
+@bp.route('/<program_id>/enrollment', methods=['PATCH'], strict_slashes=False)
 def update_enrollment(program_id):
     try:
         program = Program.query.get_or_404(program_id)
@@ -143,7 +143,7 @@ def update_enrollment(program_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<program_id>/blocks', methods=['PATCH'])
+@bp.route('/<program_id>/blocks', methods=['PATCH'], strict_slashes=False)
 def update_block_counts(program_id):
     try:
         program = Program.query.get_or_404(program_id)

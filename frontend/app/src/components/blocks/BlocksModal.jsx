@@ -57,39 +57,18 @@ const BlocksModal = ({ show, block, onHide, onSave }) => {
     }));
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     const form = e.currentTarget;
     
     if (form.checkValidity()) {
-      try {
-        const response = await fetch(`${API_URL}/blocks/`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-              ...formData,
-              block_size: parseInt(formData.block_size)
-            })
-          });
-  
-        if (response.ok) {
-          onSave();
-          onHide();
-        } else {
-          const error = await response.json();
-          alert(error.error || 'Error saving block');
-        }
-      } catch (error) {
-        console.error('Error saving block:', error);
-      }
+      onSave({
+        ...formData,
+        block_size: parseInt(formData.block_size)
+      });
     }
     setValidated(true);
   };
-  
 
   return (
     <Modal show={show} onHide={onHide} size="lg">

@@ -1,7 +1,13 @@
 import React from 'react';
 import { Table, Button, Badge, Spinner } from 'react-bootstrap';
 
-const ScheduleTable = ({ schedules = [], onView, onEdit, onValidate, isLoading }) => {
+const ScheduleTable = ({   schedules = [], 
+    onView, 
+    onEdit, 
+    onValidate, 
+    onDelete, 
+    isLoading,
+onGenerate }) => {
   if (isLoading) {
     return (
       <div className="text-center p-4">
@@ -89,11 +95,25 @@ const ScheduleTable = ({ schedules = [], onView, onEdit, onValidate, isLoading }
                   Edit
                 </Button>
                 <Button
+                  variant="success"
+                  size="sm"
+                  onClick={() => onGenerate(schedule.block_id)}
+                >
+                  Generate
+                </Button>
+                <Button
                   variant="info"
                   size="sm"
                   onClick={() => onValidate(schedule.block_id)}
                 >
                   Validate
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => onDelete(schedule.block_id)}
+                >
+                  Clear
                 </Button>
               </div>
             </td>

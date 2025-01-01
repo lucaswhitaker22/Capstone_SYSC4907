@@ -6,7 +6,7 @@ from http import HTTPStatus
 
 bp = Blueprint('blocks', __name__, url_prefix='/api/blocks')
 
-@bp.route('/', methods=['GET'])
+@bp.route('/', methods=['GET'], strict_slashes=False)
 def get_blocks():
     blocks = Block.query.all()
     return jsonify([{
@@ -19,7 +19,7 @@ def get_blocks():
         'status': b.status
     } for b in blocks]), HTTPStatus.OK
 
-@bp.route('/<block_id>', methods=['GET'])
+@bp.route('/<block_id>', methods=['GET'], strict_slashes=False)
 def get_block(block_id):
     block = Block.query.get_or_404(block_id)
     return jsonify({
@@ -36,7 +36,7 @@ def get_block(block_id):
         'status': block.status
     }), HTTPStatus.OK
 
-@bp.route('/', methods=['POST'])
+@bp.route('/', methods=['POST'], strict_slashes=False)
 def create_block():
     data = request.get_json()
     
@@ -71,7 +71,7 @@ def create_block():
         db.session.rollback()
         return jsonify({'error': 'Invalid block data'}), HTTPStatus.BAD_REQUEST
 
-@bp.route('/<block_id>/status', methods=['PATCH'])
+@bp.route('/<block_id>/status', methods=['PATCH'], strict_slashes=False)
 def update_block_status(block_id):
     try:
         block = Block.query.get_or_404(block_id)
@@ -100,7 +100,7 @@ def update_block_status(block_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<block_id>', methods=['PUT'])
+@bp.route('/<block_id>', methods=['PUT'], strict_slashes=False)
 def update_block(block_id):
     try:
         block = Block.query.get_or_404(block_id)
@@ -137,7 +137,7 @@ def update_block(block_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<block_id>', methods=['DELETE'])
+@bp.route('/<block_id>', methods=['DELETE'], strict_slashes=False)
 def delete_block(block_id):
     try:
         block = Block.query.get_or_404(block_id)
@@ -164,7 +164,7 @@ def delete_block(block_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<block_id>/rating', methods=['POST'])
+@bp.route('/<block_id>/rating', methods=['POST'], strict_slashes=False)
 def calculate_block_rating(block_id):
     try:
         block = Block.query.get_or_404(block_id)

@@ -6,7 +6,7 @@ from http import HTTPStatus
 
 bp = Blueprint('requirements', __name__, url_prefix='/api/requirements')
 
-@bp.route('/program/<program_id>', methods=['GET'])
+@bp.route('/program/<program_id>', methods=['GET'], strict_slashes=False)
 def get_program_requirements(program_id):
     try:
         if not Program.query.get(program_id):
@@ -24,7 +24,7 @@ def get_program_requirements(program_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/', methods=['POST'])
+@bp.route('/', methods=['POST'], strict_slashes=False)
 def create_requirement():
     try:
         data = request.get_json()
@@ -80,7 +80,7 @@ def create_requirement():
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<int:requirement_id>', methods=['PUT'])
+@bp.route('/<int:requirement_id>', methods=['PUT'], strict_slashes=False)
 def update_requirement(requirement_id):
     try:
         requirement = ProgramRequirement.query.get_or_404(requirement_id)
@@ -107,7 +107,7 @@ def update_requirement(requirement_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<int:requirement_id>', methods=['DELETE'])
+@bp.route('/<int:requirement_id>', methods=['DELETE'], strict_slashes=False)
 def delete_requirement(requirement_id):
     try:
         requirement = ProgramRequirement.query.get_or_404(requirement_id)
@@ -121,7 +121,7 @@ def delete_requirement(requirement_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/validate/<program_id>', methods=['POST'])
+@bp.route('/validate/<program_id>', methods=['POST'], strict_slashes=False)
 def validate_program_schedule(program_id):
     try:
         program = Program.query.get_or_404(program_id)
