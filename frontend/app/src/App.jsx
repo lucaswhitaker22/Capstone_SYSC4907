@@ -5,6 +5,7 @@ import Navigation from './components/shared/Navigation';
 import OfferingsPage from './components/offerings/OfferingPage';
 import BlocksPage from './components/blocks/BlocksPage';
 import ProgramsPage from './components/programs/ProgramsPage';
+import ConflictsPage from './components/conflicts/ConflictsPage';
 const App = () => {
   return (
     <BrowserRouter>
@@ -14,6 +15,7 @@ const App = () => {
           <Route path="/offerings" element={<OfferingsPage />} />
           <Route path="/blocks" element={<BlocksPage/>} />
           <Route path="/programs" element={<ProgramsPage/>} />
+          <Route path="/conflicts" element={<ConflictsPage/>} />
           <Route path="/" element={<div>Welcome to Course Management System</div>} />
         </Routes>
       </Container>

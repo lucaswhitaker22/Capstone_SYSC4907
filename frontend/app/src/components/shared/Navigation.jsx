@@ -13,6 +13,7 @@ const Navigation = () => {
             <Nav.Link as={Link} to="/offerings">Course Offerings</Nav.Link>
             <Nav.Link as={Link} to="/blocks">Blocks</Nav.Link>
             <Nav.Link as={Link} to="/programs">Programs</Nav.Link>
+            <Nav.Link as={Link} to="/conflicts">Conflict Checker</Nav.Link>
           </Nav>
         </Navbar.Collapse>
       </Container>
