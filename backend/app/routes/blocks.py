@@ -144,12 +144,19 @@ def delete_block(block_id):
         
         # Check if block can be deleted (not LOCKED)
         if block.status == 'LOCKED':
-            return jsonify({'error': 'Cannot delete locked block'}), HTTPStatus.FORBIDDEN
-            
+            return jsonify({
+                'error': 'Cannot delete locked block'
+            }), HTTPStatus.FORBIDDEN
+
+        # Delete associated block schedules first
+        BlockSchedule.query.filter_by(block_id=block_id).delete()
+        
+        # Delete the block
         db.session.delete(block)
         db.session.commit()
-        return '', HTTPStatus.NO_CONTENT
         
+        return '', HTTPStatus.NO_CONTENT
+
     except Exception as e:
         db.session.rollback()
         return jsonify({

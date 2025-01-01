@@ -2,25 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
 
 const BlocksModal = ({ show, block, onHide, onSave }) => {
-    const initialFormData = {
-      block_id: '',
-      program_id: '',
-      block_size: '10',
-      term: '',
-      academic_year: '',
-      status: 'DRAFT'
-    };
-  
-    const [formData, setFormData] = useState(initialFormData);
-    const [validated, setValidated] = useState(false);
-    const [programs, setPrograms] = useState([]);
-  
-    useEffect(() => {
-        if (show) {
-          fetchPrograms();
-        }
-      }, [show]);
-    
+  const initialFormData = {
+    block_id: '',
+    program_id: '',
+    block_size: '10',
+    term: '',
+    academic_year: '',
+    status: 'DRAFT'
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
+  const [validated, setValidated] = useState(false);
+  const [programs, setPrograms] = useState([]);
+
+  useEffect(() => {
+    if (show) {
+      fetchPrograms();
+    }
+  }, [show]);
 
   useEffect(() => {
     if (block) {
@@ -38,18 +37,17 @@ const BlocksModal = ({ show, block, onHide, onSave }) => {
     setValidated(false);
   }, [block, show]);
 
-
   const API_URL = 'http://127.0.0.1:5000/api';
-  
-    const fetchPrograms = async () => {
-        try {
-        const response = await fetch(`${API_URL}/programs`);
-        const data = await response.json();
-        setPrograms(data);
-        } catch (error) {
-        console.error('Error fetching programs:', error);
-        }
+
+  const fetchPrograms = async () => {
+    try {
+      const response = await fetch(`${API_URL}/programs`);
+      const data = await response.json();
+      setPrograms(data);
+    } catch (error) {
+      console.error('Error fetching programs:', error);
     }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -59,18 +57,39 @@ const BlocksModal = ({ show, block, onHide, onSave }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const form = e.currentTarget;
     
     if (form.checkValidity()) {
-      onSave({
-        ...formData,
-        block_size: parseInt(formData.block_size)
-      });
+      try {
+        const response = await fetch(`${API_URL}/blocks/`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              ...formData,
+              block_size: parseInt(formData.block_size)
+            })
+          });
+  
+        if (response.ok) {
+          onSave();
+          onHide();
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error saving block');
+        }
+      } catch (error) {
+        console.error('Error saving block:', error);
+      }
     }
     setValidated(true);
   };
+  
 
   return (
     <Modal show={show} onHide={onHide} size="lg">

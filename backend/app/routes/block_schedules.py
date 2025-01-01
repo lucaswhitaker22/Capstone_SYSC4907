@@ -114,7 +114,70 @@ def add_offering_to_block(block_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
     
+@bp.route('/block/<block_id>/generate', methods=['POST'])
+def generate_block_schedule(block_id):
+    try:
+        # Get block and validate
+        block = Block.query.get_or_404(block_id)
+        if block.status == 'LOCKED':
+            return jsonify({
+                'error': 'Cannot modify locked block'
+            }), HTTPStatus.FORBIDDEN
 
+        # Clear existing schedule
+        BlockSchedule.query.filter_by(block_id=block_id).delete()
+        db.session.commit()
+
+        # Get available offerings for the term
+        available_offerings = CourseOffering.query.filter_by(
+            term=block.term,
+            academic_year=block.academic_year,
+            status='OPEN'
+        ).all()
+
+        # Generate schedule
+        selected_offerings = []
+        for offering in available_offerings:
+            # Check conflicts with already selected offerings
+            has_conflicts = any(
+                has_time_conflict(offering, selected) 
+                for selected in selected_offerings
+            )
+            
+            if not has_conflicts:
+                selected_offerings.append(offering)
+                block_schedule = BlockSchedule(
+                    block_id=block_id,
+                    offering_id=offering.offering_id
+                )
+                db.session.add(block_schedule)
+
+            if len(selected_offerings) >= block.block_size:
+                break
+
+        db.session.commit()
+
+        # Return formatted response matching frontend expectations
+        formatted_offerings = [{
+            'offering_id': o.offering_id,
+            'course_id': o.course_id,
+            'section_type': o.section_type,
+            'section_code': o.section_code,
+            'day_of_week': o.day_of_week,
+            'start_time': o.start_time.strftime('%H:%M'),
+            'end_time': o.end_time.strftime('%H:%M')
+        } for o in selected_offerings]
+
+        return jsonify(formatted_offerings), HTTPStatus.CREATED
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+    
 @bp.route('/block/<block_id>/offering/<offering_id>', methods=['DELETE'])
 def remove_offering_from_block(block_id, offering_id):
     try:

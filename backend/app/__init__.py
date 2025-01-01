@@ -13,7 +13,14 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
 
     # Initialize CORS
-    CORS(app)
+    CORS(app, resources={
+        r"*": {
+            "origins": ["http://localhost:3000"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True
+        }
+    })
 
     # Initialize extensions
     db.init_app(app)

@@ -1,0 +1,5 @@
+program_id,program_name,total_enrollment,blocks_20_count,blocks_10_count
+ARCH,Architectural Engineering,90,4,1
+ELEC,Electrical Engineering,120,5,2
+COMP,Computer Systems Engineering,100,4,2
+MECH,Mechanical Engineering,110,5,1

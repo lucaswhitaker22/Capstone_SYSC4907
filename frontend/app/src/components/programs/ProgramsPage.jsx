@@ -15,7 +15,7 @@ const ProgramsPage = () => {
 
   const fetchPrograms = async () => {
     try {
-      const response = await fetch(`${API_URL}/programs`);
+      const response = await fetch(`${API_URL}/programs/`);
       const data = await response.json();
       setPrograms(data);
     } catch (error) {
@@ -62,7 +62,7 @@ const ProgramsPage = () => {
       const method = selectedProgram ? 'PUT' : 'POST';
       const url = selectedProgram 
         ? `${API_URL}/programs/${selectedProgram.program_id}`
-        : `${API_URL}/programs`;
+        : `${API_URL}/programs/`;
 
       const response = await fetch(url, {
         method,

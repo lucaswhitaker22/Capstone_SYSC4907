@@ -1,0 +1,4 @@
+block_id,program_id,block_size,term,academic_year,schedule_rating,early_starts,late_ends,long_breaks,consecutive_days,status
+F_ENG_1,ARCH,20,FALL,2024-2025,95.5,1,0,0,5,DRAFT
+F_ENG_2,ARCH,20,FALL,2024-2025,92.1,1,0,0,5,DRAFT
+F_ENG_3,ARCH,20,FALL,2024-2025,90.5,1,0,0,5,DRAFT
