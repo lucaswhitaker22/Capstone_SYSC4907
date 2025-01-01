@@ -1,9 +1,10 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Container } from 'react-bootstrap';
-import Navigation from './components/Navigation';
+import Navigation from './components/shared/Navigation';
 import OfferingsPage from './components/offerings/OfferingPage';
 import BlocksPage from './components/blocks/BlocksPage';
+import ProgramsPage from './components/programs/ProgramsPage';
 const App = () => {
   return (
     <BrowserRouter>
@@ -12,7 +13,7 @@ const App = () => {
         <Routes>
           <Route path="/offerings" element={<OfferingsPage />} />
           <Route path="/blocks" element={<BlocksPage/>} />
-          <Route path="/programs" element={<div>Programs Page</div>} />
+          <Route path="/programs" element={<ProgramsPage/>} />
           <Route path="/" element={<div>Welcome to Course Management System</div>} />
         </Routes>
       </Container>

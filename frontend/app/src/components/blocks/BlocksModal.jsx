@@ -2,17 +2,25 @@ import React, { useEffect, useState } from 'react';
 import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
 
 const BlocksModal = ({ show, block, onHide, onSave }) => {
-  const initialFormData = {
-    block_id: '',
-    program_id: '',
-    block_size: '10',
-    term: '',
-    academic_year: '',
-    status: 'DRAFT'
-  };
-
-  const [formData, setFormData] = useState(initialFormData);
-  const [validated, setValidated] = useState(false);
+    const initialFormData = {
+      block_id: '',
+      program_id: '',
+      block_size: '10',
+      term: '',
+      academic_year: '',
+      status: 'DRAFT'
+    };
+  
+    const [formData, setFormData] = useState(initialFormData);
+    const [validated, setValidated] = useState(false);
+    const [programs, setPrograms] = useState([]);
+  
+    useEffect(() => {
+        if (show) {
+          fetchPrograms();
+        }
+      }, [show]);
+    
 
   useEffect(() => {
     if (block) {
@@ -29,6 +37,19 @@ const BlocksModal = ({ show, block, onHide, onSave }) => {
     }
     setValidated(false);
   }, [block, show]);
+
+
+  const API_URL = 'http://127.0.0.1:5000/api';
+  
+    const fetchPrograms = async () => {
+        try {
+        const response = await fetch(`${API_URL}/programs`);
+        const data = await response.json();
+        setPrograms(data);
+        } catch (error) {
+        console.error('Error fetching programs:', error);
+        }
+    }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -79,16 +100,23 @@ const BlocksModal = ({ show, block, onHide, onSave }) => {
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Program ID</Form.Label>
-                <Form.Control
-                  type="text"
+                <Form.Label>Program</Form.Label>
+                <Form.Select
                   name="program_id"
                   value={formData.program_id}
                   onChange={handleChange}
                   required
-                />
+                  disabled={block}
+                >
+                  <option value="">Select a program</option>
+                  {programs.map(program => (
+                    <option key={program.program_id} value={program.program_id}>
+                      {program.program_id} - {program.program_name}
+                    </option>
+                  ))}
+                </Form.Select>
                 <Form.Control.Feedback type="invalid">
-                  Please provide a program ID.
+                  Please select a program.
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>

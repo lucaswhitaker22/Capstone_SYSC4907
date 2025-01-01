@@ -2,14 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { Container, Button } from 'react-bootstrap';
 import BlocksTable from './BlocksTable';
 import BlocksModal from './BlocksModal';
-
+import BlockScheduleModal from './BlockScheduleModal';
 const API_URL = 'http://127.0.0.1:5000/api';
 
 const BlocksPage = () => {
-  const [blocks, setBlocks] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [selectedBlock, setSelectedBlock] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+    const [blocks, setBlocks] = useState([]);
+    const [showModal, setShowModal] = useState(false);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [selectedBlock, setSelectedBlock] = useState(null);
+    const [selectedBlockId, setSelectedBlockId] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+  
 
   const fetchBlocks = async () => {
     try {
@@ -71,20 +74,9 @@ const BlocksPage = () => {
     }
   };
 
-  const handleViewSchedule = async (blockId) => {
-    try {
-      const response = await fetch(`${API_URL}/schedules/block/${blockId}`);
-      if (response.ok) {
-        const scheduleData = await response.json();
-        // Handle schedule view (could open a new modal or navigate to schedule page)
-        console.log('Schedule data:', scheduleData);
-      } else {
-        const error = await response.json();
-        alert(error.error || 'Error fetching schedule');
-      }
-    } catch (error) {
-      console.error('Error fetching schedule:', error);
-    }
+  const handleViewSchedule = (blockId) => {
+    setSelectedBlockId(blockId);
+    setShowScheduleModal(true);
   };
 
   const handleSave = async (formData) => {
@@ -159,6 +151,11 @@ const BlocksPage = () => {
         block={selectedBlock}
         onHide={() => setShowModal(false)}
         onSave={handleSave}
+      />
+            <BlockScheduleModal
+        show={showScheduleModal}
+        blockId={selectedBlockId}
+        onHide={() => setShowScheduleModal(false)}
       />
     </Container>
   );
