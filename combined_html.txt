@@ -1,648 +1,693 @@
---- File: ./frontend/index.html ---
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/amd-function-name/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/assets-in-worker/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/dynamic-import/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/import-meta/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/import-meta-worker/build/runner.html ---
+<!--
+Copyright 2020 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/import-worker-url/build/runner.html ---
+<!--
+Copyright 2020 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/import-worker-url-custom-scheme/build/runner.html ---
+<!--
+Copyright 2020 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/module-worker/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js" type="module"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/more-workers/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/public-path/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/simple-bundle/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/single-default/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/url-import-meta-worker/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/@surma/rollup-plugin-off-main-thread/tests/fixtures/worker/build/runner.html ---
+<!--
+Copyright 2018 Google Inc. All Rights Reserved.
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+-->
+
+<!doctype html>
+<script src="entry.js"></script>
+
+
+
+--- File: ./frontend/app/node_modules/cra-template/template/public/index.html ---
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Course Scheduling System</title>
-    <style>
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            text-align: center;
-        }
-        .nav-buttons {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 40px;
-        }
-        .nav-button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background-color 0.3s;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .nav-button:hover {
-            background-color: #45a049;
-        }
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
-        }
-        .description {
-            color: #666;
-            margin-bottom: 40px;
-            font-size: 18px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Course Scheduling System</h1>
-        <p class="description">Manage programs, course offerings, and block schedules</p>
-        <div class="nav-buttons">
-            <a href="../frontend/pages/programs.html" class="nav-button">Programs</a>
-            <a href="../frontend/pages/course_offerings.html" class="nav-button">Course Offerings</a>
-            <a href="../frontend/pages/blocks.html" class="nav-button">View Blocks</a>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Web site created using create-react-app"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <!--
+      manifest.json provides metadata used when your web app is installed on a
+      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+    -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <!--
+      Notice the use of %PUBLIC_URL% in the tags above.
+      It will be replaced with the URL of the `public` folder during the build.
+      Only files inside the `public` folder can be referenced from the HTML.
 
+      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
+      work correctly both with client-side routing and a non-root public URL.
+      Learn how to configure a non-root public URL by running `npm run build`.
+    -->
+    <title>React App</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <!--
+      This HTML file is a template.
+      If you open it directly in the browser, you will see an empty page.
 
---- File: ./frontend/pages/blocks.html ---
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Block List</title>
-    <style>
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-            cursor: pointer;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        tr:hover {
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .view-schedule {
-            background-color: #4CAF50;
-            color: white;
-            padding: 4px 8px;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-        .view-schedule:hover {
-            background-color: #45a049;
-        }
-        .status-badge {
-            padding: 4px 8px;
-            border-radius: 3px;
-            font-size: 0.8em;
-        }
-        .status-DRAFT {
-            background-color: #ffd700;
-        }
-        .status-PUBLISHED {
-            background-color: #90EE90;
-        }
-        .status-LOCKED {
-            background-color: #FFB6C1;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Blocks</h1>
-        <table id="blocksTable">
-            <thead>
-                <tr>
-                    <th onclick="sortTable(0)">Block ID</th>
-                    <th onclick="sortTable(1)">Program</th>
-                    <th onclick="sortTable(2)">Term</th>
-                    <th onclick="sortTable(3)">Academic Year</th>
-                    <th onclick="sortTable(4)">Block Size</th>
-                    <th onclick="sortTable(5)">Rating</th>
-                    <th onclick="sortTable(6)">Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="blocksBody">
-            </tbody>
-        </table>
-    </div>
+      You can add webfonts, meta tags, or analytics to this file.
+      The build step will place the bundled scripts into the <body> tag.
 
-    <script>
-        async function fetchBlocks() {
-            try {
-                const response = await fetch('http://127.0.0.1:5000/api/blocks');
-                const blocks = await response.json();
-                
-                const tbody = document.getElementById('blocksBody');
-                tbody.innerHTML = '';
-
-                blocks.forEach(block => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${block.block_id}</td>
-                        <td>${block.program_id}</td>
-                        <td>${block.term}</td>
-                        <td>${block.academic_year}</td>
-                        <td>${block.block_size} students</td>
-                        <td>${block.schedule_rating ? block.schedule_rating + '/100' : 'Not rated'}</td>
-                        <td><span class="status-badge status-${block.status}">${block.status}</span></td>
-                        <td>
-                            <button class="view-schedule" onclick="viewSchedule('${block.block_id}')">
-                                View Schedule
-                            </button>
-                        </td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            } catch (error) {
-                console.error('Error fetching blocks:', error);
-            }
-        }
-
-        function viewSchedule(blockId) {
-            window.open(`schedule.html?blockId=${blockId}`, '_blank');
-        }
-
-        function sortTable(n) {
-            const table = document.getElementById("blocksTable");
-            let switching = true;
-            let dir = "asc";
-            let switchcount = 0;
-
-            while (switching) {
-                switching = false;
-                const rows = table.rows;
-
-                for (let i = 1; i < (rows.length - 1); i++) {
-                    let shouldSwitch = false;
-                    const x = rows[i].getElementsByTagName("TD")[n];
-                    const y = rows[i + 1].getElementsByTagName("TD")[n];
-
-                    if (dir === "asc") {
-                        if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
-                            shouldSwitch = true;
-                            break;
-                        }
-                    } else if (dir === "desc") {
-                        if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
-                            shouldSwitch = true;
-                            break;
-                        }
-                    }
-
-                    if (shouldSwitch) {
-                        rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                        switching = true;
-                        switchcount++;
-                    }
-                }
-
-                if (switchcount === 0 && dir === "asc") {
-                    dir = "desc";
-                    switching = true;
-                }
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', fetchBlocks);
-    </script>
-</body>
+      To begin the development, run `npm start` or `yarn start`.
+      To create a production bundle, use `npm run build` or `yarn build`.
+    -->
+  </body>
 </html>
 
 
---- File: ./frontend/pages/course_offerings.html ---
+
+--- File: ./frontend/app/node_modules/papaparse/player/player.html ---
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Course Offerings</title>
-    <style>
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-            cursor: pointer;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        tr:hover {
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Course Offerings</h1>
-        <table id="offeringsTable">
-            <thead>
-                <tr>
-                    <th onclick="sortTable(0)">Course ID</th>
-                    <th onclick="sortTable(1)">Section Type</th>
-                    <th onclick="sortTable(2)">Section Code</th>
-                    <th onclick="sortTable(3)">Day</th>
-                    <th onclick="sortTable(4)">Time</th>
-                    <th onclick="sortTable(5)">Capacity</th>
-                    <th onclick="sortTable(6)">Enrollment</th>
-                    <th onclick="sortTable(7)">Term</th>
-                    <th onclick="sortTable(8)">Status</th>
-                </tr>
-            </thead>
-            <tbody id="offeringsBody">
-            </tbody>
-        </table>
-    </div>
+<html>
+	<head>
+		<title>Papa Parse Player</title>
+		<meta charset="utf-8">
+		<link rel="stylesheet" href="player.css">
+		<script src="http://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+		<script src="../papaparse.js"></script>
+		<script src="player.js"></script>
+	</head>
+	<body>
+		<h1><a href="http://papaparse.com">Papa Parse</a> Player</h1>
 
-    <script>
-        function getDayName(day) {
-            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            return days[day - 1];
-        }
+		<div class="grid-container">
 
-        async function fetchOfferings() {
-            try {
-                const response = await fetch('http://127.0.0.1:5000/api/offerings');
-                const offerings = await response.json();
-                
-                const tbody = document.getElementById('offeringsBody');
-                tbody.innerHTML = '';
+			<div class="grid-25">
+				<label><input type="checkbox" id="download"> Download</label>
+				<label><input type="checkbox" id="stream"> Stream</label>
+				<label><input type="checkbox" id="chunk"> Chunk</label>
+				<label><input type="checkbox" id="worker"> Worker thread</label>
+				<label><input type="checkbox" id="header"> Header row</label>
+				<label><input type="checkbox" id="dynamicTyping"> Dynamic typing</label>
+				<label><input type="checkbox" id="fastmode"> Fast mode</label>
+				<label><input type="checkbox" id="skipEmptyLines"> Skip empty lines</label>
+				<label><input type="checkbox" id="step-pause"> Pause on step</label>
+				<label><input type="checkbox" id="print-steps"> Log each step/chunk</label>
+				
+				<label>Delimiter: <input type="text" size="5" placeholder="auto" id="delimiter"> <a href="javascript:" id="insert-tab">tab</a></label>
 
-                offerings.forEach(offering => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${offering.course_id}</td>
-                        <td>${offering.section_type}</td>
-                        <td>${offering.section_code}</td>
-                        <td>${getDayName(offering.day_of_week)}</td>
-                        <td>${offering.start_time}-${offering.end_time}</td>
-                        <td>${offering.capacity}</td>
-                        <td>${offering.current_enrollment}</td>
-                        <td>${offering.term} ${offering.academic_year}</td>
-                        <td>${offering.status}</td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            } catch (error) {
-                console.error('Error fetching offerings:', error);
-            }
-        }
+				Line Endings: 
 
-        function sortTable(n) {
-            const table = document.getElementById("offeringsTable");
-            let switching = true;
-            let dir = "asc";
-            let switchcount = 0;
+				<label style="display: inline;"><input type="radio" name="newline" id="newline-auto" checked>Auto</label>
+				<label style="display: inline;"><input type="radio" name="newline" id="newline-n">\n</label>
+				<label style="display: inline;"><input type="radio" name="newline" id="newline-r">\r</label>
+				<label style="display: inline;"><input type="radio" name="newline" id="newline-rn">\r\n</label>				
+				
+				<label>Preview: <input type="number" min="0" max="1000" placeholder="default" id="preview"></label>
+				
+				<label>Encoding: <input type="text" id="encoding" placeholder="default" size="10"></label>
+				
+				<label>Comment char: <input type="text" size="5" maxlength="1" placeholder="default" id="comments"></label>
+				
+				<label>Papa.LocalChunkSize: <input type="number" min="0" placeholder="default" id="localChunkSize"></label>
+				
+				<label>Papa.RemoteChunkSize: <input type="number" min="0" placeholder="default" id="remoteChunkSize"></label>
+			</div>
 
-            while (switching) {
-                switching = false;
-                const rows = table.rows;
+			<div class="grid-75 text-center">
 
-                for (let i = 1; i < (rows.length - 1); i++) {
-                    let shouldSwitch = false;
-                    const x = rows[i].getElementsByTagName("TD")[n];
-                    const y = rows[i + 1].getElementsByTagName("TD")[n];
+				<textarea id="input" placeholder="Input">Column 1,Column 2,Column 3,Column 4
+1-1,1-2,1-3,1-4
+2-1,2-2,2-3,2-4
+3-1,3-2,3-3,3-4
+40,41,42,43
+"Quoted field",No quotes,"Foo","bar",extra
+"Field quoted with
+line break"</textarea>
+		
+				<br>
+				<b>or</b>
+				<br>
 
-                    if (dir === "asc") {
-                        if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
-                            shouldSwitch = true;
-                            break;
-                        }
-                    } else if (dir === "desc") {
-                        if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
-                            shouldSwitch = true;
-                            break;
-                        }
-                    }
+				<input type="file" id="files" multiple>
+			
+				<br><br>
 
-                    if (shouldSwitch) {
-                        rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                        switching = true;
-                        switchcount++;
-                    }
-                }
+				<button id="submit-parse">Parse</button>
+				&nbsp;
+				<button id="submit-unparse">Unparse</button>
 
-                if (switchcount === 0 && dir === "asc") {
-                    dir = "desc";
-                    switching = true;
-                }
-            }
-        }
+				<br><br>
 
-        // Fetch offerings when page loads
-        document.addEventListener('DOMContentLoaded', fetchOfferings);
-    </script>
-</body>
+				<i>Open the Console in your browser's inspector tools to see results.</i>
+			</div>
+
+		</div>
+	</body>
 </html>
 
 
---- File: ./frontend/pages/programs.html ---
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Academic Programs</title>
-    <style>
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Academic Programs</h1>
-        <table>
-            <thead>
-                <tr>
-                    <th>Program ID</th>
-                    <th>Program Name</th>
-                    <th>Total Enrollment</th>
-                    <th>20-Student Blocks</th>
-                    <th>10-Student Blocks</th>
-                </tr>
-            </thead>
-            <tbody id="programsBody"></tbody>
-        </table>
-    </div>
 
-    <script>
-        async function fetchPrograms() {
-            try {
-                const response = await fetch('http://127.0.0.1:5000/api/programs');
-                const programs = await response.json();
-                
-                const tbody = document.getElementById('programsBody');
-                tbody.innerHTML = '';
+--- File: ./frontend/app/node_modules/papaparse/tests/tests.html ---
+<html>
+	<head>
+		<title>Papa Parse Tests</title>
+		<meta charset="utf-8">
+		<script src="../node_modules/mocha/mocha.js"></script>
+		<link rel="stylesheet" href="../node_modules/mocha/mocha.css" />
+		<script src="../papaparse.js"></script>
+		
+		<script src="../node_modules/chai/chai.js"></script>
 
-                programs.forEach(program => {
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${program.program_id}</td>
-                        <td>${program.program_name}</td>
-                        <td>${program.total_enrollment}</td>
-                        <td>${program.blocks_20_count}</td>
-                        <td>${program.blocks_10_count}</td>
-                    `;
-                    tbody.appendChild(row);
-                });
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
+		<script>mocha.setup('bdd')</script>
+		<script src="test-cases.js" id="test-cases"></script>
+	</head>
+	<body>
+	<div id="mocha"></div>
 
-        document.addEventListener('DOMContentLoaded', fetchPrograms);
-    </script>
-</body>
+	<script>
+		mocha.checkLeaks();
+		mocha.run();
+	</script>
+	</body>
 </html>
 
 
---- File: ./frontend/pages/schedule.html ---
+
+--- File: ./frontend/app/node_modules/serve-index/public/directory.html ---
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Block Schedule</title>
-    <style>
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .block-info {
-            margin-bottom: 20px;
-            padding: 15px;
-            background-color: #f9f9f9;
-            border-radius: 5px;
-        }
-        /* Calendar Styles */
-        .calendar {
-            width: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
-            margin-bottom: 40px;
-        }
-        .calendar th {
-            background-color: #f2f2f2;
-            padding: 10px;
-            border: 1px solid #ddd;
-        }
-        .calendar td {
-            border: 1px solid #ddd;
-            height: 100px;
-            vertical-align: top;
-            padding: 5px;
-        }
-        .time-slot {
-            position: relative;
-            height: 60px;
-            border-bottom: 1px dashed #eee;
-        }
-        .course-block {
-            position: absolute;
-            left: 2px;
-            right: 2px;
-            padding: 4px;
-            border-radius: 3px;
-            font-size: 12px;
-            overflow: hidden;
-            z-index: 1;
-        }
-        .course-block.LECTURE { background-color: #e3f2fd; border: 1px solid #90caf9; }
-        .course-block.LAB { background-color: #f0f4c3; border: 1px solid #dce775; }
-        .course-block.TUTORIAL { background-color: #f8bbd0; border: 1px solid #f48fb1; }
-        .time-header {
-            width: 80px;
-            padding: 5px;
-            text-align: right;
-            font-size: 12px;
-            color: #666;
-        }
-        /* Table Styles */
-        .details-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        .details-table th, .details-table td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        .details-table th {
-            background-color: #f2f2f2;
-        }
-        .details-table tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        .details-table tr:hover {
-            background-color: #f5f5f5;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Block Schedule</h1>
-        <div class="block-info" id="blockInfo"></div>
-        
-        <h2>Weekly Calendar</h2>
-        <table class="calendar">
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Monday</th>
-                    <th>Tuesday</th>
-                    <th>Wednesday</th>
-                    <th>Thursday</th>
-                    <th>Friday</th>
-                </tr>
-            </thead>
-            <tbody id="calendarBody"></tbody>
-        </table>
-
-        <h2>Schedule Details</h2>
-        <table class="details-table">
-            <thead>
-                <tr>
-                    <th>Course ID</th>
-                    <th>Section Type</th>
-                    <th>Section Code</th>
-                    <th>Day</th>
-                    <th>Time</th>
-                </tr>
-            </thead>
-            <tbody id="scheduleBody"></tbody>
-        </table>
-    </div>
-
+<html>
+  <head>
+    <meta charset='utf-8'> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>listing directory {directory}</title>
+    <style>{style}</style>
     <script>
-        function getDayName(day) {
-            const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday','Sunday'];
-            return days[day - 1];
-        }
+      function $(id){
+        var el = 'string' == typeof id
+          ? document.getElementById(id)
+          : id;
 
-        function createTimeSlots() {
-            const tbody = document.getElementById('calendarBody');
-            const startHour = 8;
-            const endHour = 18;
-            
-            for (let hour = startHour; hour < endHour; hour++) {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td class="time-header">${hour.toString().padStart(2, '0')}:00</td>
-                    <td id="1-${hour}" class="time-slot"></td>
-                    <td id="2-${hour}" class="time-slot"></td>
-                    <td id="3-${hour}" class="time-slot"></td>
-                    <td id="4-${hour}" class="time-slot"></td>
-                    <td id="5-${hour}" class="time-slot"></td>
-                `;
-                tbody.appendChild(row);
-            }
-        }
+        el.on = function(event, fn){
+          if ('content loaded' == event) {
+            event = window.attachEvent ? "load" : "DOMContentLoaded";
+          }
+          el.addEventListener
+            ? el.addEventListener(event, fn, false)
+            : el.attachEvent("on" + event, fn);
+        };
 
-        function placeOffering(offering) {
-            const startHour = parseInt(offering.start_time.split(':')[0]);
-            const startMin = parseInt(offering.start_time.split(':')[1]);
-            const endHour = parseInt(offering.end_time.split(':')[0]);
-            const endMin = parseInt(offering.end_time.split(':')[1]);
-            
-            const duration = (endHour - startHour) * 60 + (endMin - startMin);
-            const topOffset = (startMin / 60) * 100;
-            const height = (duration / 60) * 100;
-            
-            const cell = document.getElementById(`${offering.day_of_week}-${startHour}`);
-            if (cell) {
-                const courseBlock = document.createElement('div');
-                courseBlock.className = `course-block ${offering.section_type}`;
-                courseBlock.style.top = `${topOffset}%`;
-                courseBlock.style.height = `${height}%`;
-                courseBlock.innerHTML = `
-                    ${offering.course_id}<br>
-                    ${offering.section_type} ${offering.section_code}<br>
-                    ${offering.start_time}-${offering.end_time}
-                `;
-                cell.appendChild(courseBlock);
-            }
-        }
+        el.all = function(selector){
+          return $(el.querySelectorAll(selector));
+        };
 
-        async function fetchBlockSchedule(blockId) {
-            try {
-                const [blockResponse, scheduleResponse] = await Promise.all([
-                    fetch(`http://127.0.0.1:5000/api/blocks/${blockId}`),
-                    fetch(`http://127.0.0.1:5000/api/blocks/${blockId}/schedule`)
-                ]);
+        el.each = function(fn){
+          for (var i = 0, len = el.length; i < len; ++i) {
+            fn($(el[i]), i);
+          }
+        };
 
-                const block = await blockResponse.json();
-                const schedule = await scheduleResponse.json();
-                
-                document.getElementById('blockInfo').innerHTML = `
-                    <h2>Block ${block.block_id}</h2>
-                    <p>Program: ${block.program_id}</p>
-                    <p>Term: ${block.term} ${block.academic_year}</p>
-                    <p>Block Size: ${block.block_size}</p>
-                    <p>Rating: ${block.schedule_rating || 'Not rated'}</p>
-                `;
+        el.getClasses = function(){
+          return this.getAttribute('class').split(/\s+/);
+        };
 
-                createTimeSlots();
-                
-                // Populate both calendar and table
-                schedule.forEach(offering => {
-                    placeOffering(offering);
-                    
-                    const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td>${offering.course_id}</td>
-                        <td>${offering.section_type}</td>
-                        <td>${offering.section_code}</td>
-                        <td>${getDayName(offering.day_of_week)}</td>
-                        <td>${offering.start_time}-${offering.end_time}</td>
-                    `;
-                    document.getElementById('scheduleBody').appendChild(row);
-                });
-            } catch (error) {
-                console.error('Error:', error);
-            }
-        }
+        el.addClass = function(name){
+          var classes = this.getAttribute('class');
+          el.setAttribute('class', classes
+            ? classes + ' ' + name
+            : name);
+        };
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const urlParams = new URLSearchParams(window.location.search);
-            const blockId = urlParams.get('blockId') || 'F_ENG_1';
-            fetchBlockSchedule(blockId);
+        el.removeClass = function(name){
+          var classes = this.getClasses().filter(function(curr){
+            return curr != name;
+          });
+          this.setAttribute('class', classes.join(' '));
+        };
+
+        return el;
+      }
+
+      function search() {
+        var str = $('search').value.toLowerCase();
+        var links = $('files').all('a');
+
+        links.each(function(link){
+          var text = link.textContent.toLowerCase();
+
+          if ('..' == text) return;
+          if (str.length && ~text.indexOf(str)) {
+            link.addClass('highlight');
+          } else {
+            link.removeClass('highlight');
+          }
         });
+      }
+
+      $(window).on('content loaded', function(){
+        $('search').on('keyup', search);
+      });
+    </script>
+  </head>
+  <body class="directory">
+    <input id="search" type="text" placeholder="Search" autocomplete="off" />
+    <div id="wrapper">
+      <h1><a href="/">~</a>{linked-path}</h1>
+      {files}
+    </div>
+  </body>
+</html>
+
+
+--- File: ./frontend/app/node_modules/sprintf-js/demo/angular.html ---
+<!doctype html>
+<html ng-app="app">
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.3.0-rc.3/angular.min.js"></script>
+    <script src="../src/sprintf.js"></script>
+    <script src="../src/angular-sprintf.js"></script>
+</head>
+<body>
+    <pre>{{ "%+010d"|sprintf:-123 }}</pre>
+    <pre>{{ "%+010d"|vsprintf:[-123] }}</pre>
+    <pre>{{ "%+010d"|fmt:-123 }}</pre>
+    <pre>{{ "%+010d"|vfmt:[-123] }}</pre>
+    <pre>{{ "I've got %2$d apples and %1$d oranges."|fmt:4:2 }}</pre>
+    <pre>{{ "I've got %(apples)d apples and %(oranges)d oranges."|fmt:{apples: 2, oranges: 4} }}</pre>
+
+    <script>
+        angular.module("app", ["sprintf"])
     </script>
 </body>
 </html>
+
+
+
+--- File: ./frontend/app/node_modules/terser/tools/props.html ---
+<html>
+  <head>
+  </head>
+  <body>
+    <script>(function(){
+      var props = {};
+
+      function addObject(obj) {
+        if (obj == null) return;
+        try {
+          Object.getOwnPropertyNames(obj).forEach(add);
+        } catch(ex) {}
+        if (obj.prototype) {
+          Object.getOwnPropertyNames(obj.prototype).forEach(add);
+        }
+        if (typeof obj == "function") {
+          try {
+            Object.getOwnPropertyNames(new obj).forEach(add);
+          } catch(ex) {}
+        }
+      }
+
+      function add(name) {
+        if (/^[a-z_$][a-z0-9_$]*$/i.test(name)) {
+            props[name] = true;
+        }
+      }
+
+      Object.getOwnPropertyNames(window).forEach(function(thing){
+        addObject(window[thing]);
+      });
+
+      try {
+        addObject(new Event("click"));
+        addObject(new Event("contextmenu"));
+        addObject(new Event("mouseup"));
+        addObject(new Event("mousedown"));
+        addObject(new Event("keydown"));
+        addObject(new Event("keypress"));
+        addObject(new Event("keyup"));
+        addObject(new Event("input"));
+        addObject(new Event("touchstart"));
+        addObject(new Event("touchmove"));
+        addObject(new Event("touchend"));
+        addObject(new Event("touchcancel"));
+        addObject(new Event("pointerdown"));
+        addObject(new Event("pointermove"));
+        addObject(new Event("pointerup"));
+        addObject(new Event("pointercancel"));
+        addObject(new Event("pointerenter"));
+        addObject(new Event("pointerleave"));
+      } catch(ex) {}
+
+      var ta = document.createElement("textarea");
+      ta.style.width = "100%";
+      ta.style.height = "20em";
+      ta.style.boxSizing = "border-box";
+      ta.value = 'export var domprops = ' + JSON.stringify(Object.keys(props).sort(cmp), null, 4);
+      document.body.appendChild(ta);
+
+      function cmp(a, b) {
+        a = a.toLowerCase();
+        b = b.toLowerCase();
+        return a < b ? -1 : a > b ? 1 : 0;
+      }
+    })();</script>
+  </body>
+</html>
+
+
+
+--- File: ./frontend/app/node_modules/tryer/test/index.html ---
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>tryer unit tests</title>
+    <link rel="stylesheet" href="../node_modules/mocha/mocha.css" />
+  </head>
+  <body>
+    <div id="mocha"></div>
+    <script src="../node_modules/chai/chai.js"></script>
+    <script src="../node_modules/spooks/src/spooks.min.js"></script>
+    <script src="../node_modules/mocha/mocha.js"></script>
+    <script>
+      mocha.setup('tdd');
+    </script>
+    <script src="../lib/tryer.min.js"></script>
+    <script src="unit.js"></script>
+    <script>
+      mocha.checkLeaks();
+      mocha.run();
+    </script>
+  </body>
+</html>
+
+
+
+
+--- File: ./frontend/app/node_modules/tslib/tslib.es6.html ---
+<script src="tslib.es6.js"></script>
+
+
+--- File: ./frontend/app/node_modules/tslib/tslib.html ---
+<script src="tslib.js"></script>
+
+
+--- File: ./frontend/app/node_modules/tsutils/node_modules/tslib/tslib.es6.html ---
+<script src="tslib.es6.js"></script>
+
+
+--- File: ./frontend/app/node_modules/tsutils/node_modules/tslib/tslib.html ---
+<script src="tslib.js"></script>
+
+
+--- File: ./frontend/app/public/index.html ---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Web site created using create-react-app"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <!--
+      manifest.json provides metadata used when your web app is installed on a
+      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+    -->
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <!--
+      Notice the use of %PUBLIC_URL% in the tags above.
+      It will be replaced with the URL of the `public` folder during the build.
+      Only files inside the `public` folder can be referenced from the HTML.
+
+      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
+      work correctly both with client-side routing and a non-root public URL.
+      Learn how to configure a non-root public URL by running `npm run build`.
+    -->
+    <title>React App</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <!--
+      This HTML file is a template.
+      If you open it directly in the browser, you will see an empty page.
+
+      You can add webfonts, meta tags, or analytics to this file.
+      The build step will place the bundled scripts into the <body> tag.
+
+      To begin the development, run `npm start` or `yarn start`.
+      To create a production bundle, use `npm run build` or `yarn build`.
+    -->
+  </body>
+</html>
+
 
 

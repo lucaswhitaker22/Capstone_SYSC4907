@@ -231,20 +231,17 @@ def delete_offering(offering_id):
         return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
     
 
-@bp.route('/bulk', methods=['POST'], strict_slashes=False)
+@bp.route('/bulk', methods=['POST'])
 def create_offerings_bulk():
     try:
         data = request.get_json()
         if not data or 'offerings' not in data:
-            return jsonify({
-                'error': 'No offerings provided'
-            }), HTTPStatus.BAD_REQUEST
-
+            return jsonify({'error': 'No offerings provided'}), HTTPStatus.BAD_REQUEST
+            
         offerings_data = data['offerings']
         created_offerings = []
         errors = []
-
-        # Validate all offerings before creating any
+        
         for offering_data in offerings_data:
             # Check required fields
             required_fields = [
@@ -252,82 +249,68 @@ def create_offerings_bulk():
                 'day_of_week', 'start_time', 'end_time', 
                 'capacity', 'term', 'academic_year'
             ]
+            
             if not all(k in offering_data for k in required_fields):
-                errors.append(f"Missing required fields for offering {offering_data.get('offering_id', 'Unknown')}")
+                errors.append(f"Missing required fields for offering")
                 continue
-
-            # Validate course exists
-            if not Course.query.get(offering_data['course_id']):
-                errors.append(f"Course {offering_data['course_id']} does not exist")
-                continue
-
+                
+            # Check if course exists, if not create it
+            course = Course.query.get(offering_data['course_id'])
+            if not course:
+                course = Course(
+                    course_id=offering_data['course_id'],
+                    course_name=offering_data.get('course_name', f'{offering_data["course_id"]}'),
+                    credits=offering_data.get('credits', 0.5)
+                )
+                db.session.add(course)
+                
             # Validate section_type
             valid_types = ['LECTURE', 'LAB', 'TUTORIAL']
             if offering_data['section_type'] not in valid_types:
-                errors.append(f"Invalid section_type for offering {offering_data['offering_id']}")
+                errors.append(f"Invalid section_type for offering")
                 continue
-
-            # Validate day_of_week
-            try:
-                day = int(offering_data['day_of_week'])
-                if not 1 <= day <= 5:
-                    errors.append(f"day_of_week must be between 1 and 5 for offering {offering_data['offering_id']}")
-                    continue
-            except ValueError:
-                errors.append(f"Invalid day_of_week for offering {offering_data['offering_id']}")
-                continue
-
+                
             # Validate times
             try:
                 start_time = datetime.strptime(offering_data['start_time'], '%H:%M').time()
                 end_time = datetime.strptime(offering_data['end_time'], '%H:%M').time()
                 if end_time <= start_time:
-                    errors.append(f"End time must be after start time for offering {offering_data['offering_id']}")
+                    errors.append(f"End time must be after start time")
                     continue
             except ValueError:
-                errors.append(f"Invalid time format for offering {offering_data['offering_id']}")
+                errors.append(f"Invalid time format")
                 continue
-
-            # Validate capacity
-            try:
-                capacity = int(offering_data['capacity'])
-                if capacity <= 0:
-                    errors.append(f"Capacity must be positive for offering {offering_data['offering_id']}")
-                    continue
-            except ValueError:
-                errors.append(f"Invalid capacity for offering {offering_data['offering_id']}")
-                continue
-
-        # If there are validation errors, return them
+                
+            # Create offering
+            offering = CourseOffering(
+                course_id=offering_data['course_id'],
+                section_type=offering_data['section_type'],
+                section_code=offering_data['section_code'],
+                day_of_week=int(offering_data['day_of_week']),
+                start_time=start_time,
+                end_time=end_time,
+                capacity=int(offering_data['capacity']),
+                term=offering_data['term'],
+                academic_year=offering_data['academic_year'],
+                status='OPEN'
+            )
+            db.session.add(offering)
+            created_offerings.append(offering_data)
+            
         if errors and not created_offerings:
+            db.session.rollback()
             return jsonify({
                 'error': 'Validation failed',
                 'errors': errors
             }), HTTPStatus.BAD_REQUEST
-
-        # Create validated offerings
-        for offering_data in offerings_data:
-            if str(offering_data.get('offering_id')) not in [e.split()[-1] for e in errors]:
-                # Convert times to proper format
-                offering_data['start_time'] = datetime.strptime(offering_data['start_time'], '%H:%M').time()
-                offering_data['end_time'] = datetime.strptime(offering_data['end_time'], '%H:%M').time()
-                
-                # Set default values
-                offering_data['status'] = offering_data.get('status', 'OPEN')
-                offering_data['current_enrollment'] = offering_data.get('current_enrollment', 0)
-
-                offering = CourseOffering(**offering_data)
-                db.session.add(offering)
-                created_offerings.append(offering_data['offering_id'])
-
+            
         db.session.commit()
-
         return jsonify({
             'message': 'Offerings created successfully',
             'created': created_offerings,
             'errors': errors
-        }), HTTPStatus.CREATED if created_offerings else HTTPStatus.BAD_REQUEST
-
+        }), HTTPStatus.CREATED
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({

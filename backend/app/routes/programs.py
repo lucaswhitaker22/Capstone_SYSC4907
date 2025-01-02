@@ -77,6 +77,34 @@ def create_program():
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
+@bp.route('/bulk', methods=['POST'])
+def bulk_create_programs():
+    try:
+        data = request.get_json()
+        if not data or 'programs' not in data:
+            return jsonify({'error': 'No programs data provided'}), HTTPStatus.BAD_REQUEST
+            
+        programs = []
+        for program_data in data['programs']:
+            if Program.query.get(program_data['program_id']):
+                continue
+                
+            program = Program(
+                program_id=program_data['program_id'],
+                program_name=program_data['program_name'],
+                total_enrollment=int(program_data['total_enrollment']),
+                blocks_20_count=int(program_data['blocks_20_count']),
+                blocks_10_count=int(program_data['blocks_10_count'])
+            )
+            programs.append(program)
+            
+        db.session.bulk_save_objects(programs)
+        db.session.commit()
+        return jsonify({'message': f'{len(programs)} programs created'}), HTTPStatus.CREATED
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), HTTPStatus.BAD_REQUEST
+    
 @bp.route('/<program_id>', methods=['PUT'], strict_slashes=False)
 def update_program(program_id):
     program = Program.query.get_or_404(program_id)

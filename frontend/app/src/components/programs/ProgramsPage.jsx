@@ -3,6 +3,9 @@ import { Container, Button } from 'react-bootstrap';
 import ProgramsTable from './ProgramsTable';
 import ProgramsModal from './ProgramsModal';
 import ProgramRequirementsModal from './ProgramRequirementsModal';
+import ProgramUploadModal from './ProgramUploadModal';
+import Papa from 'papaparse';
+
 const API_URL = 'http://127.0.0.1:5000/api';
 
 const ProgramsPage = () => {
@@ -12,6 +15,7 @@ const ProgramsPage = () => {
     const [selectedProgram, setSelectedProgram] = useState(null);
     const [selectedProgramId, setSelectedProgramId] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [showUploadModal, setShowUploadModal] = useState(false);
 
   const fetchPrograms = async () => {
     try {
@@ -89,10 +93,36 @@ const handleViewRequirements = (programId) => {
     setShowRequirementsModal(true);
   };
 
+// Add export function
+const handleExportCSV = () => {
+  const csv = Papa.unparse(programs.map(program => ({
+      program_id: program.program_id,
+      program_name: program.program_name,
+      total_enrollment: program.total_enrollment,
+      blocks_20_count: program.blocks_20_count,
+      blocks_10_count: program.blocks_10_count
+  })));
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.setAttribute('download', 'programs.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
   return (
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1>Program Management</h1>
+        <Button variant="secondary" className="me-2" onClick={() => setShowUploadModal(true)}>
+            Upload CSV
+        </Button>
+        <Button variant="success" className="me-2" onClick={handleExportCSV}>
+            Export CSV
+        </Button>
         <Button variant="primary" onClick={handleAddNew}>
           Create New Program
         </Button>
@@ -118,6 +148,11 @@ const handleViewRequirements = (programId) => {
         programId={selectedProgramId}
         onHide={() => setShowRequirementsModal(false)}
       />
+      <ProgramUploadModal
+    show={showUploadModal}
+    onHide={() => setShowUploadModal(false)}
+    onSave={fetchPrograms}
+/>
     </Container>
   );
 };

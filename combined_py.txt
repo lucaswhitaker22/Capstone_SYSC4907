@@ -203,7 +203,7 @@ from http import HTTPStatus
 
 bp = Blueprint('blocks', __name__, url_prefix='/api/blocks')
 
-@bp.route('/', methods=['GET'])
+@bp.route('/', methods=['GET'], strict_slashes=False)
 def get_blocks():
     blocks = Block.query.all()
     return jsonify([{
@@ -216,7 +216,7 @@ def get_blocks():
         'status': b.status
     } for b in blocks]), HTTPStatus.OK
 
-@bp.route('/<block_id>', methods=['GET'])
+@bp.route('/<block_id>', methods=['GET'], strict_slashes=False)
 def get_block(block_id):
     block = Block.query.get_or_404(block_id)
     return jsonify({
@@ -233,34 +233,209 @@ def get_block(block_id):
         'status': block.status
     }), HTTPStatus.OK
 
-@bp.route('/', methods=['POST'])
+@bp.route('/', methods=['POST'], strict_slashes=False)
 def create_block():
     data = request.get_json()
-    block = Block(**data)
-    db.session.add(block)
-    db.session.commit()
     
-    return jsonify({
-        'block_id': block.block_id,
-        'program_id': block.program_id,
-        'block_size': block.block_size,
-        'term': block.term,
-        'academic_year': block.academic_year,
-        'status': block.status
-    }), HTTPStatus.CREATED
+    # Validate required fields
+    required_fields = ['block_id', 'program_id', 'block_size', 'term', 'academic_year']
+    if not data or not all(field in data for field in required_fields):
+        return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
+        
+    # Validate block size before attempting insert
+    if data['block_size'] not in (10, 20):
+        return jsonify({'error': 'Block size must be 10 or 20'}), HTTPStatus.BAD_REQUEST
+        
+    # Check if block already exists
+    if Block.query.get(data['block_id']):
+        return jsonify({'error': 'Block already exists'}), HTTPStatus.CONFLICT
+        
+    try:
+        block = Block(**data)
+        db.session.add(block)
+        db.session.commit()
+        
+        return jsonify({
+            'block_id': block.block_id,
+            'program_id': block.program_id,
+            'block_size': block.block_size,
+            'term': block.term,
+            'academic_year': block.academic_year,
+            'status': block.status
+        }), HTTPStatus.CREATED
+        
+    except IntegrityError as e:
+        db.session.rollback()
+        return jsonify({'error': 'Invalid block data'}), HTTPStatus.BAD_REQUEST
 
-@bp.route('/<block_id>/schedule', methods=['GET'])
-def get_block_schedule(block_id):
-    block_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
-    return jsonify([{
-        'offering_id': bs.offering_id,
-        'course_id': bs.course_offering.course_id,
-        'section_type': bs.course_offering.section_type,
-        'section_code': bs.course_offering.section_code,
-        'day_of_week': bs.course_offering.day_of_week,
-        'start_time': bs.course_offering.start_time.strftime('%H:%M'),
-        'end_time': bs.course_offering.end_time.strftime('%H:%M')
-    } for bs in block_schedules]), HTTPStatus.OK
+@bp.route('/<block_id>/status', methods=['PATCH'], strict_slashes=False)
+def update_block_status(block_id):
+    try:
+        block = Block.query.get_or_404(block_id)
+        data = request.get_json()
+        
+        if 'status' not in data:
+            return jsonify({'error': 'Status is required'}), HTTPStatus.BAD_REQUEST
+            
+        # Validate status value
+        valid_statuses = ['DRAFT', 'PUBLISHED', 'LOCKED']
+        if data['status'] not in valid_statuses:
+            return jsonify({'error': f'Status must be one of: {", ".join(valid_statuses)}'}), HTTPStatus.BAD_REQUEST
+            
+        block.status = data['status']
+        db.session.commit()
+        
+        return jsonify({
+            'block_id': block.block_id,
+            'status': block.status
+        }), HTTPStatus.OK
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<block_id>', methods=['PUT'], strict_slashes=False)
+def update_block(block_id):
+    try:
+        block = Block.query.get_or_404(block_id)
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
+            
+        # Validate block size if provided
+        if 'block_size' in data and data['block_size'] not in (10, 20):
+            return jsonify({'error': 'Block size must be 10 or 20'}), HTTPStatus.BAD_REQUEST
+            
+        # Update fields if provided
+        updateable_fields = ['program_id', 'block_size', 'term', 'academic_year', 'status']
+        for field in updateable_fields:
+            if field in data:
+                setattr(block, field, data[field])
+        
+        db.session.commit()
+        
+        return jsonify({
+            'block_id': block.block_id,
+            'program_id': block.program_id,
+            'block_size': block.block_size,
+            'term': block.term,
+            'academic_year': block.academic_year,
+            'status': block.status
+        }), HTTPStatus.OK
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<block_id>', methods=['DELETE'], strict_slashes=False)
+def delete_block(block_id):
+    try:
+        block = Block.query.get_or_404(block_id)
+        
+        # Check if block can be deleted (not LOCKED)
+        if block.status == 'LOCKED':
+            return jsonify({
+                'error': 'Cannot delete locked block'
+            }), HTTPStatus.FORBIDDEN
+
+        # Delete associated block schedules first
+        BlockSchedule.query.filter_by(block_id=block_id).delete()
+        
+        # Delete the block
+        db.session.delete(block)
+        db.session.commit()
+        
+        return '', HTTPStatus.NO_CONTENT
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<block_id>/rating', methods=['POST'], strict_slashes=False)
+def calculate_block_rating(block_id):
+    try:
+        block = Block.query.get_or_404(block_id)
+        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        
+        # Initialize counters
+        early_starts = 0
+        late_ends = 0
+        long_breaks = 0
+        consecutive_days = set()
+        
+        # Get all offerings for the block
+        offerings = [schedule.course_offering for schedule in schedules]
+        
+        for offering in offerings:
+            # Check for early starts (before 8:30)
+            if offering.start_time < time.fromisoformat('08:30'):
+                early_starts += 1
+                
+            # Check for late ends (after 17:30)
+            if offering.end_time > time.fromisoformat('17:30'):
+                late_ends += 1
+                
+            # Add day to consecutive days set
+            consecutive_days.add(offering.day_of_week)
+            
+        # Sort offerings by day and time to check for breaks
+        offerings.sort(key=lambda x: (x.day_of_week, x.start_time))
+        
+        # Check for long breaks (> 2 hours) between classes on same day
+        for i in range(len(offerings)-1):
+            if (offerings[i].day_of_week == offerings[i+1].day_of_week and 
+                (offerings[i+1].start_time.hour - offerings[i].end_time.hour) > 2):
+                long_breaks += 1
+        
+        # Calculate consecutive days penalty
+        consecutive_days_count = 0
+        days = sorted(list(consecutive_days))
+        for i in range(len(days)-1):
+            if days[i+1] - days[i] == 1:
+                consecutive_days_count += 1
+        
+        # Update block ratings
+        block.early_starts = early_starts
+        block.late_ends = late_ends
+        block.long_breaks = long_breaks
+        block.consecutive_days = consecutive_days_count
+        
+        # Calculate overall rating (0-100 scale)
+        total_penalties = early_starts + late_ends + long_breaks + consecutive_days_count
+        max_penalties = len(offerings)  # Maximum possible penalties per category
+        if max_penalties > 0:
+            block.schedule_rating = max(0, 100 - (total_penalties / max_penalties) * 25)
+        else:
+            block.schedule_rating = 100
+        
+        db.session.commit()
+        
+        return jsonify({
+            'block_id': block.block_id,
+            'schedule_rating': float(block.schedule_rating),
+            'early_starts': block.early_starts,
+            'late_ends': block.late_ends,
+            'long_breaks': block.long_breaks,
+            'consecutive_days': block.consecutive_days
+        }), HTTPStatus.OK
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 
 --- File: ./backend/app/routes/block_schedules.py ---
@@ -273,7 +448,64 @@ import logging
 
 bp = Blueprint('schedules', __name__, url_prefix='/api/schedules')
 
-@bp.route('/block/<block_id>', methods=['POST'])
+@bp.route('/block/<block_id>', methods=['GET'], strict_slashes=False)
+def get_block_schedule(block_id):
+    try:
+        block = Block.query.get(block_id)
+        if not block:
+            return jsonify({
+                'error': 'Not Found',
+                'message': f'Block {block_id} not found'
+            }), HTTPStatus.NOT_FOUND
+            
+        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        offerings = []
+        for schedule in schedules:
+            offering = schedule.course_offering
+            offerings.append({
+                'offering_id': offering.offering_id,
+                'course_id': offering.course_id,
+                'section_type': offering.section_type,
+                'section_code': offering.section_code,
+                'day_of_week': offering.day_of_week,
+                'start_time': offering.start_time.strftime('%H:%M'),
+                'end_time': offering.end_time.strftime('%H:%M')
+            })
+        return jsonify(offerings), HTTPStatus.OK
+    except Exception as e:
+        current_app.logger.error(f"Error getting block schedule: {str(e)}")
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/block/<block_id>', methods=['DELETE'], strict_slashes=False)
+def delete_block_schedule(block_id):
+    try:
+        # Check if block exists
+        block = Block.query.get_or_404(block_id)
+        
+        # Check if block is locked
+        if block.status == 'LOCKED':
+            return jsonify({
+                'error': 'Cannot delete schedule of locked block'
+            }), HTTPStatus.FORBIDDEN
+
+        # Delete all schedule entries for the block
+        BlockSchedule.query.filter_by(block_id=block_id).delete()
+        db.session.commit()
+        
+        return '', HTTPStatus.NO_CONTENT
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@bp.route('/block/<block_id>', methods=['POST'], strict_slashes=False)
 def add_offering_to_block(block_id):
     try:
         data = request.get_json()
@@ -348,6 +580,125 @@ def add_offering_to_block(block_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+    
+@bp.route('/block/<block_id>/generate', methods=['POST'], strict_slashes=False)
+def generate_block_schedule(block_id):
+    try:
+        # Get block and validate
+        block = Block.query.get_or_404(block_id)
+        if block.status == 'LOCKED':
+            return jsonify({
+                'error': 'Cannot modify locked block'
+            }), HTTPStatus.FORBIDDEN
+
+        # Clear existing schedule
+        BlockSchedule.query.filter_by(block_id=block_id).delete()
+        db.session.commit()
+
+        # Get available offerings for the term
+        available_offerings = CourseOffering.query.filter_by(
+            term=block.term,
+            academic_year=block.academic_year,
+            status='OPEN'
+        ).all()
+
+        # Generate schedule
+        selected_offerings = []
+        for offering in available_offerings:
+            # Check conflicts with already selected offerings
+            has_conflicts = any(
+                has_time_conflict(offering, selected) 
+                for selected in selected_offerings
+            )
+            
+            if not has_conflicts:
+                selected_offerings.append(offering)
+                block_schedule = BlockSchedule(
+                    block_id=block_id,
+                    offering_id=offering.offering_id
+                )
+                db.session.add(block_schedule)
+
+            if len(selected_offerings) >= block.block_size:
+                break
+
+        db.session.commit()
+
+        # Return formatted response matching frontend expectations
+        formatted_offerings = [{
+            'offering_id': o.offering_id,
+            'course_id': o.course_id,
+            'section_type': o.section_type,
+            'section_code': o.section_code,
+            'day_of_week': o.day_of_week,
+            'start_time': o.start_time.strftime('%H:%M'),
+            'end_time': o.end_time.strftime('%H:%M')
+        } for o in selected_offerings]
+
+        return jsonify(formatted_offerings), HTTPStatus.CREATED
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+    
+@bp.route('/block/<block_id>/offering/<offering_id>', methods=['DELETE'], strict_slashes=False)
+def remove_offering_from_block(block_id, offering_id):
+    try:
+        schedule = BlockSchedule.query.filter_by(
+            block_id=block_id,
+            offering_id=offering_id
+        ).first()
+        
+        if not schedule:
+            return jsonify({
+                'error': 'Not Found',
+                'message': 'Schedule entry not found'
+            }), HTTPStatus.NOT_FOUND
+            
+        db.session.delete(schedule)
+        db.session.commit()
+        
+        return '', HTTPStatus.NO_CONTENT
+    except Exception as e:
+        current_app.logger.error(f"Error removing offering from block: {str(e)}")
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/block/<block_id>/validate', methods=['GET'], strict_slashes=False)
+def validate_block_schedule(block_id):
+    try:
+        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        offerings = [schedule.course_offering for schedule in schedules]
+        
+        conflicts = []
+        for i, offering1 in enumerate(offerings):
+            for offering2 in offerings[i+1:]:
+                if has_time_conflict(offering1, offering2):
+                    conflicts.append({
+                        'offering1_id': offering1.offering_id,
+                        'offering1_course': offering1.course_id,
+                        'offering2_id': offering2.offering_id,
+                        'offering2_course': offering2.course_id,
+                        'day_of_week': offering1.day_of_week
+                    })
+        
+        return jsonify({
+            'valid': len(conflicts) == 0,
+            'conflicts': conflicts
+        }), HTTPStatus.OK
+    except Exception as e:
+        current_app.logger.error(f"Error validating block schedule: {str(e)}")
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 --- File: ./backend/app/routes/conflicts.py ---
@@ -358,7 +709,7 @@ from http import HTTPStatus
 
 bp = Blueprint('conflicts', __name__, url_prefix='/api/conflicts')
 
-@bp.route('/offerings/<offering1_id>/<offering2_id>', methods=['GET'])
+@bp.route('/offerings/<offering1_id>/<offering2_id>', methods=['GET'], strict_slashes=False)
 def check_offering_conflict(offering1_id, offering2_id):
     offering1 = CourseOffering.query.get_or_404(offering1_id)
     offering2 = CourseOffering.query.get_or_404(offering2_id)
@@ -371,7 +722,7 @@ def check_offering_conflict(offering1_id, offering2_id):
         'offering2': offering2.course_id
     }), HTTPStatus.OK
 
-@bp.route('/schedule/conflicts', methods=['POST'])
+@bp.route('/schedule/conflicts', methods=['POST'], strict_slashes=False)
 def check_schedule_conflicts():
     data = request.get_json()
     offering_ids = data.get('offering_ids', [])
@@ -382,7 +733,7 @@ def check_schedule_conflicts():
         'conflicts': conflicts
     }), HTTPStatus.OK
 
-@bp.route('/schedule/check-course', methods=['POST'])
+@bp.route('/schedule/check-course', methods=['POST'], strict_slashes=False)
 def check_course_conflicts():
     data = request.get_json()
     schedule_offering_ids = data.get('schedule_offering_ids', [])
@@ -445,26 +796,6 @@ def _find_schedule_conflicts(offering_ids):
     
     return conflicts
 
-def _find_course_conflicts(schedule_offering_ids, new_offering_id):
-    schedule_offerings = [CourseOffering.query.get(id) for id in schedule_offering_ids]
-    new_offering = CourseOffering.query.get_or_404(new_offering_id)
-    
-    conflicts = []
-    
-    for existing_offering in schedule_offerings:
-        if has_time_conflict(existing_offering, new_offering):
-            conflicts.append({
-                'existing_offering_id': existing_offering.offering_id,
-                'existing_course_id': existing_offering.course_id,
-                'new_offering_id': new_offering.offering_id,
-                'new_course_id': new_offering.course_id,
-                'day': new_offering.day_of_week,
-                'existing_time': f"{existing_offering.start_time}-{existing_offering.end_time}",
-                'new_time': f"{new_offering.start_time}-{new_offering.end_time}"
-            })
-    
-    return conflicts
-
 
 --- File: ./backend/app/routes/courses.py ---
 # app/routes/courses.py
@@ -475,7 +806,7 @@ from http import HTTPStatus
 
 bp = Blueprint('courses', __name__, url_prefix='/api/courses')
 
-@bp.route('/', methods=['GET'])
+@bp.route('/', methods=['GET'], strict_slashes=False)
 def get_courses():
     courses = Course.query.all()
     return jsonify([{
@@ -484,7 +815,76 @@ def get_courses():
         'credits': float(c.credits)
     } for c in courses]), HTTPStatus.OK
 
-@bp.route('/<course_id>', methods=['GET'])
+@bp.route('/bulk', methods=['POST'], strict_slashes=False)
+def create_courses_bulk():
+    try:
+        data = request.get_json()
+        if not data or 'courses' not in data:
+            return jsonify({
+                'error': 'No courses provided'
+            }), HTTPStatus.BAD_REQUEST
+
+        courses_data = data['courses']
+        created_courses = []
+        errors = []
+
+        # Validate all courses before creating any
+        for course_data in courses_data:
+            # Check required fields
+            if not all(k in course_data for k in ['course_id', 'course_name', 'credits']):
+                errors.append(f"Missing required fields for course {course_data.get('course_id', 'Unknown')}")
+                continue
+
+            # Validate course_id format and existence
+            if Course.query.get(course_data['course_id']):
+                errors.append(f"Course {course_data['course_id']} already exists")
+                continue
+
+            # Validate credits
+            try:
+                credits = float(course_data['credits'])
+                if credits <= 0:
+                    errors.append(f"Credits must be positive for course {course_data['course_id']}")
+                    continue
+            except ValueError:
+                errors.append(f"Invalid credits value for course {course_data['course_id']}")
+                continue
+
+        # If there are validation errors, return them
+        if errors and not created_courses:
+            return jsonify({
+                'error': 'Validation failed',
+                'errors': errors
+            }), HTTPStatus.BAD_REQUEST
+
+        # Create validated courses
+        for course_data in courses_data:
+            if course_data['course_id'] not in [e.split()[1] for e in errors]:
+                course = Course(
+                    course_id=course_data['course_id'],
+                    course_name=course_data['course_name'],
+                    credits=float(course_data['credits'])
+                )
+                db.session.add(course)
+                created_courses.append(course_data['course_id'])
+
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Courses created successfully',
+            'created': created_courses,
+            'errors': errors
+        }), HTTPStatus.CREATED if created_courses else HTTPStatus.BAD_REQUEST
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@bp.route('/<course_id>', methods=['GET'], strict_slashes=False)
 def get_course(course_id):
     course = Course.query.get_or_404(course_id)
     return jsonify({
@@ -493,7 +893,7 @@ def get_course(course_id):
         'credits': float(course.credits)
     }), HTTPStatus.OK
 
-@bp.route('/', methods=['POST'])
+@bp.route('/', methods=['POST'], strict_slashes=False)
 def create_course():
     data = request.get_json()
     
@@ -515,7 +915,7 @@ def create_course():
         'credits': float(course.credits)
     }), HTTPStatus.CREATED
 
-@bp.route('/<course_id>', methods=['PUT'])
+@bp.route('/<course_id>', methods=['PUT'], strict_slashes=False)
 def update_course(course_id):
     course = Course.query.get_or_404(course_id)
     data = request.get_json()
@@ -531,25 +931,41 @@ def update_course(course_id):
         'credits': float(course.credits)
     }), HTTPStatus.OK
 
-@bp.route('/<course_id>', methods=['DELETE'])
+@bp.route('/<course_id>', methods=['DELETE'], strict_slashes=False)
 def delete_course(course_id):
-    course = Course.query.get_or_404(course_id)
-    db.session.delete(course)
-    db.session.commit()
-    return '', HTTPStatus.NO_CONTENT
+    try:
+        course = Course.query.get_or_404(course_id)
+        
+        # Check for related course offerings
+        if course.offerings:
+            return jsonify({
+                'error': 'Cannot delete course with existing offerings'
+            }), HTTPStatus.CONFLICT
+            
+        db.session.delete(course)
+        db.session.commit()
+        return '', HTTPStatus.NO_CONTENT
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 
 --- File: ./backend/app/routes/course_offerings.py ---
 # app/routes/course_offerings.py
 from flask import Blueprint, jsonify, request
-from app.models import CourseOffering
+from app.models import CourseOffering, Course
 from app import db
 from http import HTTPStatus
 from datetime import datetime
 
 bp = Blueprint('offerings', __name__, url_prefix='/api/offerings')
 
-@bp.route('/', methods=['GET'])
+@bp.route('/', methods=['GET'],  strict_slashes=False)
 def get_offerings():
     offerings = CourseOffering.query.all()
     return jsonify([{
@@ -567,18 +983,9 @@ def get_offerings():
         'status': o.status
     } for o in offerings]), HTTPStatus.OK
 
-@bp.route('/', methods=['POST'])
-def create_offering():
-    data = request.get_json()
-    
-    # Convert time strings to Time objects
-    data['start_time'] = datetime.strptime(data['start_time'], '%H:%M').time()
-    data['end_time'] = datetime.strptime(data['end_time'], '%H:%M').time()
-    
-    offering = CourseOffering(**data)
-    db.session.add(offering)
-    db.session.commit()
-    
+@bp.route('/<int:offering_id>', methods=['GET'], strict_slashes=False)
+def get_offering(offering_id):
+    offering = CourseOffering.query.get_or_404(offering_id)
     return jsonify({
         'offering_id': offering.offering_id,
         'course_id': offering.course_id,
@@ -592,7 +999,300 @@ def create_offering():
         'term': offering.term,
         'academic_year': offering.academic_year,
         'status': offering.status
-    }), HTTPStatus.CREATED
+    }), HTTPStatus.OK
+
+@bp.route('/', methods=['POST'], strict_slashes=False)
+def create_offering():
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['course_id', 'section_type', 'section_code', 'day_of_week', 
+                         'start_time', 'end_time', 'capacity', 'term', 'academic_year']
+        if not data or not all(field in data for field in required_fields):
+            return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
+            
+        # Validate course exists
+        if not Course.query.get(data['course_id']):
+            return jsonify({'error': 'Course not found'}), HTTPStatus.NOT_FOUND
+            
+        # Convert time strings to Time objects
+        try:
+            data['start_time'] = datetime.strptime(data['start_time'], '%H:%M').time()
+            data['end_time'] = datetime.strptime(data['end_time'], '%H:%M').time()
+        except ValueError:
+            return jsonify({'error': 'Invalid time format. Use HH:MM'}), HTTPStatus.BAD_REQUEST
+            
+        # Validate day_of_week
+        if not 1 <= data['day_of_week'] <= 7:
+            return jsonify({'error': 'day_of_week must be between 1 and 7'}), HTTPStatus.BAD_REQUEST
+            
+        offering = CourseOffering(**data)
+        db.session.add(offering)
+        db.session.commit()
+        
+        return jsonify({
+            'offering_id': offering.offering_id,
+            'course_id': offering.course_id,
+            'section_type': offering.section_type,
+            'section_code': offering.section_code,
+            'day_of_week': offering.day_of_week,
+            'start_time': offering.start_time.strftime('%H:%M'),
+            'end_time': offering.end_time.strftime('%H:%M'),
+            'capacity': offering.capacity,
+            'current_enrollment': offering.current_enrollment,
+            'term': offering.term,
+            'academic_year': offering.academic_year,
+            'status': offering.status
+        }), HTTPStatus.CREATED
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<int:offering_id>', methods=['PUT'], strict_slashes=False)
+def update_offering(offering_id):
+    try:
+        offering = CourseOffering.query.get_or_404(offering_id)
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
+            
+        # Convert time strings if provided
+        if 'start_time' in data:
+            try:
+                data['start_time'] = datetime.strptime(data['start_time'], '%H:%M').time()
+            except ValueError:
+                return jsonify({'error': 'Invalid start_time format. Use HH:MM'}), HTTPStatus.BAD_REQUEST
+                
+        if 'end_time' in data:
+            try:
+                data['end_time'] = datetime.strptime(data['end_time'], '%H:%M').time()
+            except ValueError:
+                return jsonify({'error': 'Invalid end_time format. Use HH:MM'}), HTTPStatus.BAD_REQUEST
+        
+        # Validate day_of_week if provided
+        if 'day_of_week' in data and not 1 <= data['day_of_week'] <= 7:
+            return jsonify({'error': 'day_of_week must be between 1 and 7'}), HTTPStatus.BAD_REQUEST
+            
+        updateable_fields = ['section_type', 'section_code', 'day_of_week', 
+                           'start_time', 'end_time', 'capacity', 'term', 
+                           'academic_year']
+        
+        for field in updateable_fields:
+            if field in data:
+                setattr(offering, field, data[field])
+                
+        db.session.commit()
+        
+        return jsonify({
+            'offering_id': offering.offering_id,
+            'course_id': offering.course_id,
+            'section_type': offering.section_type,
+            'section_code': offering.section_code,
+            'day_of_week': offering.day_of_week,
+            'start_time': offering.start_time.strftime('%H:%M'),
+            'end_time': offering.end_time.strftime('%H:%M'),
+            'capacity': offering.capacity,
+            'current_enrollment': offering.current_enrollment,
+            'term': offering.term,
+            'academic_year': offering.academic_year,
+            'status': offering.status
+        }), HTTPStatus.OK
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<int:offering_id>/enrollment', methods=['PATCH'], strict_slashes=False)
+def update_enrollment(offering_id):
+    try:
+        offering = CourseOffering.query.get_or_404(offering_id)
+        data = request.get_json()
+        
+        if 'current_enrollment' not in data:
+            return jsonify({'error': 'current_enrollment is required'}), HTTPStatus.BAD_REQUEST
+            
+        if not isinstance(data['current_enrollment'], int) or data['current_enrollment'] < 0:
+            return jsonify({'error': 'Invalid enrollment count'}), HTTPStatus.BAD_REQUEST
+            
+        # Update enrollment and status
+        offering.current_enrollment = data['current_enrollment']
+        
+        # Auto-update status based on enrollment
+        if offering.current_enrollment >= offering.capacity:
+            offering.status = 'FULL'
+        elif offering.current_enrollment == 0:
+            offering.status = 'OPEN'
+            
+        db.session.commit()
+        
+        return jsonify({
+            'offering_id': offering.offering_id,
+            'current_enrollment': offering.current_enrollment,
+            'capacity': offering.capacity,
+            'status': offering.status
+        }), HTTPStatus.OK
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<int:offering_id>/status', methods=['PATCH'], strict_slashes=False)
+def update_status(offering_id):
+    try:
+        offering = CourseOffering.query.get_or_404(offering_id)
+        data = request.get_json()
+        
+        if 'status' not in data:
+            return jsonify({'error': 'status is required'}), HTTPStatus.BAD_REQUEST
+            
+        valid_statuses = ['OPEN', 'FULL', 'CANCELLED']
+        if data['status'] not in valid_statuses:
+            return jsonify({
+                'error': f'Invalid status. Must be one of: {", ".join(valid_statuses)}'
+            }), HTTPStatus.BAD_REQUEST
+            
+        offering.status = data['status']
+        db.session.commit()
+        
+        return jsonify({
+            'offering_id': offering.offering_id,
+            'status': offering.status
+        }), HTTPStatus.OK
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<int:offering_id>', methods=['DELETE'], strict_slashes=False)
+def delete_offering(offering_id):
+    try:
+        offering = CourseOffering.query.get_or_404(offering_id)
+        
+        # Prevent deletion if offering has enrollments
+        if offering.current_enrollment > 0:
+            return jsonify({
+                'error': 'Cannot delete offering with active enrollments'
+            }), HTTPStatus.CONFLICT
+            
+        db.session.delete(offering)
+        db.session.commit()
+        return '', HTTPStatus.NO_CONTENT
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+    
+
+@bp.route('/bulk', methods=['POST'], strict_slashes=False)
+def create_offerings_bulk():
+    try:
+        data = request.get_json()
+        if not data or 'offerings' not in data:
+            return jsonify({
+                'error': 'No offerings provided'
+            }), HTTPStatus.BAD_REQUEST
+
+        offerings_data = data['offerings']
+        created_offerings = []
+        errors = []
+
+        # Validate all offerings before creating any
+        for offering_data in offerings_data:
+            # Check required fields
+            required_fields = [
+                'course_id', 'section_type', 'section_code', 
+                'day_of_week', 'start_time', 'end_time', 
+                'capacity', 'term', 'academic_year'
+            ]
+            if not all(k in offering_data for k in required_fields):
+                errors.append(f"Missing required fields for offering {offering_data.get('offering_id', 'Unknown')}")
+                continue
+
+            # Validate course exists
+            if not Course.query.get(offering_data['course_id']):
+                errors.append(f"Course {offering_data['course_id']} does not exist")
+                continue
+
+            # Validate section_type
+            valid_types = ['LECTURE', 'LAB', 'TUTORIAL']
+            if offering_data['section_type'] not in valid_types:
+                errors.append(f"Invalid section_type for offering {offering_data['offering_id']}")
+                continue
+
+            # Validate day_of_week
+            try:
+                day = int(offering_data['day_of_week'])
+                if not 1 <= day <= 5:
+                    errors.append(f"day_of_week must be between 1 and 5 for offering {offering_data['offering_id']}")
+                    continue
+            except ValueError:
+                errors.append(f"Invalid day_of_week for offering {offering_data['offering_id']}")
+                continue
+
+            # Validate times
+            try:
+                start_time = datetime.strptime(offering_data['start_time'], '%H:%M').time()
+                end_time = datetime.strptime(offering_data['end_time'], '%H:%M').time()
+                if end_time <= start_time:
+                    errors.append(f"End time must be after start time for offering {offering_data['offering_id']}")
+                    continue
+            except ValueError:
+                errors.append(f"Invalid time format for offering {offering_data['offering_id']}")
+                continue
+
+            # Validate capacity
+            try:
+                capacity = int(offering_data['capacity'])
+                if capacity <= 0:
+                    errors.append(f"Capacity must be positive for offering {offering_data['offering_id']}")
+                    continue
+            except ValueError:
+                errors.append(f"Invalid capacity for offering {offering_data['offering_id']}")
+                continue
+
+        # If there are validation errors, return them
+        if errors and not created_offerings:
+            return jsonify({
+                'error': 'Validation failed',
+                'errors': errors
+            }), HTTPStatus.BAD_REQUEST
+
+        # Create validated offerings
+        for offering_data in offerings_data:
+            if str(offering_data.get('offering_id')) not in [e.split()[-1] for e in errors]:
+                # Convert times to proper format
+                offering_data['start_time'] = datetime.strptime(offering_data['start_time'], '%H:%M').time()
+                offering_data['end_time'] = datetime.strptime(offering_data['end_time'], '%H:%M').time()
+                
+                # Set default values
+                offering_data['status'] = offering_data.get('status', 'OPEN')
+                offering_data['current_enrollment'] = offering_data.get('current_enrollment', 0)
+
+                offering = CourseOffering(**offering_data)
+                db.session.add(offering)
+                created_offerings.append(offering_data['offering_id'])
+
+        db.session.commit()
+
+        return jsonify({
+            'message': 'Offerings created successfully',
+            'created': created_offerings,
+            'errors': errors
+        }), HTTPStatus.CREATED if created_offerings else HTTPStatus.BAD_REQUEST
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 
 --- File: ./backend/app/routes/programs.py ---
@@ -604,18 +1304,24 @@ from http import HTTPStatus
 
 bp = Blueprint('programs', __name__, url_prefix='/api/programs')
 
-@bp.route('/', methods=['GET'])
+@bp.route('/', methods=['GET'], strict_slashes=False)
 def get_programs():
-    programs = Program.query.all()
-    return jsonify([{
-        'program_id': p.program_id,
-        'program_name': p.program_name,
-        'total_enrollment': p.total_enrollment,
-        'blocks_20_count': p.blocks_20_count,
-        'blocks_10_count': p.blocks_10_count
-    } for p in programs]), HTTPStatus.OK
+    try:
+        programs = Program.query.all()
+        return jsonify([{
+            'program_id': p.program_id,
+            'program_name': p.program_name,
+            'total_enrollment': p.total_enrollment,
+            'blocks_20_count': p.blocks_20_count,
+            'blocks_10_count': p.blocks_10_count
+        } for p in programs]), HTTPStatus.OK
+    except Exception as e:
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<program_id>', methods=['GET'])
+@bp.route('/<program_id>', methods=['GET'], strict_slashes=False)
 def get_program(program_id):
     program = Program.query.get_or_404(program_id)
     return jsonify({
@@ -628,13 +1334,70 @@ def get_program(program_id):
 
 @bp.route('/', methods=['POST'])
 def create_program():
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['program_id', 'program_name', 'total_enrollment', 
+                         'blocks_20_count', 'blocks_10_count']
+        if not data or not all(field in data for field in required_fields):
+            return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
+        
+        # Check for existing program
+        if Program.query.get(data['program_id']):
+            return jsonify({'error': 'Program already exists'}), HTTPStatus.CONFLICT
+            
+        # Validate numeric fields
+        if not isinstance(data['total_enrollment'], int) or data['total_enrollment'] < 0:
+            return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
+            
+        if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
+            return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
+            
+        if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
+            return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
+
+        program = Program(**data)
+        db.session.add(program)
+        db.session.commit()
+        
+        return jsonify({
+            'program_id': program.program_id,
+            'program_name': program.program_name,
+            'total_enrollment': program.total_enrollment,
+            'blocks_20_count': program.blocks_20_count,
+            'blocks_10_count': program.blocks_10_count
+        }), HTTPStatus.CREATED
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<program_id>', methods=['PUT'], strict_slashes=False)
+def update_program(program_id):
+    program = Program.query.get_or_404(program_id)
     data = request.get_json()
     
-    if Program.query.get(data['program_id']):
-        return jsonify({'error': 'Program already exists'}), HTTPStatus.CONFLICT
-    
-    program = Program(**data)
-    db.session.add(program)
+    if not data:
+        return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
+        
+    if 'program_name' in data:
+        program.program_name = data['program_name']
+    if 'total_enrollment' in data:
+        if not isinstance(data['total_enrollment'], int) or data['total_enrollment'] < 0:
+            return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
+        program.total_enrollment = data['total_enrollment']
+    if 'blocks_20_count' in data:
+        if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
+            return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
+        program.blocks_20_count = data['blocks_20_count']
+    if 'blocks_10_count' in data:
+        if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
+            return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
+        program.blocks_10_count = data['blocks_10_count']
+        
     db.session.commit()
     
     return jsonify({
@@ -643,39 +1406,232 @@ def create_program():
         'total_enrollment': program.total_enrollment,
         'blocks_20_count': program.blocks_20_count,
         'blocks_10_count': program.blocks_10_count
-    }), HTTPStatus.CREATED
+    }), HTTPStatus.OK
+
+@bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
+def delete_program(program_id):
+    program = Program.query.get_or_404(program_id)
+    db.session.delete(program)
+    db.session.commit()
+    return '', HTTPStatus.NO_CONTENT
+
+@bp.route('/<program_id>/enrollment', methods=['PATCH'], strict_slashes=False)
+def update_enrollment(program_id):
+    try:
+        program = Program.query.get_or_404(program_id)
+        data = request.get_json()
+        
+        if 'total_enrollment' not in data:
+            return jsonify({'error': 'Missing total_enrollment'}), HTTPStatus.BAD_REQUEST
+            
+        if not isinstance(data['total_enrollment'], int) or data['total_enrollment'] < 0:
+            return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
+            
+        program.total_enrollment = data['total_enrollment']
+        db.session.commit()
+        
+        return jsonify({
+            'program_id': program.program_id,
+            'total_enrollment': program.total_enrollment
+        }), HTTPStatus.OK
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<program_id>/blocks', methods=['PATCH'], strict_slashes=False)
+def update_block_counts(program_id):
+    try:
+        program = Program.query.get_or_404(program_id)
+        data = request.get_json()
+        
+        if 'blocks_20_count' in data:
+            if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
+                return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
+            program.blocks_20_count = data['blocks_20_count']
+            
+        if 'blocks_10_count' in data:
+            if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
+                return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
+            program.blocks_10_count = data['blocks_10_count']
+            
+        db.session.commit()
+        
+        return jsonify({
+            'program_id': program.program_id,
+            'blocks_20_count': program.blocks_20_count,
+            'blocks_10_count': program.blocks_10_count
+        }), HTTPStatus.OK
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 --- File: ./backend/app/routes/program_requirements.py ---
 # app/routes/program_requirements.py
 from flask import Blueprint, jsonify, request
-from app.models import ProgramRequirement
+from app.models import ProgramRequirement, Program, Course
 from app import db
 from http import HTTPStatus
 
 bp = Blueprint('requirements', __name__, url_prefix='/api/requirements')
 
-@bp.route('/program/<program_id>', methods=['GET'])
+@bp.route('/program/<program_id>', methods=['GET'], strict_slashes=False)
 def get_program_requirements(program_id):
-    requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
-    return jsonify([{
-        'program_id': r.program_id,
-        'course_id': r.course_id,
-        'term': r.term
-    } for r in requirements]), HTTPStatus.OK
+    try:
+        if not Program.query.get(program_id):
+            return jsonify({'error': 'Program not found'}), HTTPStatus.NOT_FOUND
+            
+        requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
+        return jsonify([{
+            'program_id': r.program_id,
+            'course_id': r.course_id,
+            'term': r.term
+        } for r in requirements]), HTTPStatus.OK
+    except Exception as e:
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/', methods=['POST'])
+@bp.route('/', methods=['POST'], strict_slashes=False)
 def create_requirement():
-    data = request.get_json()
-    requirement = ProgramRequirement(**data)
-    db.session.add(requirement)
-    db.session.commit()
-    
-    return jsonify({
-        'program_id': requirement.program_id,
-        'course_id': requirement.course_id,
-        'term': requirement.term
-    }), HTTPStatus.CREATED
+    try:
+        data = request.get_json()
+        
+        # Check for null data first
+        if data is None:
+            return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
+            
+        # Rest of the validation logic
+        required_fields = ['program_id', 'course_id', 'term']
+        if not all(field in data for field in required_fields):
+            return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
+        
+        # Validate term is a positive integer
+        try:
+            term = int(data['term'])
+            if term <= 0:
+                return jsonify({'error': 'Term must be a positive integer'}), HTTPStatus.BAD_REQUEST
+            data['term'] = term
+        except ValueError:
+            return jsonify({'error': 'Term must be a valid integer'}), HTTPStatus.BAD_REQUEST
+
+        # Validate program exists
+        if not Program.query.get(data['program_id']):
+            return jsonify({'error': 'Program not found'}), HTTPStatus.NOT_FOUND
+
+        # Validate course exists  
+        if not Course.query.get(data['course_id']):
+            return jsonify({'error': 'Course not found'}), HTTPStatus.NOT_FOUND
+
+        # Check for duplicate requirement
+        existing = ProgramRequirement.query.filter_by(
+            program_id=data['program_id'],
+            course_id=data['course_id']
+        ).first()
+        if existing:
+            return jsonify({'error': 'Requirement already exists'}), HTTPStatus.CONFLICT
+
+        requirement = ProgramRequirement(**data)
+        db.session.add(requirement)
+        db.session.commit()
+
+        return jsonify({
+            'program_id': requirement.program_id,
+            'course_id': requirement.course_id, 
+            'term': requirement.term
+        }), HTTPStatus.CREATED
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<int:requirement_id>', methods=['PUT'], strict_slashes=False)
+def update_requirement(requirement_id):
+    try:
+        requirement = ProgramRequirement.query.get_or_404(requirement_id)
+        data = request.get_json()
+        
+        if 'term' in data:
+            requirement.term = data['term']
+            
+        if 'course_id' in data:
+            if not Course.query.get(data['course_id']):
+                return jsonify({'error': 'Course not found'}), HTTPStatus.NOT_FOUND
+            requirement.course_id = data['course_id']
+            
+        db.session.commit()
+        return jsonify({
+            'program_id': requirement.program_id,
+            'course_id': requirement.course_id,
+            'term': requirement.term
+        }), HTTPStatus.OK
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/<int:requirement_id>', methods=['DELETE'], strict_slashes=False)
+def delete_requirement(requirement_id):
+    try:
+        requirement = ProgramRequirement.query.get_or_404(requirement_id)
+        db.session.delete(requirement)
+        db.session.commit()
+        return '', HTTPStatus.NO_CONTENT
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@bp.route('/validate/<program_id>', methods=['POST'], strict_slashes=False)
+def validate_program_schedule(program_id):
+    try:
+        program = Program.query.get_or_404(program_id)
+        data = request.get_json()
+        schedule_ids = data.get('schedule_ids', [])
+        
+        if not schedule_ids:
+            return jsonify({'error': 'No schedules provided'}), HTTPStatus.BAD_REQUEST
+            
+        requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
+        schedules = BlockSchedule.query.filter(BlockSchedule.schedule_id.in_(schedule_ids)).all()
+        
+        missing_requirements = []
+        for req in requirements:
+            requirement_met = False
+            for schedule in schedules:
+                if schedule.has_course(req.course_id) and schedule.term == req.term:
+                    requirement_met = True
+                    break
+            if not requirement_met:
+                missing_requirements.append({
+                    'course_id': req.course_id,
+                    'term': req.term
+                })
+        
+        return jsonify({
+            'program_id': program_id,
+            'is_valid': len(missing_requirements) == 0,
+            'missing_requirements': missing_requirements
+        }), HTTPStatus.OK
+    except Exception as e:
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 --- File: ./backend/app/routes/__init__.py ---
@@ -716,7 +1672,14 @@ def create_app(config_class=Config):
     app.config.from_object(config_class)
 
     # Initialize CORS
-    CORS(app)
+    CORS(app, resources={
+        r"*": {
+            "origins": ["http://localhost:3000"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True
+        }
+    })
 
     # Initialize extensions
     db.init_app(app)
@@ -797,111 +1760,71 @@ def init_db():
 @app.cli.command("seed-db")
 def seed_db():
     """Seed the database with sample data."""
-    # Ensure we're in the correct directory
     base_dir = os.path.abspath(os.path.dirname(__file__))
     
     with app.app_context():
         try:
             # Clear existing data
-            BlockSchedule.query.delete()
-            Block.query.delete()
-            CourseOffering.query.delete()
-            ProgramRequirement.query.delete()
-            Course.query.delete()
-            Program.query.delete()
+            models_to_clear = [
+                BlockSchedule, Block, CourseOffering, 
+                ProgramRequirement, Course, Program
+            ]
+            for model in models_to_clear:
+                model.query.delete()
             
-            # Seed Programs
-            programs_file = os.path.join(base_dir, 'sample_data', 'programs.csv')
-            with open(programs_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    program = Program(
-                        program_id=row['program_id'],
-                        program_name=row['program_name'],
-                        total_enrollment=int(row['total_enrollment']),
-                        blocks_20_count=int(row['blocks_20_count']),
-                        blocks_10_count=int(row['blocks_10_count'])
-                    )
-                    db.session.add(program)
-            
-            # Seed Courses
-            courses_file = os.path.join(base_dir, 'sample_data', 'courses.csv')
-            with open(courses_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    course = Course(
-                        course_id=row['course_id'],
-                        course_name=row['course_name'],
-                        credits=float(row['credits'])
-                    )
-                    db.session.add(course)
-            
-            # Seed Course Offerings
-            offerings_file = os.path.join(base_dir, 'sample_data', 'course_offerings.csv')
-            with open(offerings_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    offering = CourseOffering(
-                        offering_id=int(row['offering_id']),
-                        course_id=row['course_id'],
-                        section_type=row['section_type'],
-                        section_code=row['section_code'],
-                        day_of_week=int(row['day_of_week']),
-                        start_time=parse_time(row['start_time']),
-                        end_time=parse_time(row['end_time']),
-                        capacity=int(row['capacity']),
-                        current_enrollment=int(row['current_enrollment']),
-                        term=row['term'],
-                        academic_year=row['academic_year'],
-                        status=row['status']
-                    )
-                    db.session.add(offering)
-            
-            # Seed Program Requirements
-            requirements_file = os.path.join(base_dir, 'sample_data', 'program_requirements.csv')
-            with open(requirements_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    if row['course_id'] != 'ElectiveB':  # Skip electives for now
-                        requirement = ProgramRequirement(
-                            program_id=row['program_id'],
-                            course_id=row['course_id'],
-                            term=row['term']
-                        )
-                        db.session.add(requirement)
+            # Define data files mapping
+            data_files = {
+                (Program, 'programs.csv'): {
+                    'program_id': str,
+                    'program_name': str,
+                    'total_enrollment': int,
+                    'blocks_20_count': int,
+                    'blocks_10_count': int
+                },
+                (Course, 'courses.csv'): {
+                    'course_id': str,
+                    'course_name': str,
+                    'credits': float
+                },
+                (CourseOffering, 'course_offerings.csv'): {
+                    'offering_id': int,
+                    'course_id': str,
+                    'section_type': str,
+                    'section_code': str,
+                    'day_of_week': int,
+                    'start_time': parse_time,
+                    'end_time': parse_time,
+                    'capacity': int,
+                    'current_enrollment': int,
+                    'term': str,
+                    'academic_year': str,
+                    'status': str
+                }
+            }
 
-            # Seed Blocks
-            blocks_file = os.path.join(base_dir, 'sample_data', 'blocks.csv')
-            with open(blocks_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    block = Block(
-                        block_id=row['block_id'],
-                        program_id=row['program_id'],
-                        block_size=int(row['block_size']),
-                        term=row['term'],
-                        academic_year=row['academic_year'],
-                        schedule_rating=float(row['schedule_rating']) if row['schedule_rating'] else None,
-                        early_starts=int(row['early_starts']) if row['early_starts'] else 0,
-                        late_ends=int(row['late_ends']) if row['late_ends'] else 0,
-                        long_breaks=int(row['long_breaks']) if row['long_breaks'] else 0,
-                        consecutive_days=int(row['consecutive_days']) if row['consecutive_days'] else 0,
-                        status=row['status']
-                    )
-                    db.session.add(block)
+            # Seed data using the mapping
+            for (model, filename), field_types in data_files.items():
+                file_path = os.path.join(base_dir, 'sample_data', filename)
+                with open(file_path, 'r') as file:
+                    for row in csv.DictReader(file):
+                        processed_data = {
+                            field: converter(row[field]) 
+                            for field, converter in field_types.items()
+                        }
+                        db.session.add(model(**processed_data))
 
-            # Seed Block Schedules
-            schedules_file = os.path.join(base_dir, 'sample_data', 'block_schedules.csv')
-            with open(schedules_file, 'r') as file:
-                csv_reader = csv.DictReader(file)
-                for row in csv_reader:
-                    block_schedule = BlockSchedule(
-                        block_id=row['block_id'],
-                        offering_id=int(row['offering_id'])
-                    )
-                    db.session.add(block_schedule)
-            
-            # Commit all changes
+            # Seed program requirements
+            with open(os.path.join(base_dir, 'sample_data', 'program_requirements.csv'), 'r') as file:
+                for row in csv.DictReader(file):
+                    if row['course_id'] != 'ElectiveB':
+                        db.session.add(ProgramRequirement(**row))
+
+            # Seed blocks and schedules
+            for filename, model in [('blocks.csv', Block), ('block_schedules.csv', BlockSchedule)]:
+                with open(os.path.join(base_dir, 'sample_data', filename), 'r') as file:
+                    for row in csv.DictReader(file):
+                        db.session.add(model(**row))
+
             db.session.commit()
             print('Database seeded successfully.')
             
@@ -930,5 +1853,1720 @@ def clear_db():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+
+--- File: ./backend/tests/conftest.py ---
+# tests/conftest.py
+import pytest
+from app import create_app, db
+import warnings
+from sqlalchemy import exc as sa_exc
+
+@pytest.fixture
+def app():
+    app = create_app()
+    app.config.update({
+        'TESTING': True,
+        'SQLALCHEMY_DATABASE_URI': 'sqlite:///:memory:'
+    })
+    
+    with app.app_context():
+        db.create_all()
+        yield app
+        db.session.remove()
+        db.drop_all()
+
+@pytest.fixture
+def client(app):
+    return app.test_client()
+
+@pytest.fixture(autouse=True)
+def ignore_warnings():
+    warnings.simplefilter("ignore", category=sa_exc.LegacyAPIWarning)
+
+
+
+--- File: ./backend/tests/test_block.py ---
+# tests/test_block.py
+from http import HTTPStatus
+
+def test_get_blocks(client):
+    sample_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 20,
+        'term': '1',
+        'academic_year': '2024-25',
+        'schedule_rating': None,
+        'status': 'DRAFT'
+    }
+
+    response = client.post('/api/blocks/', json=sample_block)
+    assert response.status_code == HTTPStatus.CREATED
+
+    response = client.get('/api/blocks/')
+    data = response.get_json()
+
+    assert response.status_code == HTTPStatus.OK
+    assert len(data) == 1
+    assert data[0]['block_id'] == sample_block['block_id']
+    assert data[0]['program_id'] == sample_block['program_id']
+    assert data[0]['block_size'] == sample_block['block_size']
+    assert data[0]['term'] == sample_block['term']
+    assert data[0]['academic_year'] == sample_block['academic_year']
+
+def test_get_single_block(client):
+    sample_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 20,
+        'term': '1',
+        'academic_year': '2024-25',
+        'schedule_rating': None,
+        'status': 'DRAFT'
+    }
+
+    response = client.post('/api/blocks/', json=sample_block)
+    assert response.status_code == HTTPStatus.CREATED
+
+    response = client.get(f"/api/blocks/{sample_block['block_id']}")
+    data = response.get_json()
+
+    assert response.status_code == HTTPStatus.OK
+    assert data['block_id'] == sample_block['block_id']
+    assert data['program_id'] == sample_block['program_id']
+    assert data['block_size'] == sample_block['block_size']
+    assert data['status'] == 'DRAFT'
+
+def test_create_block(client):
+    sample_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 20,
+        'term': '1',
+        'academic_year': '2024-25',
+        'schedule_rating': None,
+        'status': 'DRAFT'
+    }
+
+    response = client.post('/api/blocks/', json=sample_block)
+    data = response.get_json()
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert data['block_id'] == sample_block['block_id']
+    assert data['program_id'] == sample_block['program_id']
+    assert data['block_size'] == sample_block['block_size']
+
+def test_create_block_missing_fields(client):
+    incomplete_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG'
+    }
+
+    response = client.post('/api/blocks/', json=incomplete_block)
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_create_duplicate_block(client):
+    sample_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 20,
+        'term': '1',
+        'academic_year': '2024-25',
+        'schedule_rating': None,
+        'status': 'DRAFT'
+    }
+
+    response = client.post('/api/blocks/', json=sample_block)
+    assert response.status_code == HTTPStatus.CREATED
+
+    response = client.post('/api/blocks/', json=sample_block)
+    assert response.status_code == HTTPStatus.CONFLICT
+
+def test_update_block(client):
+    sample_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 20,
+        'term': '1',
+        'academic_year': '2024-25',
+        'schedule_rating': None,
+        'status': 'DRAFT'
+    }
+
+    response = client.post('/api/blocks/', json=sample_block)
+    assert response.status_code == HTTPStatus.CREATED
+
+    update_data = {
+        'block_size': 10,
+        'status': 'PUBLISHED'
+    }
+
+    response = client.put(f"/api/blocks/{sample_block['block_id']}", json=update_data)
+    data = response.get_json()
+
+    assert response.status_code == HTTPStatus.OK
+    assert data['block_size'] == update_data['block_size']
+    assert data['status'] == update_data['status']
+
+def test_delete_block(client):
+    sample_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 20,
+        'term': '1',
+        'academic_year': '2024-25',
+        'schedule_rating': None,
+        'status': 'DRAFT'
+    }
+
+    response = client.post('/api/blocks/', json=sample_block)
+    assert response.status_code == HTTPStatus.CREATED
+
+    response = client.delete(f"/api/blocks/{sample_block['block_id']}")
+    assert response.status_code == HTTPStatus.NO_CONTENT
+
+    response = client.get(f"/api/blocks/{sample_block['block_id']}")
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_invalid_block_size(client):
+    invalid_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 15,
+        'term': '1',
+        'academic_year': '2024-25',
+        'schedule_rating': None,
+        'status': 'DRAFT'
+    }
+
+    response = client.post('/api/blocks/', json=invalid_block)
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_get_nonexistent_block(client):
+    response = client.get('/api/blocks/NOTFOUND')
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_update_block_status(client):
+    sample_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 20,
+        'term': '1',
+        'academic_year': '2024-25',
+        'status': 'DRAFT'
+    }
+
+    response = client.post('/api/blocks/', json=sample_block)
+    assert response.status_code == HTTPStatus.CREATED
+
+    # Test status update
+    status_update = {'status': 'PUBLISHED'}
+    response = client.patch(f"/api/blocks/{sample_block['block_id']}/status", 
+                          json=status_update)
+    data = response.get_json()
+
+    assert response.status_code == HTTPStatus.OK
+    assert data['status'] == 'PUBLISHED'
+
+def test_invalid_status_update(client):
+    sample_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 20,
+        'term': '1',
+        'academic_year': '2024-25',
+        'status': 'DRAFT'
+    }
+
+    response = client.post('/api/blocks/', json=sample_block)
+    assert response.status_code == HTTPStatus.CREATED
+
+    # Test invalid status
+    invalid_status = {'status': 'INVALID'}
+    response = client.patch(f"/api/blocks/{sample_block['block_id']}/status", 
+                          json=invalid_status)
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_delete_locked_block(client):
+    sample_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 20,
+        'term': '1',
+        'academic_year': '2024-25',
+        'status': 'DRAFT'
+    }
+
+    # Create and lock block
+    response = client.post('/api/blocks/', json=sample_block)
+    assert response.status_code == HTTPStatus.CREATED
+    
+    response = client.patch(f"/api/blocks/{sample_block['block_id']}/status", 
+                          json={'status': 'LOCKED'})
+    assert response.status_code == HTTPStatus.OK
+
+    # Try to delete locked block
+    response = client.delete(f"/api/blocks/{sample_block['block_id']}")
+    assert response.status_code == HTTPStatus.FORBIDDEN
+
+def test_calculate_block_rating(client):
+    sample_block = {
+        'block_id': 'BLK1',
+        'program_id': 'SENG',
+        'block_size': 20,
+        'term': '1',
+        'academic_year': '2024-25',
+        'status': 'DRAFT'
+    }
+
+    response = client.post('/api/blocks/', json=sample_block)
+    assert response.status_code == HTTPStatus.CREATED
+
+    # Calculate ratings
+    response = client.post(f"/api/blocks/{sample_block['block_id']}/rating")
+    data = response.get_json()
+
+    assert response.status_code == HTTPStatus.OK
+    assert 'schedule_rating' in data
+    assert 'early_starts' in data
+    assert 'late_ends' in data
+    assert 'long_breaks' in data
+    assert 'consecutive_days' in data
+
+
+--- File: ./backend/tests/test_conflicts.py ---
+# tests/test_conflicts.py
+from http import HTTPStatus
+from datetime import time
+from app import db
+from app.models import CourseOffering, Course
+
+def test_check_offering_conflict(client):
+    # Create prerequisite course
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    db.session.add(course)
+    
+    # Create two overlapping offerings
+    offering1 = CourseOffering(
+        offering_id=1,
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('09:00'),
+        end_time=time.fromisoformat('10:30'),
+        capacity=50,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE',
+        current_enrollment=0
+    )
+    
+    offering2 = CourseOffering(
+        offering_id=2,
+        course_id='CS101',
+        section_type='LEC',
+        section_code='B',
+        day_of_week=1,
+        start_time=time.fromisoformat('10:00'),
+        end_time=time.fromisoformat('11:30'),
+        capacity=50,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE',
+        current_enrollment=0
+    )
+    
+    db.session.add(offering1)
+    db.session.add(offering2)
+    db.session.commit()
+    
+    response = client.get('/api/conflicts/offerings/1/2')
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert data['has_conflict'] is True
+    assert data['offering1'] == 'CS101'
+    assert data['offering2'] == 'CS101'
+
+def test_check_schedule_conflicts(client):
+    # Create prerequisite course
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    db.session.add(course)
+    
+    # Create three offerings, two with conflicts
+    offerings = [
+        CourseOffering(
+            offering_id=1,
+            course_id='CS101',
+            section_type='LEC',
+            section_code='A',
+            day_of_week=1,
+            start_time=time.fromisoformat('09:00'),
+            end_time=time.fromisoformat('10:30'),
+            capacity=50,
+            term='1',
+            academic_year='2024-25',
+            status='ACTIVE',
+            current_enrollment=0
+        ),
+        CourseOffering(
+            offering_id=2,
+            course_id='CS101',
+            section_type='LEC',
+            section_code='B',
+            day_of_week=1,
+            start_time=time.fromisoformat('10:00'),
+            end_time=time.fromisoformat('11:30'),
+            capacity=50,
+            term='1',
+            academic_year='2024-25',
+            status='ACTIVE',
+            current_enrollment=0
+        ),
+        CourseOffering(
+            offering_id=3,
+            course_id='CS101',
+            section_type='LEC',
+            section_code='C',
+            day_of_week=2,  # Different day, no conflict
+            start_time=time.fromisoformat('09:00'),
+            end_time=time.fromisoformat('10:30'),
+            capacity=50,
+            term='1',
+            academic_year='2024-25',
+            status='ACTIVE',
+            current_enrollment=0
+        )
+    ]
+    
+    for offering in offerings:
+        db.session.add(offering)
+    db.session.commit()
+    
+    response = client.post('/api/conflicts/schedule/conflicts', 
+                          json={'offering_ids': [1, 2, 3]})
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert 'conflicts' in data
+    assert len(data['conflicts']) == 1  # Only offerings 1 and 2 conflict
+    assert data['conflicts'][0]['offering1_id'] == 1
+    assert data['conflicts'][0]['offering2_id'] == 2
+
+def test_check_course_conflicts(client):
+    # Create prerequisite course
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    db.session.add(course)
+    
+    # Create existing schedule offerings
+    schedule_offering = CourseOffering(
+        offering_id=1,
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('09:00'),
+        end_time=time.fromisoformat('10:30'),
+        capacity=50,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE',
+        current_enrollment=0
+    )
+    
+    # Create new offering to check
+    new_offering = CourseOffering(
+        offering_id=2,
+        course_id='CS101',
+        section_type='LEC',
+        section_code='B',
+        day_of_week=1,
+        start_time=time.fromisoformat('10:00'),  # Overlaps with schedule_offering
+        end_time=time.fromisoformat('11:30'),
+        capacity=50,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE',
+        current_enrollment=0
+    )
+    
+    db.session.add(schedule_offering)
+    db.session.add(new_offering)
+    db.session.commit()
+    
+    response = client.post('/api/conflicts/schedule/check-course',
+                          json={
+                              'schedule_offering_ids': [1],
+                              'new_offering_id': 2
+                          })
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert 'conflicts' in data
+    assert len(data['conflicts']) == 1
+    assert data['conflicts'][0]['existing_offering_id'] == 1
+    assert data['conflicts'][0]['new_offering_id'] == 2
+
+
+
+--- File: ./backend/tests/test_course.py ---
+# tests/test_course.py
+from http import HTTPStatus
+
+def test_get_courses(client):
+    sample_course = {
+        'course_id': 'CS101',
+        'course_name': 'Introduction to Programming',
+        'credits': 3.0
+    }
+
+    response = client.post('/api/courses/', json=sample_course)
+    assert response.status_code == HTTPStatus.CREATED
+
+    response = client.get('/api/courses/')
+    data = response.get_json()
+
+    assert response.status_code == HTTPStatus.OK
+    assert len(data) == 1
+    assert data[0]['course_id'] == sample_course['course_id']
+    assert data[0]['course_name'] == sample_course['course_name']
+    assert data[0]['credits'] == sample_course['credits']
+
+def test_get_single_course(client):
+    sample_course = {
+        'course_id': 'CS101',
+        'course_name': 'Introduction to Programming',
+        'credits': 3.0
+    }
+
+    response = client.post('/api/courses/', json=sample_course)
+    assert response.status_code == HTTPStatus.CREATED
+
+    response = client.get(f"/api/courses/{sample_course['course_id']}")
+    data = response.get_json()
+
+    assert response.status_code == HTTPStatus.OK
+    assert data['course_id'] == sample_course['course_id']
+    assert data['course_name'] == sample_course['course_name']
+    assert data['credits'] == sample_course['credits']
+
+def test_create_course(client):
+    sample_course = {
+        'course_id': 'CS101',
+        'course_name': 'Introduction to Programming',
+        'credits': 3.0
+    }
+
+    response = client.post('/api/courses/', json=sample_course)
+    data = response.get_json()
+
+    assert response.status_code == HTTPStatus.CREATED
+    assert data['course_id'] == sample_course['course_id']
+    assert data['course_name'] == sample_course['course_name']
+    assert data['credits'] == sample_course['credits']
+
+def test_create_duplicate_course(client):
+    sample_course = {
+        'course_id': 'CS101',
+        'course_name': 'Introduction to Programming',
+        'credits': 3.0
+    }
+
+    response = client.post('/api/courses/', json=sample_course)
+    assert response.status_code == HTTPStatus.CREATED
+
+    response = client.post('/api/courses/', json=sample_course)
+    assert response.status_code == HTTPStatus.CONFLICT
+
+def test_update_course(client):
+    sample_course = {
+        'course_id': 'CS101',
+        'course_name': 'Introduction to Programming',
+        'credits': 3.0
+    }
+
+    response = client.post('/api/courses/', json=sample_course)
+    assert response.status_code == HTTPStatus.CREATED
+
+    update_data = {
+        'course_name': 'Advanced Programming',
+        'credits': 4.0
+    }
+
+    response = client.put(f"/api/courses/{sample_course['course_id']}", json=update_data)
+    data = response.get_json()
+
+    assert response.status_code == HTTPStatus.OK
+    assert data['course_name'] == update_data['course_name']
+    assert data['credits'] == update_data['credits']
+
+def test_delete_course(client):
+    sample_course = {
+        'course_id': 'CS101',
+        'course_name': 'Introduction to Programming',
+        'credits': 3.0
+    }
+
+    response = client.post('/api/courses/', json=sample_course)
+    assert response.status_code == HTTPStatus.CREATED
+
+    response = client.delete(f"/api/courses/{sample_course['course_id']}")
+    assert response.status_code == HTTPStatus.NO_CONTENT
+
+    response = client.get(f"/api/courses/{sample_course['course_id']}")
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_get_nonexistent_course(client):
+    response = client.get('/api/courses/NOTFOUND')
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_update_nonexistent_course(client):
+    update_data = {
+        'course_name': 'New Name',
+        'credits': 3.0
+    }
+    response = client.put('/api/courses/NOTFOUND', json=update_data)
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_delete_nonexistent_course(client):
+    response = client.delete('/api/courses/NOTFOUND')
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+
+--- File: ./backend/tests/test_course_offering.py ---
+# tests/test_course_offerings.py
+from http import HTTPStatus
+from datetime import time
+from app import db
+from app.models import Course, CourseOffering
+
+def test_get_offerings(client):
+    # Create prerequisite course
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    db.session.add(course)
+    
+    # Create test offering
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE'
+    )
+    db.session.add(offering)
+    db.session.commit()
+    
+    response = client.get('/api/offerings/')
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert len(data) == 1
+    assert data[0]['course_id'] == 'CS101'
+    assert data[0]['section_type'] == 'LEC'
+    assert data[0]['start_time'] == '08:30'
+    assert data[0]['capacity'] == 50
+
+def test_get_single_offering(client):
+    # Create prerequisite course
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    response = client.get(f'/api/offerings/{offering.offering_id}')
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert data['course_id'] == 'CS101'
+    assert data['section_type'] == 'LEC'
+    assert data['start_time'] == '08:30'
+
+def test_create_offering(client):
+    # Create prerequisite course
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    db.session.add(course)
+    db.session.commit()
+    
+    offering_data = {
+        'course_id': 'CS101',
+        'section_type': 'LEC',
+        'section_code': 'A',
+        'day_of_week': 1,
+        'start_time': '08:30',
+        'end_time': '10:00',
+        'capacity': 50,
+        'term': '1',
+        'academic_year': '2024-25'
+    }
+    
+    response = client.post('/api/offerings/', json=offering_data)
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.CREATED
+    assert data['course_id'] == offering_data['course_id']
+    assert data['section_type'] == offering_data['section_type']
+    assert data['start_time'] == offering_data['start_time']
+
+def test_create_offering_missing_fields(client):
+    incomplete_data = {
+        'course_id': 'CS101',
+        'section_type': 'LEC'
+    }
+    
+    response = client.post('/api/offerings/', json=incomplete_data)
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_create_offering_nonexistent_course(client):
+    offering_data = {
+        'course_id': 'NOTFOUND',
+        'section_type': 'LEC',
+        'section_code': 'A',
+        'day_of_week': 1,
+        'start_time': '08:30',
+        'end_time': '10:00',
+        'capacity': 50,
+        'term': '1',
+        'academic_year': '2024-25'
+    }
+    
+    response = client.post('/api/offerings/', json=offering_data)
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+def test_delete_offering(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    response = client.delete(f'/api/offerings/{offering.offering_id}')
+    assert response.status_code == HTTPStatus.NO_CONTENT
+    
+    # Verify deletion
+    response = client.get(f'/api/offerings/{offering.offering_id}')
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_invalid_time_format(client):
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    db.session.add(course)
+    db.session.commit()
+    
+    offering_data = {
+        'course_id': 'CS101',
+        'section_type': 'LEC',
+        'section_code': 'A',
+        'day_of_week': 1,
+        'start_time': '8:30AM',  # Invalid format
+        'end_time': '10:00',
+        'capacity': 50,
+        'term': '1',
+        'academic_year': '2024-25'
+    }
+    
+    response = client.post('/api/offerings/', json=offering_data)
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_update_enrollment(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='OPEN'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # Update enrollment to full capacity
+    response = client.patch(f'/api/offerings/{offering.offering_id}/enrollment', 
+                          json={'current_enrollment': 50})
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert data['current_enrollment'] == 50
+    assert data['status'] == 'FULL'
+
+def test_invalid_enrollment_update(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='OPEN'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # Try negative enrollment
+    response = client.patch(f'/api/offerings/{offering.offering_id}/enrollment', 
+                          json={'current_enrollment': -1})
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_update_offering_status(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='OPEN'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # Update status to CANCELLED
+    response = client.patch(f'/api/offerings/{offering.offering_id}/status', 
+                          json={'status': 'CANCELLED'})
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert data['status'] == 'CANCELLED'
+
+def test_invalid_status_update(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=0,
+        term='1',
+        academic_year='2024-25',
+        status='OPEN'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # Try invalid status
+    response = client.patch(f'/api/offerings/{offering.offering_id}/status', 
+                          json={'status': 'INVALID'})
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_delete_offering_with_enrollment(client):
+    # Create prerequisite course and offering
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        current_enrollment=10,
+        term='1',
+        academic_year='2024-25',
+        status='OPEN'
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # Try to delete offering with enrollment
+    response = client.delete(f'/api/offerings/{offering.offering_id}')
+    assert response.status_code == HTTPStatus.CONFLICT
+
+
+
+--- File: ./backend/tests/test_programs.py ---
+# tests/test_programs.py
+from http import HTTPStatus
+from app import db
+from app.models import Program
+
+def test_get_programs(client):
+    # Create sample program
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    db.session.add(program)
+    db.session.commit()
+    
+    response = client.get('/api/programs/')
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert len(data) == 1
+    assert data[0]['program_id'] == 'SENG'
+    assert data[0]['program_name'] == 'Software Engineering'
+    assert data[0]['total_enrollment'] == 100
+    assert data[0]['blocks_20_count'] == 5
+    assert data[0]['blocks_10_count'] == 2
+
+def test_get_single_program(client):
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    db.session.add(program)
+    db.session.commit()
+    
+    response = client.get(f"/api/programs/{program.program_id}")
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert data['program_id'] == 'SENG'
+    assert data['program_name'] == 'Software Engineering'
+    assert data['total_enrollment'] == 100
+    assert data['blocks_20_count'] == 5
+    assert data['blocks_10_count'] == 2
+
+def test_create_program(client):
+    program_data = {
+        'program_id': 'SENG',
+        'program_name': 'Software Engineering',
+        'total_enrollment': 100,
+        'blocks_20_count': 5,
+        'blocks_10_count': 2
+    }
+    
+    response = client.post('/api/programs/', json=program_data)
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.CREATED
+    assert data['program_id'] == program_data['program_id']
+    assert data['program_name'] == program_data['program_name']
+    assert data['total_enrollment'] == program_data['total_enrollment']
+    assert data['blocks_20_count'] == program_data['blocks_20_count']
+    assert data['blocks_10_count'] == program_data['blocks_10_count']
+
+def test_create_program_missing_fields(client):
+    incomplete_data = {
+        'program_id': 'SENG',
+        'program_name': 'Software Engineering'
+    }
+    
+    response = client.post('/api/programs/', json=incomplete_data)
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_create_duplicate_program(client):
+    program_data = {
+        'program_id': 'SENG',
+        'program_name': 'Software Engineering',
+        'total_enrollment': 100,
+        'blocks_20_count': 5,
+        'blocks_10_count': 2
+    }
+    
+    # Create first program
+    response = client.post('/api/programs/', json=program_data)
+    assert response.status_code == HTTPStatus.CREATED
+    
+    # Try to create duplicate
+    response = client.post('/api/programs/', json=program_data)
+    assert response.status_code == HTTPStatus.CONFLICT
+
+def test_update_program(client):
+    # Create initial program
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    db.session.add(program)
+    db.session.commit()
+    
+    update_data = {
+        'program_name': 'Updated Engineering',
+        'total_enrollment': 150,
+        'blocks_20_count': 6,
+        'blocks_10_count': 3
+    }
+    
+    response = client.put(f"/api/programs/{program.program_id}", json=update_data)
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert data['program_name'] == update_data['program_name']
+    assert data['total_enrollment'] == update_data['total_enrollment']
+    assert data['blocks_20_count'] == update_data['blocks_20_count']
+    assert data['blocks_10_count'] == update_data['blocks_10_count']
+
+def test_update_nonexistent_program(client):
+    update_data = {
+        'program_name': 'Updated Engineering'
+    }
+    
+    response = client.put('/api/programs/NOTFOUND', json=update_data)
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_delete_program(client):
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    db.session.add(program)
+    db.session.commit()
+    
+    response = client.delete(f"/api/programs/{program.program_id}")
+    assert response.status_code == HTTPStatus.NO_CONTENT
+    
+    # Verify program is deleted
+    response = client.get(f"/api/programs/{program.program_id}")
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_invalid_enrollment_values(client):
+    invalid_data = {
+        'program_id': 'SENG',
+        'program_name': 'Software Engineering',
+        'total_enrollment': -1,
+        'blocks_20_count': 5,
+        'blocks_10_count': 2
+    }
+    
+    response = client.post('/api/programs/', json=invalid_data)
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+
+--- File: ./backend/tests/test_program_requirements.py ---
+# tests/test_program_requirements.py
+from http import HTTPStatus
+from app import db
+from app.models import Program, Course, ProgramRequirement
+
+def test_get_program_requirements(client):
+    # Create prerequisites
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    course = Course(
+        course_id='CS101',
+        course_name='Programming',
+        credits=3.0
+    )
+    requirement = ProgramRequirement(
+        program_id='SENG',
+        course_id='CS101',
+        term='1'
+    )
+    
+    db.session.add(program)
+    db.session.add(course)
+    db.session.add(requirement)
+    db.session.commit()
+    
+    response = client.get('/api/requirements/program/SENG')
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert len(data) == 1
+    assert data[0]['program_id'] == 'SENG'
+    assert data[0]['course_id'] == 'CS101'
+    assert data[0]['term'] == '1'
+
+def test_create_requirement(client):
+    # Create prerequisites
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    course = Course(
+        course_id='CS101',
+        course_name='Programming',
+        credits=3.0
+    )
+    
+    db.session.add(program)
+    db.session.add(course)
+    db.session.commit()
+    
+    requirement_data = {
+        'program_id': 'SENG',
+        'course_id': 'CS101',
+        'term': '1'
+    }
+    
+    response = client.post('/api/requirements/', json=requirement_data)
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.CREATED
+    assert data['program_id'] == requirement_data['program_id']
+    assert data['course_id'] == requirement_data['course_id']
+    assert data['term'] == requirement_data['term']
+
+def test_create_duplicate_requirement(client):
+    # Create prerequisites
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    course = Course(
+        course_id='CS101',
+        course_name='Programming',
+        credits=3.0
+    )
+    requirement = ProgramRequirement(
+        program_id='SENG',
+        course_id='CS101',
+        term='1'
+    )
+    
+    db.session.add(program)
+    db.session.add(course)
+    db.session.add(requirement)
+    db.session.commit()
+    
+    duplicate_data = {
+        'program_id': 'SENG',
+        'course_id': 'CS101',
+        'term': '2'
+    }
+    
+    response = client.post('/api/requirements/', json=duplicate_data)
+    assert response.status_code == HTTPStatus.CONFLICT
+
+def test_create_requirement_nonexistent_program(client):
+    course = Course(
+        course_id='CS101',
+        course_name='Programming',
+        credits=3.0
+    )
+    db.session.add(course)
+    db.session.commit()
+    
+    requirement_data = {
+        'program_id': 'NONEXISTENT',
+        'course_id': 'CS101',
+        'term': '1'
+    }
+    
+    response = client.post('/api/requirements/', json=requirement_data)
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_create_requirement_nonexistent_course(client):
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    db.session.add(program)
+    db.session.commit()
+    
+    requirement_data = {
+        'program_id': 'SENG',
+        'course_id': 'NONEXISTENT',
+        'term': '1'
+    }
+    
+    response = client.post('/api/requirements/', json=requirement_data)
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_get_nonexistent_program_requirements(client):
+    response = client.get('/api/requirements/program/NONEXISTENT')
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_create_requirement_missing_fields(client):
+    incomplete_data = {
+        'program_id': 'SENG',
+        'course_id': 'CS101'
+        # Missing term field
+    }
+    
+    response = client.post('/api/requirements/', json=incomplete_data)
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_get_program_requirements_empty(client):
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    db.session.add(program)
+    db.session.commit()
+    
+    response = client.get('/api/requirements/program/SENG')
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert len(data) == 0
+
+def test_create_requirement_invalid_term(client):
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    course = Course(
+        course_id='CS101',
+        course_name='Programming',
+        credits=3.0
+    )
+    
+    db.session.add(program)
+    db.session.add(course)
+    db.session.commit()
+    
+    requirement_data = {
+        'program_id': 'SENG',
+        'course_id': 'CS101',
+        'term': '-1'  # Invalid term
+    }
+    
+    response = client.post('/api/requirements/', json=requirement_data)
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_create_requirement_no_data(client):
+    response = client.post('/api/requirements/', json=None)
+    assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+
+def test_multiple_requirements_same_program(client):
+    program = Program(
+        program_id='SENG',
+        program_name='Software Engineering',
+        total_enrollment=100,
+        blocks_20_count=5,
+        blocks_10_count=2
+    )
+    course1 = Course(
+        course_id='CS101',
+        course_name='Programming',
+        credits=3.0
+    )
+    course2 = Course(
+        course_id='CS102',
+        course_name='Data Structures',
+        credits=3.0
+    )
+    
+    db.session.add(program)
+    db.session.add(course1)
+    db.session.add(course2)
+    db.session.commit()
+    
+    requirement1 = {
+        'program_id': 'SENG',
+        'course_id': 'CS101',
+        'term': '1'
+    }
+    requirement2 = {
+        'program_id': 'SENG',
+        'course_id': 'CS102',
+        'term': '2'
+    }
+    
+    response1 = client.post('/api/requirements/', json=requirement1)
+    response2 = client.post('/api/requirements/', json=requirement2)
+    
+    assert response1.status_code == HTTPStatus.CREATED
+    assert response2.status_code == HTTPStatus.CREATED
+    
+    response = client.get('/api/requirements/program/SENG')
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.OK
+    assert len(data) == 2
+
+
+--- File: ./backend/tests/test_schedule.py ---
+# tests/test_schedules.py
+from http import HTTPStatus
+from datetime import time
+from app import db
+from app.models import CourseOffering, Block, Course
+
+def test_add_offering_to_block(client):
+    # Create prerequisite course
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    db.session.add(course)
+    
+    # Create block
+    block = Block(
+        block_id='BLK1',
+        program_id='SENG',
+        block_size=20,
+        term='1',
+        academic_year='2024-25',
+        status='DRAFT'
+    )
+    
+    # Create offering with all required fields
+    offering = CourseOffering(
+        offering_id=1,
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE',
+        current_enrollment=0
+    )
+    
+    db.session.add(block)
+    db.session.add(offering)
+    db.session.commit()
+    
+    response = client.post('/api/schedules/block/BLK1', json={'offering_id': 1})
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.CREATED
+    assert data['block_id'] == 'BLK1'
+    assert data['offering_id'] == 1
+    assert data['course_id'] == 'CS101'
+    assert data['start_time'] == '08:30'
+    assert data['end_time'] == '10:00'
+
+def test_missing_offering_id(client):
+    block = Block(
+        block_id='BLK1',
+        program_id='SENG',
+        block_size=20,
+        term='1',
+        academic_year='2024-25',
+        status='DRAFT'
+    )
+    db.session.add(block)
+    db.session.commit()
+    
+    response = client.post('/api/schedules/block/BLK1', json={})
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_nonexistent_block(client):
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    offering = CourseOffering(
+        offering_id=1,
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE',
+        current_enrollment=0
+    )
+    db.session.add(course)
+    db.session.add(offering)
+    db.session.commit()
+    
+    response = client.post('/api/schedules/block/NONEXISTENT', json={'offering_id': 1})
+    assert response.status_code == HTTPStatus.NOT_FOUND
+
+def test_duplicate_offering(client):
+    # Setup prerequisites
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    block = Block(
+        block_id='BLK1',
+        program_id='SENG',
+        block_size=20,
+        term='1',
+        academic_year='2024-25',
+        status='DRAFT'
+    )
+    offering = CourseOffering(
+        offering_id=1,
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('08:30'),
+        end_time=time.fromisoformat('10:00'),
+        capacity=50,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE',
+        current_enrollment=0
+    )
+    
+    db.session.add(course)
+    db.session.add(block)
+    db.session.add(offering)
+    db.session.commit()
+    
+    # First addition
+    response = client.post('/api/schedules/block/BLK1', json={'offering_id': 1})
+    assert response.status_code == HTTPStatus.CREATED
+    
+    # Duplicate addition
+    response = client.post('/api/schedules/block/BLK1', json={'offering_id': 1})
+    assert response.status_code == HTTPStatus.CONFLICT
+
+def test_time_conflict(client):
+    # Setup prerequisites
+    course = Course(course_id='CS101', course_name='Programming', credits=3.0)
+    block = Block(
+        block_id='BLK1',
+        program_id='SENG',
+        block_size=20,
+        term='1',
+        academic_year='2024-25',
+        status='DRAFT'
+    )
+    
+    offering1 = CourseOffering(
+        offering_id=1,
+        course_id='CS101',
+        section_type='LEC',
+        section_code='A',
+        day_of_week=1,
+        start_time=time.fromisoformat('09:00'),
+        end_time=time.fromisoformat('10:30'),
+        capacity=50,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE',
+        current_enrollment=0
+    )
+    
+    offering2 = CourseOffering(
+        offering_id=2,
+        course_id='CS101',
+        section_type='LEC',
+        section_code='B',
+        day_of_week=1,
+        start_time=time.fromisoformat('10:00'),
+        end_time=time.fromisoformat('11:30'),
+        capacity=50,
+        term='1',
+        academic_year='2024-25',
+        status='ACTIVE',
+        current_enrollment=0
+    )
+    
+    db.session.add(course)
+    db.session.add(block)
+    db.session.add(offering1)
+    db.session.add(offering2)
+    db.session.commit()
+    
+    # Add first offering
+    response = client.post('/api/schedules/block/BLK1', json={'offering_id': 1})
+    assert response.status_code == HTTPStatus.CREATED
+    
+    # Try to add conflicting offering
+    response = client.post('/api/schedules/block/BLK1', json={'offering_id': 2})
+    data = response.get_json()
+    
+    assert response.status_code == HTTPStatus.CONFLICT
+    assert 'conflicts' in data
+    assert len(data['conflicts']) == 1
+    assert data['conflicts'][0]['existing_offering_id'] == 1
+    assert data['conflicts'][0]['new_offering_id'] == 2
+
+
+
+--- File: ./backend/tests/__init__.py ---
+
+
+
+--- File: ./frontend/app/node_modules/flatted/python/flatted.py ---
+# ISC License
+#
+# Copyright (c) 2018-2021, Andrea Giammarchi, @WebReflection
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+# OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+# PERFORMANCE OF THIS SOFTWARE.
+
+import json as _json
+
+class _Known:
+    def __init__(self):
+        self.key = []
+        self.value = []
+
+class _String:
+    def __init__(self, value):
+        self.value = value
+
+
+def _array_keys(value):
+    keys = []
+    i = 0
+    for _ in value:
+        keys.append(i)
+        i += 1
+    return keys
+
+def _object_keys(value):
+    keys = []
+    for key in value:
+        keys.append(key)
+    return keys
+
+def _is_array(value):
+    return isinstance(value, list) or isinstance(value, tuple)
+
+def _is_object(value):
+    return isinstance(value, dict)
+
+def _is_string(value):
+    return isinstance(value, str)
+
+def _index(known, input, value):
+    input.append(value)
+    index = str(len(input) - 1)
+    known.key.append(value)
+    known.value.append(index)
+    return index
+
+def _loop(keys, input, known, output):
+    for key in keys:
+        value = output[key]
+        if isinstance(value, _String):
+            _ref(key, input[int(value.value)], input, known, output)
+
+    return output
+
+def _ref(key, value, input, known, output):
+    if _is_array(value) and not value in known:
+        known.append(value)
+        value = _loop(_array_keys(value), input, known, value)
+    elif _is_object(value) and not value in known:
+        known.append(value)
+        value = _loop(_object_keys(value), input, known, value)
+
+    output[key] = value
+
+def _relate(known, input, value):
+    if _is_string(value) or _is_array(value) or _is_object(value):
+        try:
+            return known.value[known.key.index(value)]
+        except:
+            return _index(known, input, value)
+
+    return value
+
+def _transform(known, input, value):
+    if _is_array(value):
+        output = []
+        for val in value:
+            output.append(_relate(known, input, val))
+        return output
+
+    if _is_object(value):
+        obj = {}
+        for key in value:
+            obj[key] = _relate(known, input, value[key])
+        return obj
+
+    return value
+
+def _wrap(value):
+    if _is_string(value):
+        return _String(value)
+
+    if _is_array(value):
+        i = 0
+        for val in value:
+            value[i] = _wrap(val)
+            i += 1
+
+    elif _is_object(value):
+        for key in value:
+            value[key] = _wrap(value[key])
+
+    return value
+
+def parse(value, *args, **kwargs):
+    json = _json.loads(value, *args, **kwargs)
+    wrapped = []
+    for value in json:
+        wrapped.append(_wrap(value))
+
+    input = []
+    for value in wrapped:
+        if isinstance(value, _String):
+            input.append(value.value)
+        else:
+            input.append(value)
+
+    value = input[0]
+
+    if _is_array(value):
+        return _loop(_array_keys(value), input, [value], value)
+
+    if _is_object(value):
+        return _loop(_object_keys(value), input, [value], value)
+
+    return value
+
+
+def stringify(value, *args, **kwargs):
+    known = _Known()
+    input = []
+    output = []
+    i = int(_index(known, input, value))
+    while i < len(input):
+        output.append(_transform(known, input, input[i]))
+        i += 1
+    return _json.dumps(output, *args, **kwargs)
+
+
+
+--- File: ./frontend/app/node_modules/flatted/python/test.py ---
+from flatted import stringify as _stringify, parse
+
+def stringify(value):
+    return _stringify(value, separators=(',', ':'))
+
+assert stringify([None, None]) == '[[null,null]]'
+
+a = []
+o = {}
+
+assert stringify(a) == '[[]]'
+assert stringify(o) == '[{}]'
+
+a.append(a)
+o['o'] = o
+
+assert stringify(a) == '[["0"]]'
+assert stringify(o) == '[{"o":"0"}]'
+
+b = parse(stringify(a))
+assert isinstance(b, list) and b[0] == b
+
+a.append(1)
+a.append('two')
+a.append(True)
+o['one'] = 1
+o['two'] = 'two'
+o['three'] = True
+
+assert stringify(a) == '[["0",1,"1",true],"two"]'
+assert stringify(o) == '[{"o":"0","one":1,"two":"1","three":true},"two"]'
+
+a.append(o)
+o['a'] = a
+
+assert stringify(a) == '[["0",1,"1",true,"2"],"two",{"o":"2","one":1,"two":"1","three":true,"a":"0"}]'
+assert stringify(o) == '[{"o":"0","one":1,"two":"1","three":true,"a":"2"},"two",["2",1,"1",true,"0"]]'
+
+a.append({'test': 'OK'})
+a.append([1, 2, 3])
+
+o['test'] = {'test': 'OK'}
+o['array'] = [1, 2, 3]
+
+assert stringify(a) == '[["0",1,"1",true,"2","3","4"],"two",{"o":"2","one":1,"two":"1","three":true,"a":"0","test":"3","array":"4"},{"test":"5"},[1,2,3],"OK"]'
+assert stringify(o) == '[{"o":"0","one":1,"two":"1","three":true,"a":"2","test":"3","array":"4"},"two",["2",1,"1",true,"0","3","4"],{"test":"5"},[1,2,3],"OK"]'
+
+a2 = parse(stringify(a));
+o2 = parse(stringify(o));
+
+assert a2[0] == a2
+assert o2['o'] == o2
+
+assert a2[1] == 1 and a2[2] == 'two' and a2[3] == True and isinstance(a2[4], dict)
+assert a2[4] == a2[4]['o'] and a2 == a2[4]['o']['a']
+
+str = parse('[{"prop":"1","a":"2","b":"3"},{"value":123},["4","5"],{"e":"6","t":"7","p":4},{},{"b":"8"},"f",{"a":"9"},["10"],"sup",{"a":1,"d":2,"c":"7","z":"11","h":1},{"g":2,"a":"7","b":"12","f":6},{"r":4,"u":"7","c":5}]')
+assert str['b']['t']['a'] == 'sup' and str['a'][1]['b'][0]['c'] == str['b']['t']
+
+oo = parse('[{"a":"1","b":"0","c":"2"},{"aa":"3"},{"ca":"4","cb":"5","cc":"6","cd":"7","ce":"8","cf":"9"},{"aaa":"10"},{"caa":"4"},{"cba":"5"},{"cca":"2"},{"cda":"4"},"value2","value3","value1"]');
+assert oo['a']['aa']['aaa'] == 'value1' and oo == oo['b'] and oo['c']['ca']['caa'] == oo['c']['ca']
+
+print('OK')
+
 
 

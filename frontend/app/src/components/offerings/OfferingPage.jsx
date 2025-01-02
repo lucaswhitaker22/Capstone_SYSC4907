@@ -3,6 +3,8 @@ import { Container, Button } from 'react-bootstrap';
 import OfferingsTable from './OfferingsTable';
 import OfferingModal from './OfferingModal';
 import OfferingUploadModal from './OfferingUploadModal';
+import Papa from 'papaparse';
+
 const API_URL = 'http://127.0.0.1:5000/api';
 
 const OfferingsPage = () => {
@@ -31,6 +33,35 @@ const OfferingsPage = () => {
     setSelectedOffering(null);
     setShowModal(true);
   };
+  const handleExportCSV = () => {
+    const csvData = offerings.map(offering => ({
+        course_id: offering.course_id,
+        section_type: offering.section_type,
+        section_code: offering.section_code,
+        day_of_week: offering.day_of_week,
+        start_time: offering.start_time,
+        end_time: offering.end_time,
+        capacity: offering.capacity,
+        term: offering.term,
+        academic_year: offering.academic_year,
+        status: offering.status
+    }));
+    
+    const csv = Papa.unparse(csvData, {
+        header: true,
+        delimiter: ","
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `course-offerings-${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+};
 
   const handleEdit = (offering) => {
     setSelectedOffering(offering);
@@ -93,6 +124,9 @@ const OfferingsPage = () => {
           onClick={() => setShowUploadModal(true)}
         >
           Upload CSV
+        </Button>
+        <Button variant="success" className="me-2" onClick={handleExportCSV}>
+            Export CSV
         </Button>
         <Button variant="primary" onClick={handleAddNew}>
           Add New Offering
