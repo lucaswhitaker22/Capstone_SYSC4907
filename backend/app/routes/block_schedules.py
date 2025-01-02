@@ -155,79 +155,66 @@ def generate_block_schedule(block_id):
             program_id=block.program_id
         ).all()
 
-        # Map requirements by term (multiple courses per term)
-        term_requirements = {}
-        for req in program_requirements:
-            term_key = str(req.term)  # Convert term to string for dictionary key
-            if term_key not in term_requirements:
-                term_requirements[term_key] = []
-            term_requirements[term_key].append(req.course_id)
+        # Get required course IDs
+        required_courses = [req.course_id for req in program_requirements]
 
         # Clear existing schedule
         BlockSchedule.query.filter_by(block_id=block_id).delete()
         db.session.commit()
 
         # Get available offerings for required courses
-        required_courses = term_requirements.get('1', [])
         if required_courses:
             available_offerings = CourseOffering.query.filter(
-                CourseOffering.term == block.term,
-                CourseOffering.academic_year == block.academic_year,
-                CourseOffering.status == 'OPEN',
                 CourseOffering.course_id.in_(required_courses)
             ).all()
-        else:
-            available_offerings = []
 
-        # Generate schedule
-        selected_offerings = []
-        required_course_ids = set()
+            # Group offerings by course and section type
+            course_offerings = {}
+            for offering in available_offerings:
+                if offering.course_id not in course_offerings:
+                    course_offerings[offering.course_id] = {'LECTURE': [], 'LAB': []}
+                course_offerings[offering.course_id][offering.section_type].append(offering)
 
-        # First, add required courses
-        for offering in available_offerings:
-            if len(selected_offerings) >= block.block_size:
-                break
-                
-            has_conflicts = any(
-                has_time_conflict(offering, selected) 
-                for selected in selected_offerings
-            )
-            
-            if not has_conflicts and offering.course_id not in required_course_ids:
-                selected_offerings.append(offering)
-                required_course_ids.add(offering.course_id)
+            selected_offerings = []
+            # For each required course
+            for course_id in required_courses:
+                if course_id in course_offerings:
+                    # Get lecture sections grouped by section code prefix
+                    lecture_groups = {}
+                    for lecture in course_offerings[course_id]['LECTURE']:
+                        section_prefix = lecture.section_code.split('-')[0]
+                        if section_prefix not in lecture_groups:
+                            lecture_groups[section_prefix] = []
+                        lecture_groups[section_prefix].append(lecture)
+
+                    # Try each lecture group until we find one that works
+                    for lectures in lecture_groups.values():
+                        lectures_fit = True
+                        for lecture in lectures:
+                            if any(has_time_conflict(lecture, selected) 
+                                  for selected in selected_offerings):
+                                lectures_fit = False
+                                break
+                        
+                        if lectures_fit:
+                            # Add all lectures from this section
+                            selected_offerings.extend(lectures)
+                            
+                            # Try to find a compatible lab
+                            for lab in course_offerings[course_id]['LAB']:
+                                if not any(has_time_conflict(lab, selected) 
+                                         for selected in selected_offerings):
+                                    selected_offerings.append(lab)
+                                    break
+                            break
+
+            # Create block schedules for selected offerings
+            for offering in selected_offerings:
                 block_schedule = BlockSchedule(
                     block_id=block_id,
                     offering_id=offering.offering_id
                 )
                 db.session.add(block_schedule)
-
-        # Fill remaining slots with other available courses
-        remaining_slots = block.block_size - len(selected_offerings)
-        if remaining_slots > 0:
-            other_offerings = CourseOffering.query.filter(
-                CourseOffering.term == block.term,
-                CourseOffering.academic_year == block.academic_year,
-                CourseOffering.status == 'OPEN',
-                CourseOffering.course_id.notin_(list(required_course_ids)) if required_course_ids else True
-            ).all()
-
-            for offering in other_offerings:
-                if len(selected_offerings) >= block.block_size:
-                    break
-                    
-                has_conflicts = any(
-                    has_time_conflict(offering, selected) 
-                    for selected in selected_offerings
-                )
-                
-                if not has_conflicts:
-                    selected_offerings.append(offering)
-                    block_schedule = BlockSchedule(
-                        block_id=block_id,
-                        offering_id=offering.offering_id
-                    )
-                    db.session.add(block_schedule)
 
         db.session.commit()
 
@@ -236,7 +223,7 @@ def generate_block_schedule(block_id):
             'course_id': o.course_id,
             'section_type': o.section_type,
             'section_code': o.section_code,
-            'day_of_week': o.day_of_week,  # Updated to match new model
+            'day_of_week': o.day_of_week,
             'start_time': o.start_time.strftime('%H:%M'),
             'end_time': o.end_time.strftime('%H:%M')
         } for o in selected_offerings]
@@ -249,6 +236,9 @@ def generate_block_schedule(block_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+   
+
 
 @bp.route('/block/<block_id>/offering/<offering_id>', methods=['DELETE'], strict_slashes=False)
 def remove_offering_from_block(block_id, offering_id):
