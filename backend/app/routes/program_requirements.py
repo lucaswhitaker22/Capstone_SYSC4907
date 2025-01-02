@@ -1,6 +1,6 @@
 # app/routes/program_requirements.py
 from flask import Blueprint, jsonify, request
-from app.models import ProgramRequirement, Program, Course
+from app.models import ProgramRequirement, Program, Course, BlockSchedule
 from app import db
 from http import HTTPStatus
 
@@ -15,8 +15,7 @@ def get_program_requirements(program_id):
         requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
         return jsonify([{
             'program_id': r.program_id,
-            'course_id': r.course_id,
-            'term': r.term
+            'course_id': r.course_id
         } for r in requirements]), HTTPStatus.OK
     except Exception as e:
         return jsonify({
@@ -29,23 +28,12 @@ def create_requirement():
     try:
         data = request.get_json()
         
-        # Check for null data first
         if data is None:
             return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
             
-        # Rest of the validation logic
-        required_fields = ['program_id', 'course_id', 'term']
+        required_fields = ['program_id', 'course_id']
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
-        
-        # Validate term is a positive integer
-        try:
-            term = int(data['term'])
-            if term <= 0:
-                return jsonify({'error': 'Term must be a positive integer'}), HTTPStatus.BAD_REQUEST
-            data['term'] = term
-        except ValueError:
-            return jsonify({'error': 'Term must be a valid integer'}), HTTPStatus.BAD_REQUEST
 
         # Validate program exists
         if not Program.query.get(data['program_id']):
@@ -69,8 +57,7 @@ def create_requirement():
 
         return jsonify({
             'program_id': requirement.program_id,
-            'course_id': requirement.course_id, 
-            'term': requirement.term
+            'course_id': requirement.course_id
         }), HTTPStatus.CREATED
 
     except Exception as e:
@@ -85,9 +72,6 @@ def update_requirement(requirement_id):
     try:
         requirement = ProgramRequirement.query.get_or_404(requirement_id)
         data = request.get_json()
-        
-        if 'term' in data:
-            requirement.term = data['term']
             
         if 'course_id' in data:
             if not Course.query.get(data['course_id']):
@@ -98,7 +82,6 @@ def update_requirement(requirement_id):
         return jsonify({
             'program_id': requirement.program_id,
             'course_id': requirement.course_id,
-            'term': requirement.term
         }), HTTPStatus.OK
     except Exception as e:
         db.session.rollback()
@@ -138,13 +121,12 @@ def validate_program_schedule(program_id):
         for req in requirements:
             requirement_met = False
             for schedule in schedules:
-                if schedule.has_course(req.course_id) and schedule.term == req.term:
+                if schedule.has_course(req.course_id):
                     requirement_met = True
                     break
             if not requirement_met:
                 missing_requirements.append({
                     'course_id': req.course_id,
-                    'term': req.term
                 })
         
         return jsonify({

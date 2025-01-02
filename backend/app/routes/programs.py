@@ -1,6 +1,6 @@
 # app/routes/programs.py
 from flask import Blueprint, jsonify, request
-from app.models import Program
+from app.models import Program, Block
 from app import db
 from http import HTTPStatus
 
@@ -44,7 +44,7 @@ def create_program():
                          'blocks_20_count', 'blocks_10_count']
         if not data or not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
-        
+            
         # Check for existing program
         if Program.query.get(data['program_id']):
             return jsonify({'error': 'Program already exists'}), HTTPStatus.CONFLICT
@@ -59,8 +59,39 @@ def create_program():
         if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
             return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
 
+        # Create program
         program = Program(**data)
         db.session.add(program)
+        
+        # Generate blocks
+        blocks = []
+        
+        # Generate 20-student blocks
+        for i in range(data['blocks_20_count']):
+            block = Block(
+                block_id=f"{data['program_id']}_20_{i+1}",
+                program_id=data['program_id'],
+                block_size=20,
+                term="FALL",
+                academic_year="2025-2026",
+                status="ACTIVE"
+            )
+            blocks.append(block)
+            
+        # Generate 10-student blocks
+        for i in range(data['blocks_10_count']):
+            block = Block(
+                block_id=f"{data['program_id']}_10_{i+1}",
+                program_id=data['program_id'],
+                block_size=10,
+                term="FALL",
+                academic_year="2025-2026",
+                status="ACTIVE"
+            )
+            blocks.append(block)
+        
+        # Bulk save blocks
+        db.session.bulk_save_objects(blocks)
         db.session.commit()
         
         return jsonify({
@@ -68,14 +99,17 @@ def create_program():
             'program_name': program.program_name,
             'total_enrollment': program.total_enrollment,
             'blocks_20_count': program.blocks_20_count,
-            'blocks_10_count': program.blocks_10_count
+            'blocks_10_count': program.blocks_10_count,
+            'blocks_created': len(blocks)
         }), HTTPStatus.CREATED
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @bp.route('/bulk', methods=['POST'])
 def bulk_create_programs():
@@ -85,6 +119,8 @@ def bulk_create_programs():
             return jsonify({'error': 'No programs data provided'}), HTTPStatus.BAD_REQUEST
             
         programs = []
+        blocks = []
+        
         for program_data in data['programs']:
             if Program.query.get(program_data['program_id']):
                 continue
@@ -98,9 +134,35 @@ def bulk_create_programs():
             )
             programs.append(program)
             
+            # Generate blocks for each program
+            for i in range(int(program_data['blocks_20_count'])):
+                blocks.append(Block(
+                    block_id=f"{program_data['program_id']}_20_{i+1}",
+                    program_id=program_data['program_id'],
+                    block_size=20,
+                    term="FALL",
+                    academic_year="2025-2026",
+                    status="ACTIVE"
+                ))
+                
+            for i in range(int(program_data['blocks_10_count'])):
+                blocks.append(Block(
+                    block_id=f"{program_data['program_id']}_10_{i+1}",
+                    program_id=program_data['program_id'],
+                    block_size=10,
+                    term="FALL",
+                    academic_year="2025-2026",
+                    status="ACTIVE"
+                ))
+        
         db.session.bulk_save_objects(programs)
+        db.session.bulk_save_objects(blocks)
         db.session.commit()
-        return jsonify({'message': f'{len(programs)} programs created'}), HTTPStatus.CREATED
+        
+        return jsonify({
+            'message': f'{len(programs)} programs created with {len(blocks)} blocks'
+        }), HTTPStatus.CREATED
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), HTTPStatus.BAD_REQUEST

@@ -3,7 +3,7 @@ import { Container, Table, Button, Badge } from 'react-bootstrap';
 import CourseModal from './CoursesModal';
 import CourseUploadModal from './CourseUploadModal';
 import Papa from 'papaparse';
-
+import CourseOfferingsModal from './CourseOfferingModal';
 
 const CoursesPage = () => {
   const [courses, setCourses] = useState([]);
@@ -11,7 +11,8 @@ const CoursesPage = () => {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [error, setError] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
-
+  const [showOfferingsModal, setShowOfferingsModal] = useState(false);
+  const [selectedCourseId, setSelectedCourseId] = useState(null);
   const fetchCourses = async () => {
     try {
       const response = await fetch('http://127.0.0.1:5000/api/courses/');
@@ -101,6 +102,17 @@ const CoursesPage = () => {
                 >
                   Edit
                 </Button>
+                <Button
+        variant="info"
+        size="sm"
+        className="me-2"
+        onClick={() => {
+            setSelectedCourseId(course.course_id);
+            setShowOfferingsModal(true);
+        }}
+    >
+        Offerings
+    </Button>
                 <Button 
                   variant="outline-danger" 
                   size="sm"
@@ -131,6 +143,13 @@ const CoursesPage = () => {
     onHide={() => setShowUploadModal(false)}
     onSave={fetchCourses}
     />
+
+
+<CourseOfferingsModal
+    show={showOfferingsModal}
+    onHide={() => setShowOfferingsModal(false)}
+    courseId={selectedCourseId}
+/>
     </Container>
   );
 };

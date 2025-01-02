@@ -5,8 +5,7 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
     const [requirements, setRequirements] = useState([]);
     const [courses, setCourses] = useState([]); // Add courses state
     const [newRequirement, setNewRequirement] = useState({
-      course_id: '',
-      term: ''
+      course_id: ''
     });
     const [isLoading, setIsLoading] = useState(true);
 
@@ -54,13 +53,12 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
         body: JSON.stringify({
           program_id: programId,
           ...newRequirement,
-          term: parseInt(newRequirement.term)
         }),
       });
 
       if (response.ok) {
         await fetchRequirements();
-        setNewRequirement({ course_id: '', term: '' });
+        setNewRequirement({ course_id: ''});
       } else {
         const error = await response.json();
         alert(error.error || 'Error adding requirement');
@@ -131,21 +129,6 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
                 </Form.Select>
               </Form.Group>
             </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Term</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={newRequirement.term}
-                  onChange={(e) => setNewRequirement(prev => ({
-                    ...prev,
-                    term: e.target.value
-                  }))}
-                  required
-                  min="1"
-                />
-              </Form.Group>
-            </Col>
             <Col md={2} className="d-flex align-items-end">
               <Button type="submit" variant="primary" className="mb-3">
                 Add
@@ -158,7 +141,6 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
           <thead>
             <tr>
               <th>Course ID</th>
-              <th>Term</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -166,7 +148,7 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
             {requirements.map((req) => (
               <tr key={`${req.program_id}-${req.course_id}`}>
                 <td>{req.course_id}</td>
-                <td>{req.term}</td>
+
                 <td>
                   <Button
                     variant="danger"
@@ -175,15 +157,6 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
                     className="me-2"
                   >
                     Delete
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => handleUpdateRequirement(req.requirement_id, {
-                      term: parseInt(prompt('Enter new term:', req.term))
-                    })}
-                  >
-                    Edit Term
                   </Button>
                 </td>
               </tr>

@@ -17,6 +17,7 @@ def parse_time(time_str):
 def init_db():
     """Initialize the database."""
     with app.app_context():
+        db.drop_all()
         db.create_all()
         print('Database initialized.')
 
