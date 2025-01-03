@@ -1,7 +1,8 @@
 from flask import Blueprint, jsonify, request, current_app
-from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement
+from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement, Program
 from app.database import db
-from app.routes.utils.schedule_generator import generate_block_schedule, validate_block_schedule
+from app.routes.utils.schedule_generator import generate_block_schedule
+from app.routes.utils.schedule_validator import validate_block_schedule
 from http import HTTPStatus
 from .conflicts import has_time_conflict
 import logging
@@ -175,3 +176,114 @@ def remove_offering_from_block(block_id, offering_id):
 @bp.route('/block/<block_id>/validate', methods=['GET'], strict_slashes=False)
 def validate(block_id):
     return validate_block_schedule(block_id)
+
+@bp.route('/program/<program_id>/schedules', methods=['GET'])
+def get_all_possible_schedules(program_id):
+    try:
+        # Validate program exists
+        program = Program.query.get_or_404(program_id)
+        
+        # Get program requirements
+        program_requirements = ProgramRequirement.query.filter_by(
+            program_id=program_id
+        ).order_by(ProgramRequirement.requirement_id).all()
+
+        if not program_requirements:
+            return jsonify({
+                'error': 'No requirements found for program'
+            }), HTTPStatus.NOT_FOUND
+
+        # Get required course IDs
+        required_courses = [req.course_id for req in program_requirements]
+
+        # Get all available offerings for required courses
+        available_offerings = CourseOffering.query.filter(
+            CourseOffering.course_id.in_(required_courses)
+        ).all()
+
+        # Group offerings by course
+        course_offerings = {}
+        for offering in available_offerings:
+            if offering.course_id not in course_offerings:
+                course_offerings[offering.course_id] = {'LECTURE': [], 'LAB': [], 'TUTORIAL': []}
+            course_offerings[offering.course_id][offering.section_type].append(offering)
+
+        valid_schedules = []
+
+        def try_schedule_combination(current_schedule, remaining_courses):
+            if not remaining_courses:
+                valid_schedules.append(current_schedule.copy())
+                return
+
+            current_course = remaining_courses[0]
+            if current_course not in course_offerings:
+                return
+
+            # Group lectures by their section prefix
+            lecture_groups = {}
+            for lecture in course_offerings[current_course]['LECTURE']:
+                prefix = lecture.section_code.split('-')[0]
+                if prefix not in lecture_groups:
+                    lecture_groups[prefix] = []
+                lecture_groups[prefix].append(lecture)
+
+            # Try each lecture group
+            for prefix, lectures in lecture_groups.items():
+                all_lectures_fit = True
+                temp_schedule = current_schedule.copy()
+
+                # Add all lectures from this section group
+                for lecture in lectures:
+                    if any(has_time_conflict(lecture, selected) for selected in temp_schedule):
+                        all_lectures_fit = False
+                        break
+                    temp_schedule.append(lecture)
+
+                if all_lectures_fit:
+                    if course_offerings[current_course]['LAB']:
+                        # Try each lab with this lecture group
+                        for lab in course_offerings[current_course]['LAB']:
+                            if not any(has_time_conflict(lab, selected) for selected in temp_schedule):
+                                try_schedule_combination(
+                                    temp_schedule + [lab],
+                                    remaining_courses[1:]
+                                )
+                    else:
+                        # No lab required, continue with next course
+                        try_schedule_combination(
+                            temp_schedule,
+                            remaining_courses[1:]
+                        )
+
+        # Generate all possible schedules
+        try_schedule_combination([], required_courses)
+
+        # Format response
+        formatted_schedules = []
+        for schedule in valid_schedules:
+            formatted_offerings = [{
+                'offering_id': o.offering_id,
+                'course_id': o.course_id,
+                'requirement_id': next(
+                    (r.requirement_id for r in program_requirements if r.course_id == o.course_id),
+                    None
+                ),
+                'section_type': o.section_type,
+                'section_code': o.section_code,
+                'day_of_week': o.day_of_week,
+                'start_time': o.start_time.strftime('%H:%M'),
+                'end_time': o.end_time.strftime('%H:%M')
+            } for o in schedule]
+            formatted_schedules.append(formatted_offerings)
+
+        return jsonify({
+            'program_id': program_id,
+            'total_schedules': len(formatted_schedules),
+            'schedules': formatted_schedules
+        }), HTTPStatus.OK
+
+    except Exception as e:
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR

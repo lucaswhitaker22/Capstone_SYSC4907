@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request, current_app
-from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement, Program
+from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement
 from app.database import db
 from http import HTTPStatus
 from app.routes.conflicts import has_time_conflict
@@ -27,15 +27,21 @@ def generate_block_schedule(block_id):
         # Get required course IDs
         required_courses = [req.course_id for req in program_requirements]
 
-        # Get available offerings excluding ones already used in other blocks
+        # Get all existing schedules to check for duplicates
         existing_schedules = BlockSchedule.query.filter(
             BlockSchedule.block_id != block_id
         ).all()
-        used_offering_ids = {schedule.offering_id for schedule in existing_schedules}
 
+        # Group existing schedules by block for comparison
+        existing_block_schedules = {}
+        for schedule in existing_schedules:
+            if schedule.block_id not in existing_block_schedules:
+                existing_block_schedules[schedule.block_id] = []
+            existing_block_schedules[schedule.block_id].append(schedule.offering_id)
+
+        # Get all available offerings for required courses
         available_offerings = CourseOffering.query.filter(
-            CourseOffering.course_id.in_(required_courses),
-            ~CourseOffering.offering_id.in_(used_offering_ids)
+            CourseOffering.course_id.in_(required_courses)
         ).all()
 
         # Group offerings by course
@@ -45,13 +51,21 @@ def generate_block_schedule(block_id):
                 course_offerings[offering.course_id] = {'LECTURE': [], 'LAB': [], 'TUTORIAL': []}
             course_offerings[offering.course_id][offering.section_type].append(offering)
 
+        valid_schedules = []
+
         def try_schedule_combination(current_schedule, remaining_courses, course_offerings):
             if not remaining_courses:
-                return current_schedule
+                # Check if this schedule is identical to any existing block schedule
+                current_offering_ids = set(o.offering_id for o in current_schedule)
+                for block_schedule in existing_block_schedules.values():
+                    if set(block_schedule) == current_offering_ids:
+                        return
+                valid_schedules.append(current_schedule.copy())
+                return
 
             current_course = remaining_courses[0]
             if current_course not in course_offerings:
-                return None
+                return
 
             # Group lectures by their section prefix
             lecture_groups = {}
@@ -61,9 +75,8 @@ def generate_block_schedule(block_id):
                     lecture_groups[prefix] = []
                 lecture_groups[prefix].append(lecture)
 
-            # Try each lecture group (all sections with same prefix)
+            # Try each lecture group
             for prefix, lectures in lecture_groups.items():
-                # Must include ALL lectures in the group (A-1, A-2, etc.)
                 all_lectures_fit = True
                 temp_schedule = current_schedule.copy()
 
@@ -75,49 +88,39 @@ def generate_block_schedule(block_id):
                     temp_schedule.append(lecture)
 
                 if all_lectures_fit:
-                    # If course has labs, try each lab
                     if course_offerings[current_course]['LAB']:
-                        lab_found = False
+                        # Try each lab with this lecture group
                         for lab in course_offerings[current_course]['LAB']:
                             if not any(has_time_conflict(lab, selected) for selected in temp_schedule):
-                                # Try next course with all lectures and this lab
-                                result = try_schedule_combination(
+                                try_schedule_combination(
                                     temp_schedule + [lab],
                                     remaining_courses[1:],
                                     course_offerings
                                 )
-                                if result:
-                                    return result
-                                lab_found = True
-                                break
-                        if not lab_found:
-                            continue
                     else:
-                        # No lab required, try next course with all lectures
-                        result = try_schedule_combination(
+                        # No lab required, continue with next course
+                        try_schedule_combination(
                             temp_schedule,
                             remaining_courses[1:],
                             course_offerings
                         )
-                        if result:
-                            return result
 
-            return None
+        # Generate all valid schedules
+        try_schedule_combination([], required_courses, course_offerings)
 
-
-        # Try to find a valid schedule
-        valid_schedule = try_schedule_combination([], required_courses, course_offerings)
-
-        if not valid_schedule:
+        if not valid_schedules:
             return jsonify({
                 'error': 'No valid schedule found that satisfies all requirements'
             }), HTTPStatus.BAD_REQUEST
+
+        # Select the first valid schedule (you could implement a selection strategy here)
+        selected_schedule = valid_schedules[0]
 
         # Clear existing schedule
         BlockSchedule.query.filter_by(block_id=block_id).delete()
 
         # Create block schedules for selected offerings
-        for offering in valid_schedule:
+        for offering in selected_schedule:
             block_schedule = BlockSchedule(
                 block_id=block_id,
                 offering_id=offering.offering_id
@@ -139,112 +142,16 @@ def generate_block_schedule(block_id):
             'day_of_week': o.day_of_week,
             'start_time': o.start_time.strftime('%H:%M'),
             'end_time': o.end_time.strftime('%H:%M')
-        } for o in valid_schedule]
+        } for o in selected_schedule]
 
         return jsonify({
             'schedule': formatted_offerings,
-            'scheduled_courses': required_courses
+            'scheduled_courses': required_courses,
+            'total_valid_schedules': len(valid_schedules)
         }), HTTPStatus.CREATED
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({
-            'error': 'Internal Server Error',
-            'message': str(e)
-        }), HTTPStatus.INTERNAL_SERVER_ERROR
-    
-
-
-def validate_block_schedule(block_id):
-    try:
-        # Get block and its schedules
-        block = Block.query.get_or_404(block_id)
-        block_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
-        
-        if not block_schedules:
-            return jsonify({
-                'is_valid': False,
-                'error': 'No schedule found for block'
-            }), HTTPStatus.NOT_FOUND
-
-        # Get all offerings in the block
-        offerings = [schedule.course_offering for schedule in block_schedules]
-        
-        # Group offerings by course and section type
-        course_schedules = {}
-        for offering in offerings:
-            if offering.course_id not in course_schedules:
-                course_schedules[offering.course_id] = {
-                    'LECTURE': {},
-                    'LAB': [],
-                    'TUTORIAL': []
-                }
-            if offering.section_type == 'LECTURE':
-                prefix = offering.section_code.split('-')[0]
-                if prefix not in course_schedules[offering.course_id]['LECTURE']:
-                    course_schedules[offering.course_id]['LECTURE'][prefix] = []
-                course_schedules[offering.course_id]['LECTURE'][prefix].append(offering)
-            else:
-                course_schedules[offering.course_id][offering.section_type].append(offering)
-
-        # Get program requirements
-        requirements = ProgramRequirement.query.filter_by(
-            program_id=block.program_id
-        ).all()
-
-        missing_requirements = []
-        for req in requirements:
-            course_id = req.course_id
-            
-            # Check if course is scheduled
-            if course_id not in course_schedules:
-                missing_requirements.append({
-                    'course_id': course_id,
-                    'error': 'Course not scheduled'
-                })
-                continue
-
-            # Get all available sections for this course
-            available_sections = CourseOffering.query.filter_by(
-                course_id=course_id
-            ).all()
-
-            # Group available lectures by prefix
-            available_lecture_groups = {}
-            for section in available_sections:
-                if section.section_type == 'LECTURE':
-                    prefix = section.section_code.split('-')[0]
-                    if prefix not in available_lecture_groups:
-                        available_lecture_groups[prefix] = []
-                    available_lecture_groups[prefix].append(section.section_code)
-
-            # Check if all sections of each lecture group are scheduled
-            scheduled_lectures = course_schedules[course_id]['LECTURE']
-            for prefix, sections in available_lecture_groups.items():
-                if prefix in scheduled_lectures:
-                    scheduled_sections = set(o.section_code for o in scheduled_lectures[prefix])
-                    required_sections = set(sections)
-                    if scheduled_sections != required_sections:
-                        missing_requirements.append({
-                            'course_id': course_id,
-                            'error': f'Missing lecture sections for group {prefix}'
-                        })
-
-            # Check if lab is required and present
-            has_labs = any(s.section_type == 'LAB' for s in available_sections)
-            if has_labs and not course_schedules[course_id]['LAB']:
-                missing_requirements.append({
-                    'course_id': course_id,
-                    'error': 'Missing lab section'
-                })
-
-        return jsonify({
-            'block_id': block_id,
-            'is_valid': len(missing_requirements) == 0,
-            'missing_requirements': missing_requirements
-        }), HTTPStatus.OK
-
-    except Exception as e:
         return jsonify({
             'error': 'Internal Server Error',
             'message': str(e)

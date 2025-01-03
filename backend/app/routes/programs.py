@@ -1,6 +1,6 @@
 # app/routes/programs.py
 from flask import Blueprint, jsonify, request
-from app.models import Program, Block, ProgramRequirement
+from app.models import Program, Block, ProgramRequirement, BlockSchedule
 from app import db
 from http import HTTPStatus
 
@@ -185,9 +185,10 @@ def update_program(program_id):
                 return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
             program.total_enrollment = data['total_enrollment']
 
-        # Handle block count updates and create new blocks if needed
         new_blocks = []
+        deleted_blocks = []
         
+        # Handle 20-student blocks
         if 'blocks_20_count' in data:
             if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
                 return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
@@ -195,11 +196,11 @@ def update_program(program_id):
             current_20_blocks = Block.query.filter_by(
                 program_id=program_id, 
                 block_size=20
-            ).count()
+            ).order_by(Block.block_id.desc()).all()
             
-            if data['blocks_20_count'] > current_20_blocks:
-                # Create additional 20-student blocks
-                for i in range(current_20_blocks, data['blocks_20_count']):
+            if data['blocks_20_count'] > len(current_20_blocks):
+                # Create additional blocks
+                for i in range(len(current_20_blocks), data['blocks_20_count']):
                     block = Block(
                         block_id=f"{program_id}_20_{i+1}",
                         program_id=program_id,
@@ -209,9 +210,18 @@ def update_program(program_id):
                         status="ACTIVE"
                     )
                     new_blocks.append(block)
+            elif data['blocks_20_count'] < len(current_20_blocks):
+                # Delete excess blocks
+                blocks_to_delete = current_20_blocks[data['blocks_20_count']:]
+                for block in blocks_to_delete:
+                    # Delete associated schedules first
+                    BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+                    deleted_blocks.append(block.block_id)
+                    db.session.delete(block)
             
             program.blocks_20_count = data['blocks_20_count']
 
+        # Handle 10-student blocks
         if 'blocks_10_count' in data:
             if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
                 return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
@@ -219,11 +229,11 @@ def update_program(program_id):
             current_10_blocks = Block.query.filter_by(
                 program_id=program_id, 
                 block_size=10
-            ).count()
+            ).order_by(Block.block_id.desc()).all()
             
-            if data['blocks_10_count'] > current_10_blocks:
-                # Create additional 10-student blocks
-                for i in range(current_10_blocks, data['blocks_10_count']):
+            if data['blocks_10_count'] > len(current_10_blocks):
+                # Create additional blocks
+                for i in range(len(current_10_blocks), data['blocks_10_count']):
                     block = Block(
                         block_id=f"{program_id}_10_{i+1}",
                         program_id=program_id,
@@ -233,6 +243,14 @@ def update_program(program_id):
                         status="ACTIVE"
                     )
                     new_blocks.append(block)
+            elif data['blocks_10_count'] < len(current_10_blocks):
+                # Delete excess blocks
+                blocks_to_delete = current_10_blocks[data['blocks_10_count']:]
+                for block in blocks_to_delete:
+                    # Delete associated schedules first
+                    BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+                    deleted_blocks.append(block.block_id)
+                    db.session.delete(block)
             
             program.blocks_10_count = data['blocks_10_count']
 
@@ -247,7 +265,8 @@ def update_program(program_id):
             'total_enrollment': program.total_enrollment,
             'blocks_20_count': program.blocks_20_count,
             'blocks_10_count': program.blocks_10_count,
-            'new_blocks_created': len(new_blocks)
+            'new_blocks_created': len(new_blocks),
+            'blocks_deleted': deleted_blocks
         }), HTTPStatus.OK
         
     except Exception as e:
@@ -256,6 +275,7 @@ def update_program(program_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 
 @bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
