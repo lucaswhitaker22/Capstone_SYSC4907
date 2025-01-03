@@ -67,12 +67,12 @@ const CoursesPage = () => {
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1>Courses</h1>
-        <Button variant="outline-primary" className="me-2" onClick={() => setShowUploadModal(true)}>
+       {/*  <Button variant="outline-primary" className="me-2" onClick={() => setShowUploadModal(true)}>
       Upload CSV
     </Button>
     <Button variant="success" className="me-2" onClick={handleExportCSV}>
             Export CSV
-        </Button>
+        </Button> */}
         <Button variant="primary" onClick={() => setShowModal(true)}>
           Add Course
         </Button>
@@ -95,7 +95,7 @@ const CoursesPage = () => {
               <td>{course.credits}</td>
               <td>
                 <Button 
-                  variant="outline-primary" 
+                  variant="primary" 
                   size="sm" 
                   className="me-2"
                   onClick={() => handleEdit(course)}
@@ -114,7 +114,7 @@ const CoursesPage = () => {
         Offerings
     </Button>
                 <Button 
-                  variant="outline-danger" 
+                  variant="danger" 
                   size="sm"
                   onClick={() => {
                     handleDelete(course.course_id);

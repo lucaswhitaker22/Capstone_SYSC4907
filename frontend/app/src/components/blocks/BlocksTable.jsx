@@ -32,6 +32,19 @@ const BlocksTable = ({
     );
   };
 
+  const getValidationBadge = (block) => {
+    if (!block.validation_status) return null;
+    
+    return (
+      <Badge 
+        bg={block.validation_status.is_valid ? 'success' : 'danger'}
+        className="ms-2"
+      >
+        {block.validation_status.is_valid ? 'Valid' : 'Invalid'}
+      </Badge>
+    );
+  };
+
   const getRatingColor = (rating) => {
     if (rating >= 80) return 'text-success';
     if (rating >= 60) return 'text-warning';
@@ -49,6 +62,7 @@ const BlocksTable = ({
           <th>Academic Year</th>
           <th>Schedule Rating</th>
           <th>Status</th>
+          <th>Validation</th>
           <th>Actions</th>
         </tr>
       </thead>
@@ -63,7 +77,17 @@ const BlocksTable = ({
             <td className={getRatingColor(block.schedule_rating)}>
               {block.schedule_rating ? `${block.schedule_rating.toFixed(1)}%` : 'N/A'}
             </td>
-            <td>{getStatusBadge(block.status)}</td>
+            <td>
+              {getStatusBadge(block.status)}
+              {getValidationBadge(block)}
+            </td>
+            <td>
+              {block.validation_status?.missing_requirements?.length > 0 && (
+                <div className="text-danger small">
+                  Missing courses: {block.validation_status.missing_requirements.map(r => r.course_id).join(', ')}
+                </div>
+              )}
+            </td>
             <td>
               <Button
                 variant="primary"

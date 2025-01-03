@@ -1,6 +1,6 @@
 # app/routes/course_offerings.py
 from flask import Blueprint, jsonify, request
-from app.models import CourseOffering, Course
+from app.models import CourseOffering, Course, BlockSchedule
 from app import db
 from http import HTTPStatus
 from datetime import datetime
@@ -216,19 +216,28 @@ def delete_offering(offering_id):
     try:
         offering = CourseOffering.query.get_or_404(offering_id)
         
+        # Delete associated block schedules first
+        BlockSchedule.query.filter_by(offering_id=offering_id).delete()
+        
         # Prevent deletion if offering has enrollments
         if offering.current_enrollment > 0:
             return jsonify({
                 'error': 'Cannot delete offering with active enrollments'
             }), HTTPStatus.CONFLICT
-            
+
+        # Delete the offering
         db.session.delete(offering)
         db.session.commit()
+        
         return '', HTTPStatus.NO_CONTENT
         
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
     
 
 @bp.route('/bulk', methods=['POST'])

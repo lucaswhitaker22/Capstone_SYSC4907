@@ -61,7 +61,6 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
                 variant="danger"
                 size="sm"
                 onClick={() => onDelete(program.program_id)}
-                disabled={program.total_enrollment > 0}
               >
                 Delete
               </Button>

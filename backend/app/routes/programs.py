@@ -169,45 +169,118 @@ def bulk_create_programs():
     
 @bp.route('/<program_id>', methods=['PUT'], strict_slashes=False)
 def update_program(program_id):
-    program = Program.query.get_or_404(program_id)
-    data = request.get_json()
-    
-    if not data:
-        return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
+    try:
+        program = Program.query.get_or_404(program_id)
+        data = request.get_json()
         
-    if 'program_name' in data:
-        program.program_name = data['program_name']
-    if 'total_enrollment' in data:
-        if not isinstance(data['total_enrollment'], int) or data['total_enrollment'] < 0:
-            return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
-        program.total_enrollment = data['total_enrollment']
-    if 'blocks_20_count' in data:
-        if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
-            return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
-        program.blocks_20_count = data['blocks_20_count']
-    if 'blocks_10_count' in data:
-        if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
-            return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
-        program.blocks_10_count = data['blocks_10_count']
+        if not data:
+            return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
+
+        # Update basic program fields
+        if 'program_name' in data:
+            program.program_name = data['program_name']
+            
+        if 'total_enrollment' in data:
+            if not isinstance(data['total_enrollment'], int) or data['total_enrollment'] < 0:
+                return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
+            program.total_enrollment = data['total_enrollment']
+
+        # Handle block count updates and create new blocks if needed
+        new_blocks = []
         
-    db.session.commit()
-    
-    return jsonify({
-        'program_id': program.program_id,
-        'program_name': program.program_name,
-        'total_enrollment': program.total_enrollment,
-        'blocks_20_count': program.blocks_20_count,
-        'blocks_10_count': program.blocks_10_count
-    }), HTTPStatus.OK
+        if 'blocks_20_count' in data:
+            if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
+                return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
+                
+            current_20_blocks = Block.query.filter_by(
+                program_id=program_id, 
+                block_size=20
+            ).count()
+            
+            if data['blocks_20_count'] > current_20_blocks:
+                # Create additional 20-student blocks
+                for i in range(current_20_blocks, data['blocks_20_count']):
+                    block = Block(
+                        block_id=f"{program_id}_20_{i+1}",
+                        program_id=program_id,
+                        block_size=20,
+                        term="FALL",
+                        academic_year="2025-2026",
+                        status="ACTIVE"
+                    )
+                    new_blocks.append(block)
+            
+            program.blocks_20_count = data['blocks_20_count']
+
+        if 'blocks_10_count' in data:
+            if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
+                return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
+                
+            current_10_blocks = Block.query.filter_by(
+                program_id=program_id, 
+                block_size=10
+            ).count()
+            
+            if data['blocks_10_count'] > current_10_blocks:
+                # Create additional 10-student blocks
+                for i in range(current_10_blocks, data['blocks_10_count']):
+                    block = Block(
+                        block_id=f"{program_id}_10_{i+1}",
+                        program_id=program_id,
+                        block_size=10,
+                        term="FALL",
+                        academic_year="2025-2026",
+                        status="ACTIVE"
+                    )
+                    new_blocks.append(block)
+            
+            program.blocks_10_count = data['blocks_10_count']
+
+        # Save all changes
+        if new_blocks:
+            db.session.bulk_save_objects(new_blocks)
+        db.session.commit()
+
+        return jsonify({
+            'program_id': program.program_id,
+            'program_name': program.program_name,
+            'total_enrollment': program.total_enrollment,
+            'blocks_20_count': program.blocks_20_count,
+            'blocks_10_count': program.blocks_10_count,
+            'new_blocks_created': len(new_blocks)
+        }), HTTPStatus.OK
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
 def delete_program(program_id):
-    program = Program.query.get_or_404(program_id)
-    ProgramRequirement.query.filter_by(program_id=program_id).delete()
-
-    db.session.delete(program)
-    db.session.commit()
-    return '', HTTPStatus.NO_CONTENT
+    try:
+        program = Program.query.get_or_404(program_id)
+        
+        # Delete associated blocks first
+        Block.query.filter_by(program_id=program_id).delete()
+        
+        # Delete program requirements
+        ProgramRequirement.query.filter_by(program_id=program_id).delete()
+        
+        # Delete the program
+        db.session.delete(program)
+        db.session.commit()
+        
+        return '', HTTPStatus.NO_CONTENT
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @bp.route('/<program_id>/enrollment', methods=['PATCH'], strict_slashes=False)
 def update_enrollment(program_id):

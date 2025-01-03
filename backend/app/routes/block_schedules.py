@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement
 from app.database import db
-from app.routes.utils.schedule_generator import generate_block_schedule
+from app.routes.utils.schedule_generator import generate_block_schedule, validate_block_schedule
 from http import HTTPStatus
 from .conflicts import has_time_conflict
 import logging
@@ -173,30 +173,5 @@ def remove_offering_from_block(block_id, offering_id):
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @bp.route('/block/<block_id>/validate', methods=['GET'], strict_slashes=False)
-def validate_block_schedule(block_id):
-    try:
-        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
-        offerings = [schedule.course_offering for schedule in schedules]
-        
-        conflicts = []
-        for i, offering1 in enumerate(offerings):
-            for offering2 in offerings[i+1:]:
-                if has_time_conflict(offering1, offering2):
-                    conflicts.append({
-                        'offering1_id': offering1.offering_id,
-                        'offering1_course': offering1.course_id,
-                        'offering2_id': offering2.offering_id,
-                        'offering2_course': offering2.course_id,
-                        'day_of_week': offering1.day_of_week
-                    })
-        
-        return jsonify({
-            'valid': len(conflicts) == 0,
-            'conflicts': conflicts
-        }), HTTPStatus.OK
-    except Exception as e:
-        current_app.logger.error(f"Error validating block schedule: {str(e)}")
-        return jsonify({
-            'error': 'Internal Server Error',
-            'message': str(e)
-        }), HTTPStatus.INTERNAL_SERVER_ERROR
+def validate(block_id):
+    return validate_block_schedule(block_id)
