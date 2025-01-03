@@ -1,6 +1,6 @@
 # app/routes/programs.py
 from flask import Blueprint, jsonify, request
-from app.models import Program, Block
+from app.models import Program, Block, ProgramRequirement
 from app import db
 from http import HTTPStatus
 
@@ -203,6 +203,8 @@ def update_program(program_id):
 @bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
 def delete_program(program_id):
     program = Program.query.get_or_404(program_id)
+    ProgramRequirement.query.filter_by(program_id=program_id).delete()
+
     db.session.delete(program)
     db.session.commit()
     return '', HTTPStatus.NO_CONTENT

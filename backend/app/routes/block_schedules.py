@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement
 from app.database import db
+from app.routes.utils.schedule_generator import generate_block_schedule
 from http import HTTPStatus
 from .conflicts import has_time_conflict
 import logging
@@ -140,104 +141,9 @@ def add_offering_to_block(block_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
     
-@bp.route('/block/<block_id>/generate', methods=['POST'], strict_slashes=False)
-def generate_block_schedule(block_id):
-    try:
-        # Get block and validate
-        block = Block.query.get_or_404(block_id)
-        if block.status == 'LOCKED':
-            return jsonify({
-                'error': 'Cannot modify locked block'
-            }), HTTPStatus.FORBIDDEN
-
-        # Get program requirements
-        program_requirements = ProgramRequirement.query.filter_by(
-            program_id=block.program_id
-        ).all()
-
-        # Get required course IDs
-        required_courses = [req.course_id for req in program_requirements]
-
-        # Clear existing schedule
-        BlockSchedule.query.filter_by(block_id=block_id).delete()
-        db.session.commit()
-
-        # Get available offerings for required courses
-        if required_courses:
-            available_offerings = CourseOffering.query.filter(
-                CourseOffering.course_id.in_(required_courses)
-            ).all()
-
-            # Group offerings by course and section type
-            course_offerings = {}
-            for offering in available_offerings:
-                if offering.course_id not in course_offerings:
-                    course_offerings[offering.course_id] = {'LECTURE': [], 'LAB': []}
-                course_offerings[offering.course_id][offering.section_type].append(offering)
-
-            selected_offerings = []
-            # For each required course
-            for course_id in required_courses:
-                if course_id in course_offerings:
-                    # Get lecture sections grouped by section code prefix
-                    lecture_groups = {}
-                    for lecture in course_offerings[course_id]['LECTURE']:
-                        section_prefix = lecture.section_code.split('-')[0]
-                        if section_prefix not in lecture_groups:
-                            lecture_groups[section_prefix] = []
-                        lecture_groups[section_prefix].append(lecture)
-
-                    # Try each lecture group until we find one that works
-                    for lectures in lecture_groups.values():
-                        lectures_fit = True
-                        for lecture in lectures:
-                            if any(has_time_conflict(lecture, selected) 
-                                  for selected in selected_offerings):
-                                lectures_fit = False
-                                break
-                        
-                        if lectures_fit:
-                            # Add all lectures from this section
-                            selected_offerings.extend(lectures)
-                            
-                            # Try to find a compatible lab
-                            for lab in course_offerings[course_id]['LAB']:
-                                if not any(has_time_conflict(lab, selected) 
-                                         for selected in selected_offerings):
-                                    selected_offerings.append(lab)
-                                    break
-                            break
-
-            # Create block schedules for selected offerings
-            for offering in selected_offerings:
-                block_schedule = BlockSchedule(
-                    block_id=block_id,
-                    offering_id=offering.offering_id
-                )
-                db.session.add(block_schedule)
-
-        db.session.commit()
-
-        formatted_offerings = [{
-            'offering_id': o.offering_id,
-            'course_id': o.course_id,
-            'section_type': o.section_type,
-            'section_code': o.section_code,
-            'day_of_week': o.day_of_week,
-            'start_time': o.start_time.strftime('%H:%M'),
-            'end_time': o.end_time.strftime('%H:%M')
-        } for o in selected_offerings]
-
-        return jsonify(formatted_offerings), HTTPStatus.CREATED
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({
-            'error': 'Internal Server Error',
-            'message': str(e)
-        }), HTTPStatus.INTERNAL_SERVER_ERROR
-
-   
+@bp.route('/block/<block_id>/generate', methods=['POST'])
+def generate(block_id):
+    return generate_block_schedule(block_id)
 
 
 @bp.route('/block/<block_id>/offering/<offering_id>', methods=['DELETE'], strict_slashes=False)

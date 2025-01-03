@@ -1,12 +1,10 @@
-# app/routes/program_requirements.py
 from flask import Blueprint, jsonify, request
 from app.models import ProgramRequirement, Program, Course, BlockSchedule
 from app import db
 from http import HTTPStatus
 
 bp = Blueprint('requirements', __name__, url_prefix='/api/requirements')
-
-@bp.route('/program/<program_id>', methods=['GET'], strict_slashes=False)
+@bp.route('/program/<program_id>', methods=['GET'])
 def get_program_requirements(program_id):
     try:
         if not Program.query.get(program_id):
@@ -14,6 +12,7 @@ def get_program_requirements(program_id):
             
         requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
         return jsonify([{
+            'requirement_id': r.requirement_id,
             'program_id': r.program_id,
             'course_id': r.course_id
         } for r in requirements]), HTTPStatus.OK
@@ -28,7 +27,7 @@ def create_requirement():
     try:
         data = request.get_json()
         
-        if data is None:
+        if not data:
             return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
             
         required_fields = ['program_id', 'course_id']
@@ -48,6 +47,7 @@ def create_requirement():
             program_id=data['program_id'],
             course_id=data['course_id']
         ).first()
+        
         if existing:
             return jsonify({'error': 'Requirement already exists'}), HTTPStatus.CONFLICT
 
@@ -56,6 +56,7 @@ def create_requirement():
         db.session.commit()
 
         return jsonify({
+            'requirement_id': requirement.requirement_id,
             'program_id': requirement.program_id,
             'course_id': requirement.course_id
         }), HTTPStatus.CREATED
@@ -67,30 +68,7 @@ def create_requirement():
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<int:requirement_id>', methods=['PUT'], strict_slashes=False)
-def update_requirement(requirement_id):
-    try:
-        requirement = ProgramRequirement.query.get_or_404(requirement_id)
-        data = request.get_json()
-            
-        if 'course_id' in data:
-            if not Course.query.get(data['course_id']):
-                return jsonify({'error': 'Course not found'}), HTTPStatus.NOT_FOUND
-            requirement.course_id = data['course_id']
-            
-        db.session.commit()
-        return jsonify({
-            'program_id': requirement.program_id,
-            'course_id': requirement.course_id,
-        }), HTTPStatus.OK
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({
-            'error': 'Internal Server Error',
-            'message': str(e)
-        }), HTTPStatus.INTERNAL_SERVER_ERROR
-
-@bp.route('/<int:requirement_id>', methods=['DELETE'], strict_slashes=False)
+@bp.route('/<int:requirement_id>', methods=['DELETE'])
 def delete_requirement(requirement_id):
     try:
         requirement = ProgramRequirement.query.get_or_404(requirement_id)
@@ -104,7 +82,37 @@ def delete_requirement(requirement_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/validate/<program_id>', methods=['POST'], strict_slashes=False)
+@bp.route('/<program_id>/<course_id>', methods=['PUT'], strict_slashes=False)
+def update_requirement(program_id, course_id):
+    try:
+        requirement = ProgramRequirement.query.filter_by(
+            program_id=program_id,
+            course_id=course_id
+        ).first_or_404()
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
+            
+        if 'new_course_id' in data:
+            if not Course.query.get(data['new_course_id']):
+                return jsonify({'error': 'Course not found'}), HTTPStatus.NOT_FOUND
+            requirement.course_id = data['new_course_id']
+            
+        db.session.commit()
+        return jsonify({
+            'program_id': requirement.program_id,
+            'course_id': requirement.course_id
+        }), HTTPStatus.OK
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@bp.route('/validate/<program_id>', methods=['POST'])
 def validate_program_schedule(program_id):
     try:
         program = Program.query.get_or_404(program_id)
@@ -126,7 +134,7 @@ def validate_program_schedule(program_id):
                     break
             if not requirement_met:
                 missing_requirements.append({
-                    'course_id': req.course_id,
+                    'course_id': req.course_id
                 })
         
         return jsonify({

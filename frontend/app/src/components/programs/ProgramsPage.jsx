@@ -117,12 +117,12 @@ const handleExportCSV = () => {
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1>Program Management</h1>
-        <Button variant="secondary" className="me-2" onClick={() => setShowUploadModal(true)}>
+        {/* <Button variant="secondary" className="me-2" onClick={() => setShowUploadModal(true)}>
             Upload CSV
         </Button>
         <Button variant="success" className="me-2" onClick={handleExportCSV}>
             Export CSV
-        </Button>
+        </Button> */}
         <Button variant="primary" onClick={handleAddNew}>
           Create New Program
         </Button>
