@@ -127,7 +127,17 @@ def generate_block_schedule(block_id):
             )
             db.session.add(block_schedule)
 
+        # Calculate and set the rating
+        rating_response = rate_block_schedule(block_id)
+        if isinstance(rating_response, tuple):
+            rating = rating_response[0].get_json()  # Extract the rating value from jsonify response
+        else:
+            rating = rating_response
+
+        # Update block with new rating
+        block.schedule_rating = rating
         db.session.commit()
+
 
         # Format response
         formatted_offerings = [{
@@ -147,7 +157,8 @@ def generate_block_schedule(block_id):
         return jsonify({
             'schedule': formatted_offerings,
             'scheduled_courses': required_courses,
-            'total_valid_schedules': len(valid_schedules)
+            'total_valid_schedules': len(valid_schedules),
+            'schedule_rating': rating
         }), HTTPStatus.CREATED
 
     except Exception as e:
@@ -156,3 +167,69 @@ def generate_block_schedule(block_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+def rate_block_schedule(block_id):
+    try:
+        block = Block.query.get_or_404(block_id)
+        block_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        
+        if not block_schedules:
+            return jsonify(0), HTTPStatus.OK
+            
+        offerings = [schedule.course_offering for schedule in block_schedules]
+        total_points = 0
+        
+        # Criterion 1: Time Distribution (40 points)
+        time_slots = {
+            'morning': 0,    # Before 12:00
+            'afternoon': 0,  # 12:00-17:00
+            'evening': 0     # After 17:00
+        }
+        
+        for offering in offerings:
+            hour = offering.start_time.hour
+            if hour < 12:
+                time_slots['morning'] += 1
+            elif hour < 17:
+                time_slots['afternoon'] += 1
+            else:
+                time_slots['evening'] += 1
+                
+        if len(offerings) > 0:
+            distribution_score = 40 * (1 - (max(time_slots.values()) - min(time_slots.values())) / len(offerings))
+            total_points += distribution_score
+        
+        # Criterion 2: Day Distribution (30 points)
+        days_used = len(set(o.day_of_week for o in offerings))
+        day_distribution_score = 30 * (days_used / 5)  # Assuming 5 weekdays
+        total_points += day_distribution_score
+        
+        # Criterion 3: Gap Analysis (30 points)
+        daily_schedules = {}
+        for offering in offerings:
+            if offering.day_of_week not in daily_schedules:
+                daily_schedules[offering.day_of_week] = []
+            daily_schedules[offering.day_of_week].append(offering)
+
+        gap_penalties = 0
+        for day_schedule in daily_schedules.values():
+            sorted_offerings = sorted(day_schedule, key=lambda x: x.start_time)
+            for i in range(len(sorted_offerings) - 1):
+                # Convert times to datetime for proper subtraction
+                from datetime import datetime, timedelta
+                current_date = datetime.now().date()
+                end_time = datetime.combine(current_date, sorted_offerings[i].end_time)
+                start_time = datetime.combine(current_date, sorted_offerings[i+1].start_time)
+                gap = (start_time - end_time).total_seconds() / 3600
+                if gap > 3:  # Penalize gaps longer than 3 hours
+                    gap_penalties += 1
+                        
+            gap_score = 30 * (1 - (gap_penalties / len(offerings)))
+            total_points += gap_score
+        
+        return jsonify(round(total_points, 1)), HTTPStatus.OK
+        
+    except Exception as e:
+        current_app.logger.error(f"Error rating schedule: {str(e)}")
+        return jsonify(0), HTTPStatus.OK
+

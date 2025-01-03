@@ -60,19 +60,28 @@ const BlocksPage = () => {
 
   const handleCalculateRating = async (blockId) => {
     try {
-      const response = await fetch(`${API_URL}/blocks/${blockId}/rating`, {
-        method: 'POST'
-      });
-      if (response.ok) {
-        await fetchBlocks();
-      } else {
-        const error = await response.json();
-        alert(error.error || 'Error calculating rating');
-      }
+        const response = await fetch(`${API_URL}/schedules/block/${blockId}/rate`, {
+            method: 'GET'
+        });
+        
+        if (response.ok) {
+            const rating = await response.json();
+            // Update the blocks with the new rating
+            setBlocks(blocks.map(block => 
+                block.block_id === blockId 
+                    ? { ...block, schedule_rating: rating } 
+                    : block
+            ));
+        } else {
+            const error = await response.json();
+            alert(error.error || 'Error calculating rating');
+        }
     } catch (error) {
-      console.error('Error calculating rating:', error);
+        console.error('Error calculating rating:', error);
+        alert('Error calculating schedule rating');
     }
-  };
+};
+
 
   const handleViewSchedule = (blockId) => {
     setSelectedBlockId(blockId);

@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, current_app
 from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement, Program
 from app.database import db
-from app.routes.utils.schedule_generator import generate_block_schedule
+from app.routes.utils.schedule_generator import generate_block_schedule, rate_block_schedule
 from app.routes.utils.schedule_validator import validate_block_schedule
 from http import HTTPStatus
 from .conflicts import has_time_conflict
@@ -176,6 +176,10 @@ def remove_offering_from_block(block_id, offering_id):
 @bp.route('/block/<block_id>/validate', methods=['GET'], strict_slashes=False)
 def validate(block_id):
     return validate_block_schedule(block_id)
+
+@bp.route('/block/<block_id>/rate', methods=['GET'])
+def rate(block_id):
+    return rate_block_schedule(block_id)
 
 @bp.route('/program/<program_id>/schedules', methods=['GET'])
 def get_all_possible_schedules(program_id):
