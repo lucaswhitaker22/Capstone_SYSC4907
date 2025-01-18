@@ -1,0 +1,3911 @@
+=== frontend/app/src/App.jsx ===
+import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Container } from 'react-bootstrap';
+import Navigation from './components/shared/Navigation';
+import OfferingsPage from './components/offerings/OfferingPage';
+import BlocksPage from './components/blocks/BlocksPage';
+import ProgramsPage from './components/programs/ProgramsPage';
+import ConflictsPage from './components/conflicts/ConflictsPage';
+import SchedulePage from './components/schedule/SchedulePage';
+import CoursesPage from './components/courses/CoursesPage';
+const App = () => {
+  return (
+    <BrowserRouter>
+      <Navigation />
+      <Container fluid>
+        <Routes>
+          <Route path="/offerings" element={<OfferingsPage />} />
+          <Route path="/blocks" element={<BlocksPage/>} />
+          <Route path="/courses" element={<CoursesPage/>} />
+
+          <Route path="/programs" element={<ProgramsPage/>} />
+          <Route path="/conflicts" element={<ConflictsPage/>} />
+          <Route path="/schedule" element={<SchedulePage/>} />
+          <Route path="/" element={<div>Welcome to Course Management System</div>} />
+        </Routes>
+      </Container>
+    </BrowserRouter>
+  );
+};
+
+export default App;
+
+
+
+=== frontend/app/src/components/blocks/BlockScheduleModal.jsx ===
+import React, { useEffect, useState } from 'react';
+import { Modal, Table, Button, Spinner } from 'react-bootstrap';
+
+const BlockScheduleModal = ({ show, blockId, onHide }) => {
+  const [schedule, setSchedule] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchSchedule = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${blockId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSchedule(data);
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Error fetching schedule');
+      }
+    } catch (error) {
+      console.error('Error fetching schedule:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (show && blockId) {
+      fetchSchedule();
+    }
+  }, [show, blockId]);
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Block Schedule</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {isLoading ? (
+          <div className="text-center p-4">
+            <Spinner animation="border" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </Spinner>
+          </div>
+        ) : schedule.length === 0 ? (
+          <div className="text-center p-4">No courses scheduled for this block</div>
+        ) : (
+          <Table striped bordered hover>
+            <thead>
+              <tr>
+                <th>Course ID</th>
+                <th>Section Type</th>
+                <th>Section Code</th>
+                <th>Day</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedule.map((offering) => (
+                <tr key={offering.offering_id}>
+                  <td>{offering.course_id}</td>
+                  <td>{offering.section_type}</td>
+                  <td>{offering.section_code}</td>
+                  <td>{getDayName(offering.day_of_week)}</td>
+                  <td>{`${offering.start_time}-${offering.end_time}`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>
+          Close
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default BlockScheduleModal;
+
+
+
+=== frontend/app/src/components/blocks/BlocksModal.jsx ===
+import React, { useEffect, useState } from 'react';
+import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
+
+const BlocksModal = ({ show, block, onHide, onSave }) => {
+  const initialFormData = {
+    block_id: '',
+    program_id: '',
+    block_size: '10',
+    term: '',
+    academic_year: '',
+    status: 'DRAFT'
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
+  const [validated, setValidated] = useState(false);
+  const [programs, setPrograms] = useState([]);
+
+  useEffect(() => {
+    if (show) {
+      fetchPrograms();
+    }
+  }, [show]);
+
+  useEffect(() => {
+    if (block) {
+      setFormData({
+        block_id: block.block_id,
+        program_id: block.program_id,
+        block_size: block.block_size.toString(),
+        term: block.term,
+        academic_year: block.academic_year,
+        status: block.status
+      });
+    } else {
+      setFormData(initialFormData);
+    }
+    setValidated(false);
+  }, [block, show]);
+
+  const API_URL = 'http://127.0.0.1:5000/api';
+
+  const fetchPrograms = async () => {
+    try {
+      const response = await fetch(`${API_URL}/programs`);
+      const data = await response.json();
+      setPrograms(data);
+    } catch (error) {
+      console.error('Error fetching programs:', error);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    
+    if (form.checkValidity()) {
+      onSave({
+        ...formData,
+        block_size: parseInt(formData.block_size)
+      });
+    }
+    setValidated(true);
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>
+          {block ? 'Edit Block' : 'Create New Block'}
+        </Modal.Title>
+      </Modal.Header>
+      <Form noValidate validated={validated} onSubmit={handleSubmit}>
+        <Modal.Body>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Block ID</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="block_id"
+                  value={formData.block_id}
+                  onChange={handleChange}
+                  required
+                  disabled={block}
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a block ID.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Program</Form.Label>
+                <Form.Select
+                  name="program_id"
+                  value={formData.program_id}
+                  onChange={handleChange}
+                  required
+                  disabled={block}
+                >
+                  <option value="">Select a program</option>
+                  {programs.map(program => (
+                    <option key={program.program_id} value={program.program_id}>
+                      {program.program_id} - {program.program_name}
+                    </option>
+                  ))}
+                </Form.Select>
+                <Form.Control.Feedback type="invalid">
+                  Please select a program.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <Row>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Block Size</Form.Label>
+                <Form.Select
+                  name="block_size"
+                  value={formData.block_size}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Term</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="term"
+                  value={formData.term}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a term.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="academic_year"
+                  value={formData.academic_year}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide an academic year.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          {block && (
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Status</Form.Label>
+                  <Form.Select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="DRAFT">Draft</option>
+                    <option value="PUBLISHED">Published</option>
+                    <option value="LOCKED">Locked</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onHide}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit">
+            Save
+          </Button>
+        </Modal.Footer>
+      </Form>
+    </Modal>
+  );
+};
+
+export default BlocksModal;
+
+
+
+=== frontend/app/src/components/blocks/BlocksPage.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Container, Button } from 'react-bootstrap';
+import BlocksTable from './BlocksTable';
+import BlocksModal from './BlocksModal';
+import BlockScheduleModal from './BlockScheduleModal';
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const BlocksPage = () => {
+    const [blocks, setBlocks] = useState([]);
+    const [showModal, setShowModal] = useState(false);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [selectedBlock, setSelectedBlock] = useState(null);
+    const [selectedBlockId, setSelectedBlockId] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+  
+
+  const fetchBlocks = async () => {
+    try {
+      const response = await fetch(`${API_URL}/blocks`);
+      const data = await response.json();
+      setBlocks(data);
+    } catch (error) {
+      console.error('Error fetching blocks:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBlocks();
+  }, []);
+
+  const handleAddNew = () => {
+    setSelectedBlock(null);
+    setShowModal(true);
+  };
+
+  const handleEdit = (block) => {
+    setSelectedBlock(block);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (blockId) => {
+    if (window.confirm('Are you sure you want to delete this block?')) {
+      try {
+        const response = await fetch(`${API_URL}/blocks/${blockId}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          await fetchBlocks();
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error deleting block');
+        }
+      } catch (error) {
+        console.error('Error deleting block:', error);
+      }
+    }
+  };
+
+  const handleCalculateRating = async (blockId) => {
+    try {
+        const response = await fetch(`${API_URL}/schedules/block/${blockId}/rate`, {
+            method: 'GET'
+        });
+        
+        if (response.ok) {
+            const rating = await response.json();
+            // Update the blocks with the new rating
+            setBlocks(blocks.map(block => 
+                block.block_id === blockId 
+                    ? { ...block, schedule_rating: rating } 
+                    : block
+            ));
+        } else {
+            const error = await response.json();
+            alert(error.error || 'Error calculating rating');
+        }
+    } catch (error) {
+        console.error('Error calculating rating:', error);
+        alert('Error calculating schedule rating');
+    }
+};
+
+
+  const handleViewSchedule = (blockId) => {
+    setSelectedBlockId(blockId);
+    setShowScheduleModal(true);
+  };
+
+  const handleSave = async (formData) => {
+    try {
+      const method = selectedBlock ? 'PUT' : 'POST';
+      const url = selectedBlock 
+        ? `${API_URL}/blocks/${selectedBlock.block_id}`
+        : `${API_URL}/blocks`;
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        setShowModal(false);
+        await fetchBlocks();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Error saving block');
+      }
+    } catch (error) {
+      console.error('Error saving block:', error);
+    }
+  };
+
+  const handleStatusUpdate = async (blockId, status) => {
+    try {
+      const response = await fetch(`${API_URL}/blocks/${blockId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      if (response.ok) {
+        await fetchBlocks();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Error updating status');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
+  };
+
+  return (
+    <Container className="py-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1>Block Management</h1>
+        <Button variant="primary" onClick={handleAddNew}>
+          Create New Block
+        </Button>
+      </div>
+
+      <BlocksTable 
+        blocks={blocks}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onViewSchedule={handleViewSchedule}
+        onCalculateRating={handleCalculateRating}
+        onStatusUpdate={handleStatusUpdate}
+        isLoading={isLoading}
+      />
+
+      <BlocksModal
+        show={showModal}
+        block={selectedBlock}
+        onHide={() => setShowModal(false)}
+        onSave={handleSave}
+      />
+            <BlockScheduleModal
+        show={showScheduleModal}
+        blockId={selectedBlockId}
+        onHide={() => setShowScheduleModal(false)}
+      />
+    </Container>
+  );
+};
+
+export default BlocksPage;
+
+
+
+=== frontend/app/src/components/blocks/BlocksTable.jsx ===
+import React from 'react';
+import { Table, Button, Badge, Spinner } from 'react-bootstrap';
+
+const BlocksTable = ({ 
+    blocks = [], 
+    onEdit, 
+    onDelete, 
+    onViewSchedule, 
+    onCalculateRating, 
+    isLoading 
+  }) => {
+  if (isLoading) {
+    return (
+      <div className="text-center p-4">
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </Spinner>
+      </div>
+    );
+  }
+
+  const getStatusBadge = (status) => {
+    const variants = {
+      'DRAFT': 'secondary',
+      'PUBLISHED': 'success',
+      'LOCKED': 'danger'
+    };
+    return (
+      <Badge bg={variants[status] || 'secondary'}>
+        {status}
+      </Badge>
+    );
+  };
+
+  const getValidationBadge = (block) => {
+    if (!block.validation_status) return null;
+    
+    return (
+      <Badge 
+        bg={block.validation_status.is_valid ? 'success' : 'danger'}
+        className="ms-2"
+      >
+        {block.validation_status.is_valid ? 'Valid' : 'Invalid'}
+      </Badge>
+    );
+  };
+
+  const getRatingColor = (rating) => {
+    if (rating >= 80) return 'text-success';
+    if (rating >= 60) return 'text-warning';
+    return 'text-danger';
+  };
+
+  return (
+    <Table striped bordered hover responsive>
+      <thead>
+        <tr>
+          <th>Block ID</th>
+          <th>Program ID</th>
+          <th>Block Size</th>
+          <th>Term</th>
+          <th>Academic Year</th>
+          <th>Schedule Rating</th>
+          <th>Status</th>
+          <th>Validation</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {blocks.map((block) => (
+          <tr key={block.block_id}>
+            <td>{block.block_id}</td>
+            <td>{block.program_id}</td>
+            <td>{block.block_size}</td>
+            <td>{block.term}</td>
+            <td>{block.academic_year}</td>
+            <td className={getRatingColor(block.schedule_rating)}>
+              {block.schedule_rating ? `${block.schedule_rating.toFixed(1)}%` : 'N/A'}
+            </td>
+            <td>
+              {getStatusBadge(block.status)}
+              {getValidationBadge(block)}
+            </td>
+            <td>
+              {block.validation_status?.missing_requirements?.length > 0 && (
+                <div className="text-danger small">
+                  Missing courses: {block.validation_status.missing_requirements.map(r => r.course_id).join(', ')}
+                </div>
+              )}
+            </td>
+            <td>
+              <Button
+                variant="primary"
+                size="sm"
+                className="me-2"
+                onClick={() => onEdit(block)}
+                disabled={block.status === 'LOCKED'}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => onDelete(block.block_id)}
+                disabled={block.status === 'LOCKED'}
+              >
+                Delete
+              </Button>
+              <Button
+                variant="info"
+                size="sm"
+                className="ms-2"
+                onClick={() => onViewSchedule(block.block_id)}
+              >
+                View Schedule
+              </Button>
+              {block.status !== 'LOCKED' && (
+                <Button
+                  variant="success"
+                  size="sm"
+                  className="ms-2"
+                  onClick={() => onCalculateRating(block.block_id)}
+                >
+                  Calculate Rating
+                </Button>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+};
+
+export default BlocksTable;
+
+
+
+=== frontend/app/src/components/blocks/ViewSchedule.jsx ===
+
+
+
+=== frontend/app/src/components/conflicts/ConflictsPage.jsx ===
+import React, { useState } from 'react';
+import { Container, Button, Row, Col, Card } from 'react-bootstrap';
+import OfferingConflictModal from './OfferingConflictModal';
+import ScheduleConflictModal from './ScheduleConflictModal';
+import CourseConflictModal from './CourseConflictModal';
+
+const ConflictsPage = () => {
+  const [activeModal, setActiveModal] = useState(null);
+
+  const conflictTypes = [
+    {
+      id: 'offering',
+      title: 'Offering Conflicts',
+      description: 'Check for time conflicts between two course offerings.',
+      buttonText: 'Check Offering Conflicts'
+    },
+    {
+      id: 'schedule',
+      title: 'Schedule Conflicts',
+      description: 'Check for conflicts in a set of course offerings.',
+      buttonText: 'Check Schedule Conflicts'
+    },
+    {
+      id: 'course',
+      title: 'Course Conflicts',
+      description: 'Check if a new course conflicts with existing schedule.',
+      buttonText: 'Check Course Conflicts'
+    }
+  ];
+
+  const renderConflictCard = ({ id, title, description, buttonText }) => (
+    <Col md={4} key={id}>
+      <Card className="h-100 mb-3">
+        <Card.Body className="d-flex flex-column">
+          <Card.Title>{title}</Card.Title>
+          <Card.Text className="flex-grow-1">{description}</Card.Text>
+          <Button 
+            variant="primary" 
+            onClick={() => setActiveModal(id)}
+            className="mt-auto"
+          >
+            {buttonText}
+          </Button>
+        </Card.Body>
+      </Card>
+    </Col>
+  );
+
+  return (
+    <Container className="py-4">
+      <h1 className="mb-4">Conflict Checker</h1>
+      
+      <Row className="g-4">
+        {conflictTypes.map(renderConflictCard)}
+      </Row>
+
+      <OfferingConflictModal 
+        show={activeModal === 'offering'}
+        onHide={() => setActiveModal(null)}
+      />
+      <ScheduleConflictModal
+        show={activeModal === 'schedule'}
+        onHide={() => setActiveModal(null)}
+      />
+      <CourseConflictModal
+        show={activeModal === 'course'}
+        onHide={() => setActiveModal(null)}
+      />
+    </Container>
+  );
+};
+
+export default ConflictsPage;
+
+
+
+=== frontend/app/src/components/conflicts/CourseConflictModal.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Modal, Form, Button, Alert, Spinner, ListGroup } from 'react-bootstrap';
+
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const CourseConflictModal = ({ show, onHide }) => {
+  const [offerings, setOfferings] = useState([]);
+  const [selectedScheduleOfferings, setSelectedScheduleOfferings] = useState([]);
+  const [newOffering, setNewOffering] = useState('');
+  const [conflicts, setConflicts] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+
+  useEffect(() => {
+    if (show) {
+      fetchOfferings();
+      setConflicts([]);
+      setSelectedScheduleOfferings([]);
+      setNewOffering('');
+    }
+  }, [show]);
+
+  const fetchOfferings = async () => {
+    try {
+      const response = await fetch(`${API_URL}/offerings`);
+      if (response.ok) {
+        const data = await response.json();
+        setOfferings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching offerings:', error);
+    } finally {
+      setIsLoadingOfferings(false);
+    }
+  };
+
+  const handleScheduleOfferingsSelect = (e) => {
+    const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+    setSelectedScheduleOfferings(selectedOptions);
+  };
+
+  const checkConflicts = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/conflicts/schedule/check-course`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          schedule_offering_ids: selectedScheduleOfferings,
+          new_offering_id: newOffering
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setConflicts(data.conflicts);
+      }
+    } catch (error) {
+      console.error('Error checking conflicts:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Check Course Conflicts</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {isLoadingOfferings ? (
+          <div className="text-center p-4">
+            <Spinner animation="border" role="status">
+              <span className="visually-hidden">Loading offerings...</span>
+            </Spinner>
+          </div>
+        ) : (
+          <>
+            <Form.Group className="mb-3">
+              <Form.Label>Select Existing Schedule Offerings</Form.Label>
+              <Form.Select 
+                multiple 
+                size={6}
+                value={selectedScheduleOfferings}
+                onChange={handleScheduleOfferingsSelect}
+              >
+                {offerings.map(offering => (
+                  <option key={offering.offering_id} value={offering.offering_id}>
+                    {offering.course_id} - {offering.section_type} {offering.section_code}
+                    ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Text className="text-muted">
+                Hold Ctrl/Cmd to select multiple offerings
+              </Form.Text>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Select New Course Offering</Form.Label>
+              <Form.Select
+                value={newOffering}
+                onChange={(e) => setNewOffering(e.target.value)}
+              >
+                <option value="">Select an offering</option>
+                {offerings.map(offering => (
+                  <option key={offering.offering_id} value={offering.offering_id}>
+                    {offering.course_id} - {offering.section_type} {offering.section_code}
+                    ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+
+            {conflicts.length > 0 && (
+              <Alert variant="danger">
+                <Alert.Heading>Conflicts Found</Alert.Heading>
+                <ListGroup>
+                  {conflicts.map((conflict, index) => (
+                    <ListGroup.Item key={index} variant="danger">
+                      Conflict on {getDayName(conflict.day_of_week)}:<br />
+                      New course {conflict.new_course_id} ({conflict.new_time}) conflicts with<br />
+                      Existing course {conflict.existing_course_id} ({conflict.existing_time})
+                    </ListGroup.Item>
+                  ))}
+                </ListGroup>
+              </Alert>
+            )}
+
+            {conflicts.length === 0 && selectedScheduleOfferings.length > 0 && newOffering && !isLoading && (
+              <Alert variant="success">
+                No conflicts found with the selected course.
+              </Alert>
+            )}
+          </>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>Close</Button>
+        <Button 
+          variant="primary" 
+          onClick={checkConflicts}
+          disabled={selectedScheduleOfferings.length === 0 || !newOffering || isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Spinner
+                as="span"
+                animation="border"
+                size="sm"
+                role="status"
+                className="me-2"
+              />
+              Checking...
+            </>
+          ) : (
+            'Check Conflicts'
+          )}
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default CourseConflictModal;
+
+
+
+=== frontend/app/src/components/conflicts/OfferingConflictModal.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Modal, Form, Button, Alert, Spinner } from 'react-bootstrap';
+
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const OfferingConflictModal = ({ show, onHide }) => {
+  const [offerings, setOfferings] = useState([]);
+  const [offering1, setOffering1] = useState('');
+  const [offering2, setOffering2] = useState('');
+  const [conflict, setConflict] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+
+  useEffect(() => {
+    if (show) {
+      fetchOfferings();
+      setConflict(null);
+      setOffering1('');
+      setOffering2('');
+    }
+  }, [show]);
+
+  const fetchOfferings = async () => {
+    try {
+      const response = await fetch(`${API_URL}/offerings`);
+      if (response.ok) {
+        const data = await response.json();
+        setOfferings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching offerings:', error);
+    } finally {
+      setIsLoadingOfferings(false);
+    }
+  };
+
+  const checkConflict = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(
+        `${API_URL}/conflicts/offerings/${offering1}/${offering2}`
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setConflict(data);
+      }
+    } catch (error) {
+      console.error('Error checking conflict:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renderOfferingOption = (offering) => (
+    <option key={offering.offering_id} value={offering.offering_id}>
+      {offering.course_id} - {offering.section_type} {offering.section_code} 
+      ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
+    </option>
+  );
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  return (
+    <Modal show={show} onHide={onHide}>
+      <Modal.Header closeButton>
+        <Modal.Title>Check Offering Conflicts</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {isLoadingOfferings ? (
+          <div className="text-center p-4">
+            <Spinner animation="border" role="status">
+              <span className="visually-hidden">Loading offerings...</span>
+            </Spinner>
+          </div>
+        ) : (
+          <Form>
+            <Form.Group className="mb-3">
+              <Form.Label>First Offering</Form.Label>
+              <Form.Select
+                value={offering1}
+                onChange={(e) => setOffering1(e.target.value)}
+              >
+                <option value="">Select an offering</option>
+                {offerings.map(renderOfferingOption)}
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Second Offering</Form.Label>
+              <Form.Select
+                value={offering2}
+                onChange={(e) => setOffering2(e.target.value)}
+                disabled={!offering1}
+              >
+                <option value="">Select an offering</option>
+                {offerings
+                  .filter(o => o.offering_id !== offering1)
+                  .map(renderOfferingOption)}
+              </Form.Select>
+            </Form.Group>
+          </Form>
+        )}
+        {conflict && (
+          <Alert variant={conflict.has_conflict ? 'danger' : 'success'}>
+            {conflict.has_conflict ? 
+              `Time conflict detected between ${conflict.offering1} and ${conflict.offering2}` :
+              'No time conflicts detected between these offerings'
+            }
+          </Alert>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>Close</Button>
+        <Button 
+          variant="primary" 
+          onClick={checkConflict}
+          disabled={!offering1 || !offering2 || isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Spinner
+                as="span"
+                animation="border"
+                size="sm"
+                role="status"
+                className="me-2"
+              />
+              Checking...
+            </>
+          ) : (
+            'Check Conflict'
+          )}
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default OfferingConflictModal;
+
+
+
+=== frontend/app/src/components/conflicts/ScheduleConflictModal.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Modal, Form, Button, Alert, Spinner, ListGroup } from 'react-bootstrap';
+
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const ScheduleConflictModal = ({ show, onHide }) => {
+  const [offerings, setOfferings] = useState([]);
+  const [selectedOfferings, setSelectedOfferings] = useState([]);
+  const [conflicts, setConflicts] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+
+  useEffect(() => {
+    if (show) {
+      fetchOfferings();
+      setConflicts([]);
+      setSelectedOfferings([]);
+    }
+  }, [show]);
+
+  const fetchOfferings = async () => {
+    try {
+      const response = await fetch(`${API_URL}/offerings`);
+      if (response.ok) {
+        const data = await response.json();
+        setOfferings(data);
+      }
+    } catch (error) {
+      console.error('Error fetching offerings:', error);
+    } finally {
+      setIsLoadingOfferings(false);
+    }
+  };
+
+  const handleOfferingSelect = (e) => {
+    const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
+    setSelectedOfferings(selectedOptions);
+  };
+
+  const checkConflicts = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/conflicts/schedule/conflicts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          offering_ids: selectedOfferings
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setConflicts(data.conflicts);
+      }
+    } catch (error) {
+      console.error('Error checking conflicts:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Check Schedule Conflicts</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {isLoadingOfferings ? (
+          <div className="text-center p-4">
+            <Spinner animation="border" role="status">
+              <span className="visually-hidden">Loading offerings...</span>
+            </Spinner>
+          </div>
+        ) : (
+          <>
+            <Form.Group className="mb-3">
+              <Form.Label>Select Multiple Offerings</Form.Label>
+              <Form.Select 
+                multiple 
+                size={6}
+                value={selectedOfferings}
+                onChange={handleOfferingSelect}
+              >
+                {offerings.map(offering => (
+                  <option key={offering.offering_id} value={offering.offering_id}>
+                    {offering.course_id} - {offering.section_type} {offering.section_code}
+                    ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Text className="text-muted">
+                Hold Ctrl/Cmd to select multiple offerings
+              </Form.Text>
+            </Form.Group>
+
+            {conflicts.length > 0 && (
+              <div className="mt-3">
+                <Alert variant="danger">
+                  <Alert.Heading>Conflicts Found</Alert.Heading>
+                  <ListGroup>
+                    {conflicts.map((conflict, index) => (
+                      <ListGroup.Item key={index} variant="danger">
+                        Conflict on {getDayName(conflict.day)}:<br />
+                        {conflict.course1_id} ({conflict.time1}) conflicts with<br />
+                        {conflict.course2_id} ({conflict.time2})
+                      </ListGroup.Item>
+                    ))}
+                  </ListGroup>
+                </Alert>
+              </div>
+            )}
+
+            {conflicts.length === 0 && selectedOfferings.length > 0 && !isLoading && (
+              <Alert variant="success">
+                No conflicts found in the selected offerings.
+              </Alert>
+            )}
+          </>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>Close</Button>
+        <Button 
+          variant="primary" 
+          onClick={checkConflicts}
+          disabled={selectedOfferings.length < 2 || isLoading}
+        >
+          {isLoading ? (
+            <>
+              <Spinner
+                as="span"
+                animation="border"
+                size="sm"
+                role="status"
+                className="me-2"
+              />
+              Checking...
+            </>
+          ) : (
+            'Check Conflicts'
+          )}
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default ScheduleConflictModal;
+
+
+
+=== frontend/app/src/components/courses/CourseOfferingModal.jsx ===
+// CourseOfferingsModal.jsx
+import React, { useState, useEffect } from 'react';
+import { Modal, Table, Form, Row, Col } from 'react-bootstrap';
+
+const CourseOfferingsModal = ({ show, onHide, courseId }) => {
+    const [offerings, setOfferings] = useState([]);
+    const [filteredOfferings, setFilteredOfferings] = useState([]);
+    const [filters, setFilters] = useState({
+        sectionType: '',
+        sectionCode: ''
+    });
+    
+    useEffect(() => {
+        if (courseId && show) {
+            fetchOfferings();
+        }
+    }, [courseId, show]);
+    
+    useEffect(() => {
+        filterOfferings();
+    }, [offerings, filters]);
+    
+    const fetchOfferings = async () => {
+        try {
+            const response = await fetch(`http://127.0.0.1:5000/api/offerings/`);
+            const data = await response.json();
+            const courseOfferings = data.filter(offering => offering.course_id === courseId);
+            setOfferings(courseOfferings);
+            setFilteredOfferings(courseOfferings);
+        } catch (error) {
+            console.error('Error fetching offerings:', error);
+        }
+    };
+
+    const filterOfferings = () => {
+        let filtered = [...offerings];
+        
+        if (filters.sectionType) {
+            filtered = filtered.filter(offering => 
+                offering.section_type === filters.sectionType
+            );
+        }
+        
+        if (filters.sectionCode) {
+            filtered = filtered.filter(offering => 
+                offering.section_code.toLowerCase().includes(filters.sectionCode.toLowerCase())
+            );
+        }
+        
+        setFilteredOfferings(filtered);
+    };
+
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
+
+    return (
+        <Modal show={show} onHide={onHide} size="lg">
+            <Modal.Header closeButton>
+                <Modal.Title>Course Offerings - {courseId}</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <Row className="mb-3">
+                    <Col md={6}>
+                        <Form.Group>
+                            <Form.Label>Section Type</Form.Label>
+                            <Form.Select
+                                name="sectionType"
+                                value={filters.sectionType}
+                                onChange={handleFilterChange}
+                            >
+                                <option value="">All Types</option>
+                                <option value="LECTURE">Lecture</option>
+                                <option value="LAB">Lab</option>
+                                <option value="TUTORIAL">Tutorial</option>
+                            </Form.Select>
+                        </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                        <Form.Group>
+                            <Form.Label>Section Code</Form.Label>
+                            <Form.Control
+                                type="text"
+                                name="sectionCode"
+                                value={filters.sectionCode}
+                                onChange={handleFilterChange}
+                                placeholder="Filter by section code..."
+                            />
+                        </Form.Group>
+                    </Col>
+                </Row>
+
+                <Table striped bordered hover>
+                    <thead>
+                        <tr>
+                            <th>Section</th>
+                            <th>Type</th>
+                            <th>Day</th>
+                            <th>Time</th>
+                            <th>Capacity</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredOfferings.map((offering) => (
+                            <tr key={offering.offering_id}>
+                                <td>{offering.section_code}</td>
+                                <td>{offering.section_type}</td>
+                                <td>{offering.day_of_week}</td>
+                                <td>{`${offering.start_time} - ${offering.end_time}`}</td>
+                                <td>{`${offering.current_enrollment}/${offering.capacity}`}</td>
+                                <td>{offering.status}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            </Modal.Body>
+        </Modal>
+    );
+};
+
+export default CourseOfferingsModal;
+
+
+
+=== frontend/app/src/components/courses/CoursesModal.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Modal, Form, Button } from 'react-bootstrap';
+
+const CourseModal = ({ show, onHide, course, onSave }) => {
+  const initialFormData = {
+    course_id: '',
+    course_name: '',
+    credits: ''
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
+  const [validated, setValidated] = useState(false);
+
+  useEffect(() => {
+    if (course) {
+      setFormData({
+        course_id: course.course_id,
+        course_name: course.course_name,
+        credits: course.credits.toString()
+      });
+    } else {
+      setFormData(initialFormData);
+    }
+    setValidated(false);
+  }, [course, show]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    
+    if (form.checkValidity()) {
+      try {
+        const url = course 
+          ? `http://127.0.0.1:5000/api/courses/${course.course_id}`
+          : 'http://127.0.0.1:5000/api/courses/';
+        
+        const response = await fetch(url, {
+          method: course ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            ...formData,
+            credits: parseFloat(formData.credits)
+          })
+        });
+
+        if (response.ok) {
+          onSave();
+          onHide();
+        }
+      } catch (error) {
+        console.error('Error saving course:', error);
+      }
+    }
+    setValidated(true);
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  return (
+    <Modal show={show} onHide={onHide}>
+      <Modal.Header closeButton>
+        <Modal.Title>
+          {course ? 'Edit Course' : 'Add Course'}
+        </Modal.Title>
+      </Modal.Header>
+      <Form noValidate validated={validated} onSubmit={handleSubmit}>
+        <Modal.Body>
+          <Form.Group className="mb-3">
+            <Form.Label>Course ID</Form.Label>
+            <Form.Control
+              type="text"
+              name="course_id"
+              value={formData.course_id}
+              onChange={handleChange}
+              required
+              disabled={!!course}
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a course ID.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>Course Name</Form.Label>
+            <Form.Control
+              type="text"
+              name="course_name"
+              value={formData.course_name}
+              onChange={handleChange}
+              required
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a course name.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>Credits</Form.Label>
+            <Form.Control
+              type="number"
+              step="0.5"
+              name="credits"
+              value={formData.credits}
+              onChange={handleChange}
+              required
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide credits.
+            </Form.Control.Feedback>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onHide}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit">
+            Save
+          </Button>
+        </Modal.Footer>
+      </Form>
+    </Modal>
+  );
+};
+
+export default CourseModal;
+
+
+
+
+=== frontend/app/src/components/courses/CoursesPage.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Container, Table, Button, Badge } from 'react-bootstrap';
+import CourseModal from './CoursesModal';
+import CourseUploadModal from './CourseUploadModal';
+import Papa from 'papaparse';
+import CourseOfferingsModal from './CourseOfferingModal';
+
+const CoursesPage = () => {
+  const [courses, setCourses] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [error, setError] = useState(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showOfferingsModal, setShowOfferingsModal] = useState(false);
+  const [selectedCourseId, setSelectedCourseId] = useState(null);
+  const fetchCourses = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/courses/');
+      const data = await response.json();
+      setCourses(data);
+    } catch (error) {
+      setError('Error fetching courses');
+    }
+  };
+
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+    const handleExportCSV = () => {
+      const csvData = courses.map(course => ({
+          course_id: course.course_id,
+          course_name: course.course_name,
+          credits: course.credits
+      }));
+      
+      const csv = Papa.unparse(csvData);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `courses-${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  }
+
+  const handleDelete = async (courseId) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/courses/${courseId}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        fetchCourses();
+      }
+    } catch (error) {
+      setError('Error deleting course');
+    }
+  };
+
+  const handleEdit = (course) => {
+    setSelectedCourse(course);
+    setShowModal(true);
+  };
+
+  return (
+    <Container className="py-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1>Courses</h1>
+       {/*  <Button variant="outline-primary" className="me-2" onClick={() => setShowUploadModal(true)}>
+      Upload CSV
+    </Button>
+    <Button variant="success" className="me-2" onClick={handleExportCSV}>
+            Export CSV
+        </Button> */}
+        <Button variant="primary" onClick={() => setShowModal(true)}>
+          Add Course
+        </Button>
+      </div>
+
+      <Table striped bordered hover responsive>
+        <thead>
+          <tr>
+            <th>Course ID</th>
+            <th>Course Name</th>
+            <th>Credits</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {courses.map((course) => (
+            <tr key={course.course_id}>
+              <td>{course.course_id}</td>
+              <td>{course.course_name}</td>
+              <td>{course.credits}</td>
+              <td>
+                <Button 
+                  variant="primary" 
+                  size="sm" 
+                  className="me-2"
+                  onClick={() => handleEdit(course)}
+                >
+                  Edit
+                </Button>
+                <Button
+        variant="info"
+        size="sm"
+        className="me-2"
+        onClick={() => {
+            setSelectedCourseId(course.course_id);
+            setShowOfferingsModal(true);
+        }}
+    >
+        Offerings
+    </Button>
+                <Button 
+                  variant="danger" 
+                  size="sm"
+                  onClick={() => {
+                    handleDelete(course.course_id);
+                  }}
+                >
+                  Delete
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+
+      <CourseModal 
+        show={showModal}
+        onHide={() => {
+          setShowModal(false);
+          setSelectedCourse(null);
+        }}
+        course={selectedCourse}
+        onSave={fetchCourses}
+      />
+
+    <CourseUploadModal
+    show={showUploadModal}
+    onHide={() => setShowUploadModal(false)}
+    onSave={fetchCourses}
+    />
+
+
+<CourseOfferingsModal
+    show={showOfferingsModal}
+    onHide={() => setShowOfferingsModal(false)}
+    courseId={selectedCourseId}
+/>
+    </Container>
+  );
+};
+
+export default CoursesPage;
+
+
+
+=== frontend/app/src/components/courses/CourseUploadModal.jsx ===
+import React, { useState } from 'react';
+import { Modal, Button, Table, Alert } from 'react-bootstrap';
+import Papa from 'papaparse';
+
+const CourseUploadModal = ({ show, onHide, onSave }) => {
+  const [parsedData, setParsedData] = useState([]);
+  const [error, setError] = useState(null);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          if (results.errors.length > 0) {
+            setError('Error parsing CSV file');
+            return;
+          }
+          setParsedData(results.data);
+          setError(null);
+        }
+      });
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/courses/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ courses: parsedData })
+      });
+
+      if (response.ok) {
+        onSave();
+        onHide();
+      } else {
+        const error = await response.json();
+        setError(error.message || 'Error uploading courses');
+      }
+    } catch (error) {
+      setError('Error uploading courses');
+    }
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Upload Courses CSV</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="mb-3">
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleFileUpload}
+            className="form-control"
+          />
+        </div>
+
+        {error && (
+          <Alert variant="danger" className="mb-3">
+            {error}
+          </Alert>
+        )}
+
+        {parsedData.length > 0 && (
+          <Table striped bordered hover>
+            <thead>
+              <tr>
+                <th>Course ID</th>
+                <th>Course Name</th>
+                <th>Credits</th>
+              </tr>
+            </thead>
+            <tbody>
+              {parsedData.map((course, index) => (
+                <tr key={index}>
+                  <td>{course.course_id}</td>
+                  <td>{course.course_name}</td>
+                  <td>{course.credits}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          disabled={parsedData.length === 0}
+        >
+          Save Courses
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default CourseUploadModal;
+
+
+
+=== frontend/app/src/components/offerings/OfferingModal.jsx ===
+import React, { useEffect, useState } from 'react';
+import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
+
+const OfferingModal = ({ show, offering, onHide, onSave }) => {
+  const initialFormData = {
+    course_id: '',
+    section_type: 'LECTURE',
+    section_code: '',
+    day_of_week: '1',
+    start_time: '',
+    end_time: '',
+    capacity: '',
+    term: '',
+    academic_year: '',
+    status: 'OPEN'
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
+  const [validated, setValidated] = useState(false);
+  const [courses, setCourses] = useState([]);
+
+  // Fetch courses for dropdown
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:5000/api/courses/');
+        const data = await response.json();
+        setCourses(data);
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+      }
+    };
+    fetchCourses();
+  }, []);
+
+  useEffect(() => {
+    if (offering) {
+      setFormData({
+        course_id: offering.course_id,
+        section_type: offering.section_type,
+        section_code: offering.section_code,
+        day_of_week: offering.day_of_week.toString(),
+        start_time: offering.start_time,
+        end_time: offering.end_time,
+        capacity: offering.capacity,
+        term: offering.term,
+        academic_year: offering.academic_year,
+        status: offering.status
+      });
+    } else {
+      setFormData(initialFormData);
+    }
+    setValidated(false);
+  }, [offering, show]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    if (form.checkValidity()) {
+      onSave({
+        ...formData,
+        day_of_week: parseInt(formData.day_of_week),
+        capacity: parseInt(formData.capacity)
+      });
+    }
+    setValidated(true);
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>
+          {offering ? 'Edit Course Offering' : 'Add Course Offering'}
+        </Modal.Title>
+      </Modal.Header>
+      <Form noValidate validated={validated} onSubmit={handleSubmit}>
+        <Modal.Body>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Course</Form.Label>
+                <Form.Select
+                  name="course_id"
+                  value={formData.course_id}
+                  onChange={handleChange}
+                  required
+                  disabled={offering}
+                >
+                  <option value="">Select a course...</option>
+                  {courses.map(course => (
+                    <option key={course.course_id} value={course.course_id}>
+                      {course.course_id} - {course.course_name}
+                    </option>
+                  ))}
+                </Form.Select>
+                <Form.Control.Feedback type="invalid">
+                  Please select a course.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Section Type</Form.Label>
+                <Form.Select
+                  name="section_type"
+                  value={formData.section_type}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="LECTURE">Lecture</option>
+                  <option value="LAB">Lab</option>
+                  <option value="TUTORIAL">Tutorial</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+          </Row>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Section Code</Form.Label>
+                <Form.Select
+                  name="section_code"
+                  value={formData.section_code}
+                  onChange={handleChange}
+                  required
+                  disabled={!formData.course_id}
+                >
+                  <option value="">Select a section code...</option>
+                  {['A', 'B', 'C', 'D', 'E', 'F'].map(code => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </Form.Select>
+                <Form.Control.Feedback type="invalid">
+                  Please select a section code.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Day</Form.Label>
+                <Form.Select
+                  name="day_of_week"
+                  value={formData.day_of_week}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Start Time (HH:MM)</Form.Label>
+                <Form.Control
+                  type="time"
+                  name="start_time"
+                  value={formData.start_time}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid start time.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>End Time (HH:MM)</Form.Label>
+                <Form.Control
+                  type="time"
+                  name="end_time"
+                  value={formData.end_time}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid end time.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <Row>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Capacity</Form.Label>
+                <Form.Control
+                  type="number"
+                  name="capacity"
+                  value={formData.capacity}
+                  onChange={handleChange}
+                  required
+                  min="1"
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid capacity.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Term</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="term"
+                  value={formData.term}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a term.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="academic_year"
+                  value={formData.academic_year}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide an academic year.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          {offering && (
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Status</Form.Label>
+                  <Form.Select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="OPEN">Open</option>
+                    <option value="FULL">Full</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onHide}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit">
+            Save
+          </Button>
+        </Modal.Footer>
+      </Form>
+    </Modal>
+  );
+};
+
+export default OfferingModal;
+
+
+
+=== frontend/app/src/components/offerings/OfferingPage.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Container, Button } from 'react-bootstrap';
+import OfferingsTable from './OfferingsTable';
+import OfferingModal from './OfferingModal';
+import OfferingUploadModal from './OfferingUploadModal';
+import Papa from 'papaparse';
+
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const OfferingsPage = () => {
+  const [offerings, setOfferings] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedOffering, setSelectedOffering] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const fetchOfferings = async () => {
+    try {
+      const response = await fetch(`${API_URL}/offerings/`);
+      const data = await response.json();
+      setOfferings(data);
+    } catch (error) {
+      console.error('Error fetching offerings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOfferings();
+  }, []);
+
+  const handleAddNew = () => {
+    setSelectedOffering(null);
+    setShowModal(true);
+  };
+  const handleExportCSV = () => {
+    const csvData = offerings.map(offering => ({
+        course_id: offering.course_id,
+        section_type: offering.section_type,
+        section_code: offering.section_code,
+        day_of_week: offering.day_of_week,
+        start_time: offering.start_time,
+        end_time: offering.end_time,
+        capacity: offering.capacity,
+        term: offering.term,
+        academic_year: offering.academic_year,
+        status: offering.status
+    }));
+    
+    const csv = Papa.unparse(csvData, {
+        header: true,
+        delimiter: ","
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `course-offerings-${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+};
+
+  const handleEdit = (offering) => {
+    setSelectedOffering(offering);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (offeringId) => {
+    if (window.confirm('Are you sure you want to delete this offering?')) {
+      try {
+        const response = await fetch(`${API_URL}/offerings/${offeringId}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          await fetchOfferings();
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error deleting offering');
+        }
+      } catch (error) {
+        console.error('Error deleting offering:', error);
+      }
+    }
+  };
+
+  const handleSave = async (formData) => {
+    try {
+      const method = selectedOffering ? 'PUT' : 'POST';
+      const url = selectedOffering 
+        ? `${API_URL}/offerings/${selectedOffering.offering_id}`
+        : `${API_URL}/offerings`;
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        setShowModal(false);
+        await fetchOfferings();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Error saving offering');
+      }
+    } catch (error) {
+      console.error('Error saving offering:', error);
+    }
+  };
+
+  return (
+    <Container className="py-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1>Course Offerings</h1>
+
+        <Button 
+          variant="outline-primary" 
+          className="me-2" 
+          onClick={() => setShowUploadModal(true)}
+        >
+          Upload CSV
+        </Button>
+        <Button variant="success" className="me-2" onClick={handleExportCSV}>
+            Export CSV
+        </Button>
+        <Button variant="primary" onClick={handleAddNew}>
+          Add New Offering
+        </Button>
+
+      </div>
+
+      <OfferingsTable 
+        offerings={offerings}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        isLoading={isLoading}
+      />
+
+      <OfferingModal
+        show={showModal}
+        offering={selectedOffering}
+        onHide={() => setShowModal(false)}
+        onSave={handleSave}
+      />
+          <OfferingUploadModal
+      show={showUploadModal}
+      onHide={() => setShowUploadModal(false)}
+      onSave={fetchOfferings}
+    />
+    </Container>
+  );
+};
+
+export default OfferingsPage;
+
+
+
+
+=== frontend/app/src/components/offerings/OfferingsTable.jsx ===
+import React from 'react';
+import { Table, Button } from 'react-bootstrap';
+
+const getDayName = (day) => {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days[day - 1];
+};
+
+const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
+  if (!offerings) {
+    return <div>No offerings available</div>;
+  }
+
+  return (
+    <Table striped bordered hover responsive>
+      <thead>
+        <tr>
+          <th>Course ID</th>
+          <th>Section Type</th>
+          <th>Section Code</th>
+          <th>Day</th>
+          <th>Time</th>
+          <th>Capacity</th>
+          <th>Enrollment</th>
+          <th>Term</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {offerings.map((offering) => (
+          <tr key={offering.offering_id}>
+            <td>{offering.course_id}</td>
+            <td>{offering.section_type}</td>
+            <td>{offering.section_code}</td>
+            <td>{getDayName(offering.day_of_week)}</td>
+            <td>{`${offering.start_time}-${offering.end_time}`}</td>
+            <td>{offering.capacity}</td>
+            <td>{offering.current_enrollment}</td>
+            <td>{`${offering.term} ${offering.academic_year}`}</td>
+            <td>{offering.status}</td>
+            <td>
+              <Button
+                variant="primary"
+                size="sm"
+                className="me-2"
+                onClick={() => onEdit(offering)}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => onDelete(offering.offering_id)}
+              >
+                Delete
+              </Button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+};
+
+export default OfferingsTable;
+
+
+
+=== frontend/app/src/components/offerings/OfferingUploadModal.jsx ===
+import React, { useState } from 'react';
+import { Modal, Button, Table, Alert } from 'react-bootstrap';
+import Papa from 'papaparse';
+
+const OfferingUploadModal = ({ show, onHide, onSave }) => {
+  const [parsedData, setParsedData] = useState([]);
+  const [error, setError] = useState(null);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          if (results.errors.length > 0) {
+            setError('Error parsing CSV file');
+            return;
+          }
+          // Convert string values to appropriate types
+          const formattedData = results.data.map(row => ({
+            ...row,
+            offering_id: parseInt(row.offering_id),
+            day_of_week: parseInt(row.day_of_week),
+            capacity: parseInt(row.capacity),
+            current_enrollment: parseInt(row.current_enrollment)
+          }));
+          setParsedData(formattedData);
+          setError(null);
+        }
+      });
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/offerings/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ offerings: parsedData })
+      });
+
+      if (response.ok) {
+        onSave();
+        onHide();
+      } else {
+        const error = await response.json();
+        setError(error.message || 'Error uploading offerings');
+      }
+    } catch (error) {
+      setError('Error uploading offerings');
+    }
+  };
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="xl">
+      <Modal.Header closeButton>
+        <Modal.Title>Upload Course Offerings CSV</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="mb-3">
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleFileUpload}
+            className="form-control"
+          />
+        </div>
+
+        {error && (
+          <Alert variant="danger" className="mb-3">
+            {error}
+          </Alert>
+        )}
+
+        {parsedData.length > 0 && (
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <Table striped bordered hover>
+              <thead>
+                <tr>
+                  <th>Course ID</th>
+                  <th>Section Type</th>
+                  <th>Section Code</th>
+                  <th>Day</th>
+                  <th>Time</th>
+                  <th>Capacity</th>
+                  <th>Term</th>
+                  <th>Academic Year</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parsedData.map((offering, index) => (
+                  <tr key={index}>
+                    <td>{offering.course_id}</td>
+                    <td>{offering.section_type}</td>
+                    <td>{offering.section_code}</td>
+                    <td>{getDayName(offering.day_of_week)}</td>
+                    <td>{`${offering.start_time} - ${offering.end_time}`}</td>
+                    <td>{offering.capacity}</td>
+                    <td>{offering.term}</td>
+                    <td>{offering.academic_year}</td>
+                    <td>{offering.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          disabled={parsedData.length === 0}
+        >
+          Save Offerings
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default OfferingUploadModal;
+
+
+
+=== frontend/app/src/components/programs/ProgramRequirementsModal.jsx ===
+import React, { useEffect, useState } from 'react';
+import { Modal, Form, Button, Table, Row, Col } from 'react-bootstrap';
+
+const ProgramRequirementsModal = ({ show, programId, onHide }) => {
+    const [requirements, setRequirements] = useState([]);
+    const [courses, setCourses] = useState([]);
+    const [newRequirement, setNewRequirement] = useState({
+        course_id: ''
+    });
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchRequirements = async () => {
+        try {
+            const response = await fetch(`http://127.0.0.1:5000/api/requirements/program/${programId}`);
+            if (response.ok) {
+                const data = await response.json();
+                setRequirements(data);
+            }
+        } catch (error) {
+            console.error('Error fetching requirements:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const fetchCourses = async () => {
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/courses');
+            if (response.ok) {
+                const data = await response.json();
+                setCourses(data);
+            }
+        } catch (error) {
+            console.error('Error fetching courses:', error);
+        }
+    };
+
+    useEffect(() => {
+        if (show && programId) {
+            fetchRequirements();
+            fetchCourses();
+        }
+    }, [show, programId]);
+
+    const handleAddRequirement = async (e) => {
+        e.preventDefault();
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/requirements', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    program_id: programId,
+                    ...newRequirement,
+                }),
+            });
+
+            if (response.ok) {
+                await fetchRequirements();
+                setNewRequirement({ course_id: '' });
+            } else {
+                const error = await response.json();
+                alert(error.error || 'Error adding requirement');
+            }
+        } catch (error) {
+            console.error('Error adding requirement:', error);
+        }
+    };
+
+    const handleDeleteRequirement = async (requirementId) => {
+        if (window.confirm('Are you sure you want to delete this requirement?')) {
+            try {
+                const response = await fetch(
+                    `http://127.0.0.1:5000/api/requirements/${requirementId}`,
+                    {
+                        method: 'DELETE'
+                    }
+                );
+                if (response.ok) {
+                    await fetchRequirements();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Error deleting requirement');
+                }
+            } catch (error) {
+                console.error('Error deleting requirement:', error);
+            }
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <Modal show={show} onHide={onHide}>
+                <Modal.Body>Loading...</Modal.Body>
+            </Modal>
+        );
+    }
+
+    return (
+        <Modal show={show} onHide={onHide} size="lg">
+            <Modal.Header closeButton>
+                <Modal.Title>Program Requirements</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <Form onSubmit={handleAddRequirement} className="mb-4">
+                    <Row>
+                        <Col md={9}>
+                            <Form.Group className="mb-3">
+                                <Form.Label>Course</Form.Label>
+                                <Form.Select
+                                    value={newRequirement.course_id}
+                                    onChange={(e) => setNewRequirement({
+                                        course_id: e.target.value
+                                    })}
+                                    required
+                                >
+                                    <option value="">Select a course...</option>
+                                    {courses.map(course => (
+                                        <option key={course.course_id} value={course.course_id}>
+                                            {course.course_id} - {course.course_name}
+                                        </option>
+                                    ))}
+                                </Form.Select>
+                            </Form.Group>
+                        </Col>
+                        <Col md={3} className="d-flex align-items-end">
+                            <Button type="submit" variant="primary" className="mb-3 w-100">
+                                Add Requirement
+                            </Button>
+                        </Col>
+                    </Row>
+                </Form>
+
+                <Table striped bordered hover>
+                    <thead>
+                        <tr>
+                            <th>Course ID</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {requirements.map((req) => (
+                            <tr key={req.requirement_id}>
+                                <td>{req.course_id}</td>
+                                <td>
+                                    <Button
+                                        variant="danger"
+                                        size="sm"
+                                        onClick={() => handleDeleteRequirement(req.requirement_id)}
+                                        className="me-2"
+                                    >
+                                        Delete
+                                    </Button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={onHide}>
+                    Close
+                </Button>
+            </Modal.Footer>
+        </Modal>
+    );
+};
+
+export default ProgramRequirementsModal;
+
+
+
+=== frontend/app/src/components/programs/ProgramsModal.jsx ===
+import React, { useEffect, useState } from 'react';
+import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
+
+const ProgramsModal = ({ show, program, onHide, onSave }) => {
+  const initialFormData = {
+    program_id: '',
+    program_name: '',
+    total_enrollment: 0,
+    blocks_20_count: 0,
+    blocks_10_count: 0
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
+  const [validated, setValidated] = useState(false);
+
+  useEffect(() => {
+    if (program) {
+      setFormData({
+        program_id: program.program_id,
+        program_name: program.program_name,
+        total_enrollment: program.total_enrollment,
+        blocks_20_count: program.blocks_20_count,
+        blocks_10_count: program.blocks_10_count
+      });
+    } else {
+      setFormData(initialFormData);
+    }
+    setValidated(false);
+  }, [program, show]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    const numericFields = ['total_enrollment', 'blocks_20_count', 'blocks_10_count'];
+    
+    setFormData(prev => ({
+      ...prev,
+      [name]: numericFields.includes(name) ? parseInt(value) || 0 : value
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    
+    if (form.checkValidity()) {
+      onSave(formData);
+    }
+    setValidated(true);
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>
+          {program ? 'Edit Program' : 'Create New Program'}
+        </Modal.Title>
+      </Modal.Header>
+      <Form noValidate validated={validated} onSubmit={handleSubmit}>
+        <Modal.Body>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Program ID</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="program_id"
+                  value={formData.program_id}
+                  onChange={handleChange}
+                  required
+                  disabled={program}
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a program ID.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Program Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="program_name"
+                  value={formData.program_name}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a program name.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <Row>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Total Enrollment</Form.Label>
+                <Form.Control
+                  type="number"
+                  name="total_enrollment"
+                  value={formData.total_enrollment}
+                  onChange={handleChange}
+                  required
+                  min="0"
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid enrollment number.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>20-Student Blocks</Form.Label>
+                <Form.Control
+                  type="number"
+                  name="blocks_20_count"
+                  value={formData.blocks_20_count}
+                  onChange={handleChange}
+                  required
+                  min="0"
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid number of 20-student blocks.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>10-Student Blocks</Form.Label>
+                <Form.Control
+                  type="number"
+                  name="blocks_10_count"
+                  value={formData.blocks_10_count}
+                  onChange={handleChange}
+                  required
+                  min="0"
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid number of 10-student blocks.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onHide}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit">
+            Save
+          </Button>
+        </Modal.Footer>
+      </Form>
+    </Modal>
+  );
+};
+
+export default ProgramsModal;
+
+
+
+=== frontend/app/src/components/programs/ProgramsPage.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Container, Button } from 'react-bootstrap';
+import ProgramsTable from './ProgramsTable';
+import ProgramsModal from './ProgramsModal';
+import ProgramRequirementsModal from './ProgramRequirementsModal';
+import ProgramUploadModal from './ProgramUploadModal';
+import Papa from 'papaparse';
+
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const ProgramsPage = () => {
+    const [programs, setPrograms] = useState([]);
+    const [showModal, setShowModal] = useState(false);
+    const [showRequirementsModal, setShowRequirementsModal] = useState(false);
+    const [selectedProgram, setSelectedProgram] = useState(null);
+    const [selectedProgramId, setSelectedProgramId] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [showUploadModal, setShowUploadModal] = useState(false);
+
+  const fetchPrograms = async () => {
+    try {
+      const response = await fetch(`${API_URL}/programs/`);
+      const data = await response.json();
+      setPrograms(data);
+    } catch (error) {
+      console.error('Error fetching programs:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPrograms();
+  }, []);
+
+  const handleAddNew = () => {
+    setSelectedProgram(null);
+    setShowModal(true);
+  };
+
+  const handleEdit = (program) => {
+    setSelectedProgram(program);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (programId) => {
+    if (window.confirm('Are you sure you want to delete this program?')) {
+      try {
+        const response = await fetch(`${API_URL}/programs/${programId}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          await fetchPrograms();
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error deleting program');
+        }
+      } catch (error) {
+        console.error('Error deleting program:', error);
+      }
+    }
+  };
+
+  const handleSave = async (formData) => {
+    try {
+      const method = selectedProgram ? 'PUT' : 'POST';
+      const url = selectedProgram 
+        ? `${API_URL}/programs/${selectedProgram.program_id}`
+        : `${API_URL}/programs/`;
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        setShowModal(false);
+        await fetchPrograms();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Error saving program');
+      }
+    } catch (error) {
+      console.error('Error saving program:', error);
+    }
+  };
+
+const handleViewRequirements = (programId) => {
+    setSelectedProgramId(programId);
+    setShowRequirementsModal(true);
+  };
+
+// Add export function
+const handleExportCSV = () => {
+  const csv = Papa.unparse(programs.map(program => ({
+      program_id: program.program_id,
+      program_name: program.program_name,
+      total_enrollment: program.total_enrollment,
+      blocks_20_count: program.blocks_20_count,
+      blocks_10_count: program.blocks_10_count
+  })));
+  
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.setAttribute('download', 'programs.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+const handleViewSchedules = async (programId) => {
+  try {
+      const response = await fetch(`${API_URL}/schedules/program/${programId}/schedules`);
+      if (response.ok) {
+          const data = await response.json();
+          alert(`Found ${data.total_schedules} possible schedules for this program!`);
+          // You might want to show these in a modal instead of an alert
+      } else {
+          const error = await response.json();
+          alert(error.error || 'Error fetching schedules');
+      }
+  } catch (error) {
+      console.error('Error fetching schedules:', error);
+      alert('Error fetching schedules');
+  }
+};
+  return (
+    <Container className="py-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1>Program Management</h1>
+        {/* <Button variant="secondary" className="me-2" onClick={() => setShowUploadModal(true)}>
+            Upload CSV
+        </Button>
+        <Button variant="success" className="me-2" onClick={handleExportCSV}>
+            Export CSV
+        </Button> */}
+        <Button variant="primary" onClick={handleAddNew}>
+          Create New Program
+        </Button>
+      </div>
+
+      <ProgramsTable 
+                programs={programs}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onViewRequirements={handleViewRequirements}
+                onViewSchedules={handleViewSchedules}
+                isLoading={isLoading}
+            />
+
+      <ProgramsModal
+        show={showModal}
+        program={selectedProgram}
+        onHide={() => setShowModal(false)}
+        onSave={handleSave}
+      />
+
+        <ProgramRequirementsModal
+        show={showRequirementsModal}
+        programId={selectedProgramId}
+        onHide={() => setShowRequirementsModal(false)}
+      />
+      <ProgramUploadModal
+    show={showUploadModal}
+    onHide={() => setShowUploadModal(false)}
+    onSave={fetchPrograms}
+/>
+    </Container>
+  );
+};
+
+export default ProgramsPage;
+
+
+
+=== frontend/app/src/components/programs/ProgramsTable.jsx ===
+import React from 'react';
+import { Table, Button, Badge, Spinner } from 'react-bootstrap';
+
+const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements,onViewSchedules  }) => {
+  if (isLoading) {
+    return (
+      <div className="text-center p-4">
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </Spinner>
+      </div>
+    );
+  }
+
+  if (!programs.length) {
+    return <div className="text-center p-4">No programs available</div>;
+  }
+
+  return (
+    <Table striped bordered hover responsive>
+      <thead>
+        <tr>
+          <th>Program ID</th>
+          <th>Program Name</th>
+          <th>Total Enrollment</th>
+          <th>20-Student Blocks</th>
+          <th>10-Student Blocks</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {programs.map((program) => (
+          <tr key={program.program_id}>
+            <td>{program.program_id}</td>
+            <td>{program.program_name}</td>
+            <td>
+              <Badge bg="info">
+                {program.total_enrollment} students
+              </Badge>
+            </td>
+            <td>
+              <Badge bg="primary">
+                {program.blocks_20_count} blocks
+              </Badge>
+            </td>
+            <td>
+              <Badge bg="secondary">
+                {program.blocks_10_count} blocks
+              </Badge>
+            </td>
+            <td>
+              <Button
+                variant="primary"
+                size="sm"
+                className="me-2"
+                onClick={() => onEdit(program)}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => onDelete(program.program_id)}
+              >
+                Delete
+              </Button>
+              <Button
+                variant="info"
+                size="sm"
+                className="ms-2"
+                onClick={() => onViewRequirements(program.program_id)}
+              >
+                Requirements
+              </Button>
+              <Button
+                variant="success"
+                size="sm"
+                className="ms-2"
+                onClick={() => onViewSchedules(program.program_id)}
+              >
+                View Schedules
+              </Button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+};
+
+export default ProgramsTable;
+
+
+
+=== frontend/app/src/components/programs/ProgramUploadModal.jsx ===
+// ProgramUploadModal.jsx
+import React, { useState } from 'react';
+import { Modal, Button, Table, Alert } from 'react-bootstrap';
+import Papa from 'papaparse';
+
+const ProgramUploadModal = ({ show, onHide, onSave }) => {
+    const [parsedData, setParsedData] = useState([]);
+    const [error, setError] = useState(null);
+
+    const handleFileUpload = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (results.errors.length > 0) {
+                        setError('Error parsing CSV file');
+                        return;
+                    }
+                    const validData = results.data.map(item => ({
+                        ...item,
+                        total_enrollment: parseInt(item.total_enrollment),
+                        blocks_20_count: parseInt(item.blocks_20_count),
+                        blocks_10_count: parseInt(item.blocks_10_count)
+                    }));
+                    setParsedData(validData);
+                    setError(null);
+                }
+            });
+        }
+    };
+
+    const handleSave = async () => {
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/programs/bulk', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ programs: parsedData })
+            });
+            if (response.ok) {
+                onSave();
+                onHide();
+            } else {
+                const error = await response.json();
+                setError(error.message || 'Error uploading programs');
+            }
+        } catch (error) {
+            setError('Error uploading programs');
+        }
+    };
+
+    return (
+        <Modal show={show} onHide={onHide} size="lg">
+            <Modal.Header closeButton>
+                <Modal.Title>Upload Programs CSV</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileUpload}
+                    className="mb-3"
+                />
+                {error && (
+                    <Alert variant="danger">{error}</Alert>
+                )}
+                {parsedData.length > 0 && (
+                    <Table striped bordered hover>
+                        <thead>
+                            <tr>
+                                <th>Program ID</th>
+                                <th>Program Name</th>
+                                <th>Total Enrollment</th>
+                                <th>20-Student Blocks</th>
+                                <th>10-Student Blocks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {parsedData.map((program, index) => (
+                                <tr key={index}>
+                                    <td>{program.program_id}</td>
+                                    <td>{program.program_name}</td>
+                                    <td>{program.total_enrollment}</td>
+                                    <td>{program.blocks_20_count}</td>
+                                    <td>{program.blocks_10_count}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </Table>
+                )}
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={onHide}>Cancel</Button>
+                <Button 
+                    variant="primary" 
+                    onClick={handleSave}
+                    disabled={parsedData.length === 0}
+                >
+                    Save Programs
+                </Button>
+            </Modal.Footer>
+        </Modal>
+    );
+};
+
+export default ProgramUploadModal;
+
+
+
+=== frontend/app/src/components/schedule/ScheduleEditModal.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Modal, Form, Button, ListGroup, Alert, Spinner } from 'react-bootstrap';
+
+const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
+  const [blockSchedule, setBlockSchedule] = useState([]);
+  const [selectedOffering, setSelectedOffering] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (show && blockId) {
+      fetchBlockSchedule();
+    }
+  }, [show, blockId]);
+
+  const fetchBlockSchedule = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${blockId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setBlockSchedule(data);
+      }
+    } catch (error) {
+      setError('Error fetching schedule');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddOffering = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${blockId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ offering_id: selectedOffering }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        await fetchBlockSchedule();
+        setSelectedOffering('');
+      } else {
+        setError(data.message || 'Error adding offering');
+      }
+    } catch (error) {
+      setError('Error adding offering');
+    }
+  };
+
+  const handleRemoveOffering = async (offeringId) => {
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:5000/api/schedules/block/${blockId}/offering/${offeringId}`,
+        { method: 'DELETE' }
+      );
+      if (response.ok) {
+        await fetchBlockSchedule();
+      }
+    } catch (error) {
+      setError('Error removing offering');
+    }
+  };
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Edit Block Schedule</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {isLoading ? (
+          <div className="text-center p-4">
+            <Spinner animation="border" />
+          </div>
+        ) : (
+          <>
+            <Form.Group className="mb-3">
+              <Form.Label>Add Course Offering</Form.Label>
+              <Form.Select
+                value={selectedOffering}
+                onChange={(e) => setSelectedOffering(e.target.value)}
+              >
+                <option value="">Select an offering</option>
+                {offerings.map(offering => (
+                  <option key={offering.offering_id} value={offering.offering_id}>
+                    {offering.course_id} - {offering.section_type} {offering.section_code}
+                    ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+
+            <Button 
+              variant="primary" 
+              onClick={handleAddOffering}
+              disabled={!selectedOffering}
+              className="mb-3"
+            >
+              Add to Schedule
+            </Button>
+
+            {error && <Alert variant="danger">{error}</Alert>}
+
+            <ListGroup>
+              {blockSchedule.map(offering => (
+                <ListGroup.Item
+                  key={offering.offering_id}
+                  className="d-flex justify-content-between align-items-center"
+                >
+                  <div>
+                    {offering.course_id} - {offering.section_type} {offering.section_code}
+                    <br />
+                    <small>
+                      {getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time}
+                    </small>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleRemoveOffering(offering.offering_id)}
+                  >
+                    Remove
+                  </Button>
+                </ListGroup.Item>
+              ))}
+            </ListGroup>
+          </>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>Close</Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default ScheduleEditModal;
+
+
+
+=== frontend/app/src/components/schedule/ScheduleGenerateModal.jsx ===
+import React, { useState } from 'react';
+import { Modal, Form, Button, Alert, Spinner, ListGroup } from 'react-bootstrap';
+
+const ScheduleGenerateModal = ({ show, blocks, onHide, onGenerate }) => {
+  const [selectedBlock, setSelectedBlock] = useState('');
+  const [generatedSchedule, setGeneratedSchedule] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleGenerate = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}`, {
+        method: 'GET'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setGeneratedSchedule(data);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || 'Failed to generate schedule');
+      }
+    } catch (error) {
+      setError('Error generating schedule');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ schedule: generatedSchedule })
+      });
+      
+      if (response.ok) {
+        await onGenerate();
+        handleClose();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || 'Failed to save schedule');
+      }
+    } catch (error) {
+      setError('Error saving schedule');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  const handleClose = () => {
+    setSelectedBlock('');
+    setGeneratedSchedule(null);
+    setError(null);
+    onHide();
+  };
+
+  return (
+    <Modal show={show} onHide={handleClose} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Generate Block Schedule</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <Form.Group className="mb-3">
+          <Form.Label>Select Block</Form.Label>
+          <Form.Select
+            value={selectedBlock}
+            onChange={(e) => setSelectedBlock(e.target.value)}
+            disabled={isLoading}
+          >
+            <option value="">Choose a block...</option>
+            {blocks
+              .filter(block => block.status !== 'LOCKED')
+              .map(block => (
+                <option key={block.block_id} value={block.block_id}>
+                  Block {block.block_id} - Program {block.program_id} 
+                  (Size: {block.block_size})
+                </option>
+              ))}
+          </Form.Select>
+        </Form.Group>
+
+        {error && (
+          <Alert variant="danger" className="mt-3">
+            {error}
+          </Alert>
+        )}
+
+        {generatedSchedule && (
+          <div className="mt-4">
+            <h5>Generated Schedule Preview:</h5>
+            <ListGroup>
+              {generatedSchedule.map((offering, index) => (
+                <ListGroup.Item key={index}>
+                  {offering.course_id} - {offering.section_type} {offering.section_code}
+                  <br />
+                  <small>
+                    {getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time}
+                  </small>
+                </ListGroup.Item>
+              ))}
+            </ListGroup>
+          </div>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={handleClose}>
+          Cancel
+        </Button>
+        {!generatedSchedule ? (
+          <Button
+            variant="primary"
+            onClick={handleGenerate}
+            disabled={!selectedBlock || isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
+                Generating...
+              </>
+            ) : (
+              'Preview Schedule'
+            )}
+          </Button>
+        ) : (
+          <Button
+            variant="success"
+            onClick={handleSave}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
+                Saving...
+              </>
+            ) : (
+              'Save Schedule'
+            )}
+          </Button>
+        )}
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default ScheduleGenerateModal;
+
+
+
+=== frontend/app/src/components/schedule/SchedulePage.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Container, Button } from 'react-bootstrap';
+import ScheduleTable from './ScheduleTable';
+import ScheduleViewModal from './ScheduleViewModal';
+import ScheduleEditModal from './ScheduleEditModal';
+import ScheduleGenerateModal from './ScheduleGenerateModal';
+
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const SchedulePage = () => {
+    const [schedules, setSchedules] = useState([]);
+    const [blocks, setBlocks] = useState([]);
+    const [offerings, setOfferings] = useState([]);
+    const [selectedBlock, setSelectedBlock] = useState(null);
+    const [showViewModal, setShowViewModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showGenerateModal, setShowGenerateModal] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchBlocks = async () => {
+        try {
+            const response = await fetch(`${API_URL}/blocks`);
+            const data = await response.json();
+            setBlocks(data);
+        } catch (error) {
+            console.error('Error fetching blocks:', error);
+        }
+    };
+
+    const fetchOfferings = async () => {
+        try {
+            const response = await fetch(`${API_URL}/offerings`);
+            const data = await response.json();
+            setOfferings(data);
+        } catch (error) {
+            console.error('Error fetching offerings:', error);
+        }
+    };
+
+    const fetchBlockSchedule = async (blockId) => {
+        try {
+            const [scheduleResponse, validationResponse] = await Promise.all([
+                fetch(`${API_URL}/schedules/block/${blockId}`),
+                fetch(`${API_URL}/schedules/block/${blockId}/validate`)
+            ]);
+
+            const offerings = await scheduleResponse.json();
+            const validation = await validationResponse.json();
+
+            return {
+                offerings: scheduleResponse.ok ? offerings : [],
+                validation: validationResponse.ok ? validation : null
+            };
+        } catch (error) {
+            console.error('Error fetching block schedule:', error);
+            return { offerings: [], validation: null };
+        }
+    };
+
+    const fetchAllSchedules = async () => {
+        setIsLoading(true);
+        try {
+            const schedulesData = await Promise.all(
+                blocks.map(async (block) => {
+                    const { offerings, validation } = await fetchBlockSchedule(block.block_id);
+                    return {
+                        block_id: block.block_id,
+                        program_id: block.program_id,
+                        offerings: offerings,
+                        rating: block.schedule_rating,
+                        validation: validation
+                    };
+                })
+            );
+            setSchedules(schedulesData);
+        } catch (error) {
+            console.error('Error fetching schedules:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchBlocks();
+        fetchOfferings();
+    }, []);
+
+    useEffect(() => {
+        if (blocks.length > 0) {
+            fetchAllSchedules();
+        }
+    }, [blocks]);
+
+    const handleViewSchedule = (blockId) => {
+        setSelectedBlock(blockId);
+        setShowViewModal(true);
+    };
+
+    const handleEditSchedule = (blockId) => {
+        setSelectedBlock(blockId);
+        setShowEditModal(true);
+    };
+
+    const handleGenerateSchedule = async (blockId) => {
+        try {
+            const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                await fetchAllSchedules();
+            } else {
+                const error = await response.json();
+                alert(error.error || 'Error generating schedule');
+            }
+        } catch (error) {
+            console.error('Error generating schedule:', error);
+            alert('Error generating schedule');
+        }
+    };
+
+    const handleDeleteSchedule = async (blockId) => {
+        if (window.confirm('Are you sure you want to delete this schedule?')) {
+            try {
+                const response = await fetch(`${API_URL}/schedules/block/${blockId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    await fetchAllSchedules();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Error deleting schedule');
+                }
+            } catch (error) {
+                console.error('Error deleting schedule:', error);
+                alert('Error deleting schedule');
+            }
+        }
+    };
+
+    const handleValidateSchedule = async (blockId) => {
+        try {
+            const response = await fetch(`${API_URL}/schedules/block/${blockId}/validate`);
+            if (response.ok) {
+                const data = await response.json();
+                if (!data.is_valid) {
+                    const missingCourses = data.missing_requirements
+                        .map(r => r.course_id)
+                        .join(', ');
+                    alert(`Schedule validation failed.\nMissing courses: ${missingCourses}`);
+                } else {
+                    alert('Schedule is valid!');
+                }
+                return data;
+            }
+        } catch (error) {
+            console.error('Error validating schedule:', error);
+            alert('Error validating schedule');
+        }
+    };
+
+    return (
+        <Container className="py-4">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h1>Block Schedules</h1>
+                <Button variant="primary" onClick={() => setShowGenerateModal(true)}>
+                    Generate New Schedule
+                </Button>
+            </div>
+
+            <ScheduleTable 
+                schedules={schedules}
+                onView={handleViewSchedule}
+                onEdit={handleEditSchedule}
+                onValidate={handleValidateSchedule}
+                onDelete={handleDeleteSchedule}
+                onGenerate={handleGenerateSchedule}
+                isLoading={isLoading}
+            />
+
+            <ScheduleViewModal
+                show={showViewModal}
+                blockId={selectedBlock}
+                onHide={() => setShowViewModal(false)}
+            />
+
+            <ScheduleEditModal
+                show={showEditModal}
+                blockId={selectedBlock}
+                offerings={offerings}
+                onHide={() => setShowEditModal(false)}
+                onSave={fetchAllSchedules}
+            />
+
+            <ScheduleGenerateModal
+                show={showGenerateModal}
+                blocks={blocks}
+                offerings={offerings}
+                onHide={() => setShowGenerateModal(false)}
+                onGenerate={fetchAllSchedules}
+            />
+        </Container>
+    );
+};
+
+export default SchedulePage;
+
+
+
+=== frontend/app/src/components/schedule/ScheduleTable.jsx ===
+import React from 'react';
+import { Table, Button, Badge, Spinner } from 'react-bootstrap';
+
+const ScheduleTable = ({   schedules = [], 
+    onView, 
+    onEdit, 
+    onValidate, 
+    onDelete, 
+    isLoading,
+onGenerate }) => {
+  if (isLoading) {
+    return (
+      <div className="text-center p-4">
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading schedules...</span>
+        </Spinner>
+      </div>
+    );
+  }
+
+  if (!schedules.length) {
+    return <div className="text-center p-4">No schedules available</div>;
+  }
+
+  const getRatingBadge = (rating) => {
+    if (!rating) return <Badge bg="secondary">Not Rated</Badge>;
+    
+    let variant;
+    if (rating >= 80) variant = 'success';
+    else if (rating >= 60) variant = 'warning';
+    else variant = 'danger';
+
+    return (
+      <Badge bg={variant}>
+        {rating.toFixed(1)}%
+      </Badge>
+    );
+  };
+
+  const getCoursesCount = (offerings) => {
+    if (!offerings) return 0;
+    return offerings.length;
+  };
+
+  const getDaysString = (offerings) => {
+    if (!offerings || !offerings.length) return 'No days scheduled';
+    
+    const days = [...new Set(offerings.map(o => o.day_of_week))].sort();
+    const dayNames = days.map(day => {
+      const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      return daysOfWeek[day - 1];
+    });
+    
+    return dayNames.join(', ');
+  };
+
+  return (
+    <Table striped bordered hover responsive>
+      <thead>
+        <tr>
+          <th>Block ID</th>
+          <th>Program</th>
+          <th>Courses</th>
+          <th>Days</th>
+          <th>Rating</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {schedules.map((schedule) => (
+          <tr key={schedule.block_id}>
+            <td>Block {schedule.block_id}</td>
+            <td>{schedule.program_id}</td>
+            <td>
+              <Badge bg="info">
+                {getCoursesCount(schedule.offerings)} courses
+              </Badge>
+            </td>
+            <td>{getDaysString(schedule.offerings)}</td>
+            <td>{getRatingBadge(schedule.rating)}</td>
+            <td>
+              <div className="d-flex gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => onView(schedule.block_id)}
+                >
+                  View
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onEdit(schedule.block_id)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="success"
+                  size="sm"
+                  onClick={() => onGenerate(schedule.block_id)}
+                >
+                  Generate
+                </Button>
+                <Button
+                  variant="info"
+                  size="sm"
+                  onClick={() => onValidate(schedule.block_id)}
+                >
+                  Validate
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => onDelete(schedule.block_id)}
+                >
+                  Clear
+                </Button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+};
+
+export default ScheduleTable;
+
+
+
+=== frontend/app/src/components/schedule/ScheduleViewModal.jsx ===
+import React, { useState, useEffect } from 'react';
+import { Modal, Table, Badge, Spinner } from 'react-bootstrap';
+
+const ScheduleViewModal = ({ show, blockId, onHide }) => {
+  const [schedule, setSchedule] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (show && blockId) {
+      fetchSchedule();
+    }
+  }, [show, blockId]);
+
+  const fetchSchedule = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${blockId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSchedule(data);
+      }
+    } catch (error) {
+      console.error('Error fetching schedule:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  const renderTimeSlot = (offering) => {
+    return (
+      <div className="p-2 border rounded mb-2" key={offering.offering_id}>
+        <Badge bg="primary" className="me-2">{offering.section_type}</Badge>
+        <strong>{offering.course_id}</strong> - {offering.section_code}
+        <br />
+        <small>{offering.start_time} - {offering.end_time}</small>
+      </div>
+    );
+  };
+
+  const renderScheduleTable = () => {
+    const days = [1, 2, 3, 4, 5]; // Monday to Friday
+    const scheduleByDay = days.map(day => ({
+      day,
+      offerings: schedule.filter(offering => offering.day_of_week === day)
+    }));
+
+    return (
+      <Table bordered responsive>
+        <thead>
+          <tr>
+            {days.map(day => (
+              <th key={day} className="text-center">{getDayName(day)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            {scheduleByDay.map(({ day, offerings }) => (
+              <td key={day} className="align-top" style={{ minWidth: '200px' }}>
+                {offerings.sort((a, b) => a.start_time.localeCompare(b.start_time))
+                  .map(offering => renderTimeSlot(offering))}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </Table>
+    );
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="xl">
+      <Modal.Header closeButton>
+        <Modal.Title>Block Schedule View</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {isLoading ? (
+          <div className="text-center p-4">
+            <Spinner animation="border" role="status">
+              <span className="visually-hidden">Loading schedule...</span>
+            </Spinner>
+          </div>
+        ) : schedule.length === 0 ? (
+          <div className="text-center p-4">No courses scheduled for this block</div>
+        ) : (
+          renderScheduleTable()
+        )}
+      </Modal.Body>
+    </Modal>
+  );
+};
+
+export default ScheduleViewModal;
+
+
+
+=== frontend/app/src/components/shared/Navigation.jsx ===
+import React from 'react';
+import { Navbar, Nav, Container } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
+
+const Navigation = () => {
+  return (
+    <Navbar bg="dark" variant="dark" expand="lg" className="mb-4">
+      <Container>
+        <Navbar.Brand as={Link} to="/">Course Management System</Navbar.Brand>
+        <Navbar.Toggle aria-controls="basic-navbar-nav" />
+        <Navbar.Collapse id="basic-navbar-nav">
+          <Nav className="me-auto">
+            <Nav.Link as={Link} to="/offerings">Course Offerings</Nav.Link>
+            <Nav.Link as={Link} to="/courses">Courses</Nav.Link>
+
+            <Nav.Link as={Link} to="/blocks">Blocks</Nav.Link>
+            <Nav.Link as={Link} to="/programs">Programs</Nav.Link>
+            <Nav.Link as={Link} to="/conflicts">Conflict Checker</Nav.Link>
+            <Nav.Link as={Link} to="/schedule">Schedules</Nav.Link>
+          </Nav>
+        </Navbar.Collapse>
+      </Container>
+    </Navbar>
+  );
+};
+
+export default Navigation;
+
+
+

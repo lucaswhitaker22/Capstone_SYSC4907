@@ -1,34 +1,7 @@
 #!/bin/bash
 
-output_file="combined_html.txt"
+# Create backend.txt - recursively search all subdirectories
+find backend/app -type f -name "*.py" ! -path "*/__pycache__/*" -exec echo "=== {} ===" \; -exec cat {} \; -exec echo -e "\n\n" \; > backend.txt
 
-# Remove the output file if it already exists
-rm -f "$output_file"
-
-# Find all .html files and process them
-find . -type f -name "*.html" | while read -r file; do
-    echo "Processing: $file"
-    echo "--- File: $file ---" >> "$output_file"
-    cat "$file" >> "$output_file"
-    echo -e "\n\n" >> "$output_file"
-done
-
-echo "All .html files have been concatenated into $output_file"
-
-
-#!/bin/bash
-
-output_file="combined_py.txt"
-
-# Remove the output file if it already exists
-rm -f "$output_file"
-
-# Find all .html files and process them
-find . -type f -name "*.py" | while read -r file; do
-    echo "Processing: $file"
-    echo "--- File: $file ---" >> "$output_file"
-    cat "$file" >> "$output_file"
-    echo -e "\n\n" >> "$output_file"
-done
-
-echo "All .py files have been concatenated into $output_file"
+# Create frontend.txt - recursively search all subdirectories
+find frontend/app/src -type f -name "*.jsx" -exec echo "=== {} ===" \; -exec cat {} \; -exec echo -e "\n\n" \; > frontend.txt
