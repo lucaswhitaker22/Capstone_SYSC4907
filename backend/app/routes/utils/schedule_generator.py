@@ -14,22 +14,25 @@ def generate_block_schedule(block_id):
                 'error': 'Cannot modify locked block'
             }), HTTPStatus.FORBIDDEN
 
-        # Get program requirements
+        # Get term-specific program requirements
         program_requirements = ProgramRequirement.query.filter_by(
-            program_id=block.program_id
+            program_id=block.program_id,
+            term=block.term
         ).order_by(ProgramRequirement.requirement_id).all()
 
         if not program_requirements:
             return jsonify({
-                'error': 'No requirements found for program'
+                'error': f'No requirements found for program in {block.term} term'
             }), HTTPStatus.NOT_FOUND
 
         # Get required course IDs
         required_courses = [req.course_id for req in program_requirements]
 
-        # Get all existing schedules to check for duplicates
-        existing_schedules = BlockSchedule.query.filter(
-            BlockSchedule.block_id != block_id
+        # Get all existing schedules to check for duplicates (within same term/year)
+        existing_schedules = BlockSchedule.query.join(Block).filter(
+            BlockSchedule.block_id != block_id,
+            Block.term == block.term,
+            Block.academic_year == block.academic_year
         ).all()
 
         # Group existing schedules by block for comparison
@@ -39,9 +42,11 @@ def generate_block_schedule(block_id):
                 existing_block_schedules[schedule.block_id] = []
             existing_block_schedules[schedule.block_id].append(schedule.offering_id)
 
-        # Get all available offerings for required courses
+        # Get all available offerings for required courses in the same term/year
         available_offerings = CourseOffering.query.filter(
-            CourseOffering.course_id.in_(required_courses)
+            CourseOffering.course_id.in_(required_courses),
+            CourseOffering.term == block.term,
+            CourseOffering.academic_year == block.academic_year
         ).all()
 
         # Group offerings by course
@@ -55,7 +60,6 @@ def generate_block_schedule(block_id):
 
         def try_schedule_combination(current_schedule, remaining_courses, course_offerings):
             if not remaining_courses:
-                # Check if this schedule is identical to any existing block schedule
                 current_offering_ids = set(o.offering_id for o in current_schedule)
                 for block_schedule in existing_block_schedules.values():
                     if set(block_schedule) == current_offering_ids:
@@ -80,7 +84,6 @@ def generate_block_schedule(block_id):
                 all_lectures_fit = True
                 temp_schedule = current_schedule.copy()
 
-                # Add all lectures from this section group
                 for lecture in lectures:
                     if any(has_time_conflict(lecture, selected) for selected in temp_schedule):
                         all_lectures_fit = False
@@ -89,7 +92,6 @@ def generate_block_schedule(block_id):
 
                 if all_lectures_fit:
                     if course_offerings[current_course]['LAB']:
-                        # Try each lab with this lecture group
                         for lab in course_offerings[current_course]['LAB']:
                             if not any(has_time_conflict(lab, selected) for selected in temp_schedule):
                                 try_schedule_combination(
@@ -98,7 +100,6 @@ def generate_block_schedule(block_id):
                                     course_offerings
                                 )
                     else:
-                        # No lab required, continue with next course
                         try_schedule_combination(
                             temp_schedule,
                             remaining_courses[1:],
@@ -110,10 +111,10 @@ def generate_block_schedule(block_id):
 
         if not valid_schedules:
             return jsonify({
-                'error': 'No valid schedule found that satisfies all requirements'
+                'error': f'No valid schedule found for {block.term} term that satisfies all requirements'
             }), HTTPStatus.BAD_REQUEST
 
-        # Select the first valid schedule (you could implement a selection strategy here)
+        # Select the first valid schedule
         selected_schedule = valid_schedules[0]
 
         # Clear existing schedule
@@ -130,16 +131,13 @@ def generate_block_schedule(block_id):
         # Calculate and set the rating
         rating_response = rate_block_schedule(block_id)
         if isinstance(rating_response, tuple):
-            rating = rating_response[0].get_json()  # Extract the rating value from jsonify response
+            rating = rating_response[0].get_json()
         else:
             rating = rating_response
 
-        # Update block with new rating
         block.schedule_rating = rating
         db.session.commit()
 
-
-        # Format response
         formatted_offerings = [{
             'offering_id': o.offering_id,
             'course_id': o.course_id,
@@ -151,10 +149,15 @@ def generate_block_schedule(block_id):
             'section_code': o.section_code,
             'day_of_week': o.day_of_week,
             'start_time': o.start_time.strftime('%H:%M'),
-            'end_time': o.end_time.strftime('%H:%M')
+            'end_time': o.end_time.strftime('%H:%M'),
+            'term': block.term,
+            'academic_year': block.academic_year
         } for o in selected_schedule]
 
         return jsonify({
+            'block_id': block_id,
+            'term': block.term,
+            'academic_year': block.academic_year,
             'schedule': formatted_offerings,
             'scheduled_courses': required_courses,
             'total_valid_schedules': len(valid_schedules),
@@ -168,13 +171,24 @@ def generate_block_schedule(block_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
+
 def rate_block_schedule(block_id):
     try:
         block = Block.query.get_or_404(block_id)
-        block_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        
+        # Get block schedules for specific term/year
+        block_schedules = BlockSchedule.query.join(CourseOffering).filter(
+            BlockSchedule.block_id == block_id,
+            CourseOffering.term == block.term,
+            CourseOffering.academic_year == block.academic_year
+        ).all()
         
         if not block_schedules:
-            return jsonify(0), HTTPStatus.OK
+            return jsonify({
+                'rating': 0,
+                'term': block.term,
+                'academic_year': block.academic_year
+            }), HTTPStatus.OK
             
         offerings = [schedule.course_offering for schedule in block_schedules]
         total_points = 0
@@ -227,9 +241,24 @@ def rate_block_schedule(block_id):
             gap_score = 30 * (1 - (gap_penalties / len(offerings)))
             total_points += gap_score
         
-        return jsonify(round(total_points, 1)), HTTPStatus.OK
+        return jsonify({
+            'block_id': block_id,
+            'term': block.term,
+            'academic_year': block.academic_year,
+            'rating': round(total_points, 1),
+            'time_distribution': {
+                'morning': time_slots['morning'],
+                'afternoon': time_slots['afternoon'],
+                'evening': time_slots['evening']
+            },
+            'days_used': days_used,
+            'gap_penalties': gap_penalties
+        }), HTTPStatus.OK
         
     except Exception as e:
-        current_app.logger.error(f"Error rating schedule: {str(e)}")
-        return jsonify(0), HTTPStatus.OK
-
+        current_app.logger.error(f"Error rating schedule for block {block_id}: {str(e)}")
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e),
+            'block_id': block_id
+        }), HTTPStatus.INTERNAL_SERVER_ERROR

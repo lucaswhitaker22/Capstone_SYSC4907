@@ -1,0 +1,642 @@
+import React, { useEffect, useState } from 'react';
+import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
+
+const OfferingModal = ({ show, offering, onHide, onSave }) => {
+  const initialFormData = {
+    course_id: '',
+    section_type: 'LECTURE',
+    section_code: '',
+    day_of_week: '1',
+    start_time: '',
+    end_time: '',
+    capacity: '',
+    term: '',
+    academic_year: '',
+    status: 'OPEN'
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
+  const [validated, setValidated] = useState(false);
+  const [courses, setCourses] = useState([]);
+
+  // Fetch courses for dropdown
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const response = await fetch('http://127.0.0.1:5000/api/courses/');
+        const data = await response.json();
+        setCourses(data);
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+      }
+    };
+    fetchCourses();
+  }, []);
+
+  useEffect(() => {
+    if (offering) {
+      setFormData({
+        course_id: offering.course_id,
+        section_type: offering.section_type,
+        section_code: offering.section_code,
+        day_of_week: offering.day_of_week.toString(),
+        start_time: offering.start_time,
+        end_time: offering.end_time,
+        capacity: offering.capacity,
+        term: offering.term,
+        academic_year: offering.academic_year,
+        status: offering.status
+      });
+    } else {
+      setFormData(initialFormData);
+    }
+    setValidated(false);
+  }, [offering, show]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    if (form.checkValidity()) {
+      onSave({
+        ...formData,
+        day_of_week: parseInt(formData.day_of_week),
+        capacity: parseInt(formData.capacity)
+      });
+    }
+    setValidated(true);
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>
+          {offering ? 'Edit Course Offering' : 'Add Course Offering'}
+        </Modal.Title>
+      </Modal.Header>
+      <Form noValidate validated={validated} onSubmit={handleSubmit}>
+        <Modal.Body>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Course</Form.Label>
+                <Form.Select
+                  name="course_id"
+                  value={formData.course_id}
+                  onChange={handleChange}
+                  required
+                  disabled={offering}
+                >
+                  <option value="">Select a course...</option>
+                  {courses.map(course => (
+                    <option key={course.course_id} value={course.course_id}>
+                      {course.course_id} - {course.course_name}
+                    </option>
+                  ))}
+                </Form.Select>
+                <Form.Control.Feedback type="invalid">
+                  Please select a course.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Section Type</Form.Label>
+                <Form.Select
+                  name="section_type"
+                  value={formData.section_type}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="LECTURE">Lecture</option>
+                  <option value="LAB">Lab</option>
+                  <option value="TUTORIAL">Tutorial</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+          </Row>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Section Code</Form.Label>
+                <Form.Select
+                  name="section_code"
+                  value={formData.section_code}
+                  onChange={handleChange}
+                  required
+                  disabled={!formData.course_id}
+                >
+                  <option value="">Select a section code...</option>
+                  {['A', 'B', 'C', 'D', 'E', 'F'].map(code => (
+                    <option key={code} value={code}>
+                      {code}
+                    </option>
+                  ))}
+                </Form.Select>
+                <Form.Control.Feedback type="invalid">
+                  Please select a section code.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Day</Form.Label>
+                <Form.Select
+                  name="day_of_week"
+                  value={formData.day_of_week}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="1">Monday</option>
+                  <option value="2">Tuesday</option>
+                  <option value="3">Wednesday</option>
+                  <option value="4">Thursday</option>
+                  <option value="5">Friday</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Start Time (HH:MM)</Form.Label>
+                <Form.Control
+                  type="time"
+                  name="start_time"
+                  value={formData.start_time}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid start time.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>End Time (HH:MM)</Form.Label>
+                <Form.Control
+                  type="time"
+                  name="end_time"
+                  value={formData.end_time}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid end time.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <Row>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Capacity</Form.Label>
+                <Form.Control
+                  type="number"
+                  name="capacity"
+                  value={formData.capacity}
+                  onChange={handleChange}
+                  required
+                  min="1"
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid capacity.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Term</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="term"
+                  value={formData.term}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a term.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="academic_year"
+                  value={formData.academic_year}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide an academic year.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          {offering && (
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Status</Form.Label>
+                  <Form.Select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="OPEN">Open</option>
+                    <option value="FULL">Full</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onHide}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit">
+            Save
+          </Button>
+        </Modal.Footer>
+      </Form>
+    </Modal>
+  );
+};
+
+export default OfferingModal;
+import React, { useState, useEffect } from 'react';
+import { Container, Button } from 'react-bootstrap';
+import OfferingsTable from './OfferingsTable';
+import OfferingModal from './OfferingModal';
+import OfferingUploadModal from './OfferingUploadModal';
+import Papa from 'papaparse';
+
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const OfferingsPage = () => {
+  const [offerings, setOfferings] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedOffering, setSelectedOffering] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const fetchOfferings = async () => {
+    try {
+      const response = await fetch(`${API_URL}/offerings/`);
+      const data = await response.json();
+      setOfferings(data);
+    } catch (error) {
+      console.error('Error fetching offerings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOfferings();
+  }, []);
+
+  const handleAddNew = () => {
+    setSelectedOffering(null);
+    setShowModal(true);
+  };
+  const handleExportCSV = () => {
+    const csvData = offerings.map(offering => ({
+        course_id: offering.course_id,
+        section_type: offering.section_type,
+        section_code: offering.section_code,
+        day_of_week: offering.day_of_week,
+        start_time: offering.start_time,
+        end_time: offering.end_time,
+        capacity: offering.capacity,
+        term: offering.term,
+        academic_year: offering.academic_year,
+        status: offering.status
+    }));
+    
+    const csv = Papa.unparse(csvData, {
+        header: true,
+        delimiter: ","
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `course-offerings-${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+};
+
+  const handleEdit = (offering) => {
+    setSelectedOffering(offering);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (offeringId) => {
+    if (window.confirm('Are you sure you want to delete this offering?')) {
+      try {
+        const response = await fetch(`${API_URL}/offerings/${offeringId}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          await fetchOfferings();
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error deleting offering');
+        }
+      } catch (error) {
+        console.error('Error deleting offering:', error);
+      }
+    }
+  };
+
+  const handleSave = async (formData) => {
+    try {
+      const method = selectedOffering ? 'PUT' : 'POST';
+      const url = selectedOffering 
+        ? `${API_URL}/offerings/${selectedOffering.offering_id}`
+        : `${API_URL}/offerings`;
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        setShowModal(false);
+        await fetchOfferings();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Error saving offering');
+      }
+    } catch (error) {
+      console.error('Error saving offering:', error);
+    }
+  };
+
+  return (
+    <Container className="py-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1>Course Offerings</h1>
+
+        <Button 
+          variant="outline-primary" 
+          className="me-2" 
+          onClick={() => setShowUploadModal(true)}
+        >
+          Upload CSV
+        </Button>
+        <Button variant="success" className="me-2" onClick={handleExportCSV}>
+            Export CSV
+        </Button>
+        <Button variant="primary" onClick={handleAddNew}>
+          Add New Offering
+        </Button>
+
+      </div>
+
+      <OfferingsTable 
+        offerings={offerings}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        isLoading={isLoading}
+      />
+
+      <OfferingModal
+        show={showModal}
+        offering={selectedOffering}
+        onHide={() => setShowModal(false)}
+        onSave={handleSave}
+      />
+          <OfferingUploadModal
+      show={showUploadModal}
+      onHide={() => setShowUploadModal(false)}
+      onSave={fetchOfferings}
+    />
+    </Container>
+  );
+};
+
+export default OfferingsPage;
+
+import React from 'react';
+import { Table, Button } from 'react-bootstrap';
+
+const getDayName = (day) => {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days[day - 1];
+};
+
+const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
+  if (!offerings) {
+    return <div>No offerings available</div>;
+  }
+
+  return (
+    <Table striped bordered hover responsive>
+      <thead>
+        <tr>
+          <th>Course ID</th>
+          <th>Section Type</th>
+          <th>Section Code</th>
+          <th>Day</th>
+          <th>Time</th>
+          <th>Capacity</th>
+          <th>Enrollment</th>
+          <th>Term</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {offerings.map((offering) => (
+          <tr key={offering.offering_id}>
+            <td>{offering.course_id}</td>
+            <td>{offering.section_type}</td>
+            <td>{offering.section_code}</td>
+            <td>{getDayName(offering.day_of_week)}</td>
+            <td>{`${offering.start_time}-${offering.end_time}`}</td>
+            <td>{offering.capacity}</td>
+            <td>{offering.current_enrollment}</td>
+            <td>{`${offering.term} ${offering.academic_year}`}</td>
+            <td>{offering.status}</td>
+            <td>
+              <Button
+                variant="primary"
+                size="sm"
+                className="me-2"
+                onClick={() => onEdit(offering)}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => onDelete(offering.offering_id)}
+              >
+                Delete
+              </Button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+};
+
+export default OfferingsTable;
+import React, { useState } from 'react';
+import { Modal, Button, Table, Alert } from 'react-bootstrap';
+import Papa from 'papaparse';
+
+const OfferingUploadModal = ({ show, onHide, onSave }) => {
+  const [parsedData, setParsedData] = useState([]);
+  const [error, setError] = useState(null);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          if (results.errors.length > 0) {
+            setError('Error parsing CSV file');
+            return;
+          }
+          // Convert string values to appropriate types
+          const formattedData = results.data.map(row => ({
+            ...row,
+            offering_id: parseInt(row.offering_id),
+            day_of_week: parseInt(row.day_of_week),
+            capacity: parseInt(row.capacity),
+            current_enrollment: parseInt(row.current_enrollment)
+          }));
+          setParsedData(formattedData);
+          setError(null);
+        }
+      });
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/offerings/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ offerings: parsedData })
+      });
+
+      if (response.ok) {
+        onSave();
+        onHide();
+      } else {
+        const error = await response.json();
+        setError(error.message || 'Error uploading offerings');
+      }
+    } catch (error) {
+      setError('Error uploading offerings');
+    }
+  };
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day];
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="xl">
+      <Modal.Header closeButton>
+        <Modal.Title>Upload Course Offerings CSV</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="mb-3">
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleFileUpload}
+            className="form-control"
+          />
+        </div>
+
+        {error && (
+          <Alert variant="danger" className="mb-3">
+            {error}
+          </Alert>
+        )}
+
+        {parsedData.length > 0 && (
+          <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            <Table striped bordered hover>
+              <thead>
+                <tr>
+                  <th>Course ID</th>
+                  <th>Section Type</th>
+                  <th>Section Code</th>
+                  <th>Day</th>
+                  <th>Time</th>
+                  <th>Capacity</th>
+                  <th>Term</th>
+                  <th>Academic Year</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {parsedData.map((offering, index) => (
+                  <tr key={index}>
+                    <td>{offering.course_id}</td>
+                    <td>{offering.section_type}</td>
+                    <td>{offering.section_code}</td>
+                    <td>{getDayName(offering.day_of_week)}</td>
+                    <td>{`${offering.start_time} - ${offering.end_time}`}</td>
+                    <td>{offering.capacity}</td>
+                    <td>{offering.term}</td>
+                    <td>{offering.academic_year}</td>
+                    <td>{offering.status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          disabled={parsedData.length === 0}
+        >
+          Save Offerings
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default OfferingUploadModal;

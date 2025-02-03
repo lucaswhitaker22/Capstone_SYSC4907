@@ -9,6 +9,7 @@ import logging
 
 bp = Blueprint('schedules', __name__, url_prefix='/api/schedules')
 
+
 @bp.route('/block/<block_id>', methods=['GET'], strict_slashes=False)
 def get_block_schedule(block_id):
     try:
@@ -30,7 +31,9 @@ def get_block_schedule(block_id):
                 'section_code': offering.section_code,
                 'day_of_week': offering.day_of_week,
                 'start_time': offering.start_time.strftime('%H:%M'),
-                'end_time': offering.end_time.strftime('%H:%M')
+                'end_time': offering.end_time.strftime('%H:%M'),
+                'term': block.term,
+                'academic_year': block.academic_year
             })
         return jsonify(offerings), HTTPStatus.OK
     except Exception as e:
@@ -76,8 +79,6 @@ def add_offering_to_block(block_id):
                 'message': 'offering_id is required'
             }), HTTPStatus.BAD_REQUEST
 
-        current_app.logger.info(f"Adding offering to block: {block_id}, offering_id: {data['offering_id']}")
-        
         # Check if block exists
         block = Block.query.get(block_id)
         if not block:
@@ -86,19 +87,26 @@ def add_offering_to_block(block_id):
                 'message': f'Block {block_id} not found'
             }), HTTPStatus.NOT_FOUND
 
-        # Check if offering exists
+        # Check if offering exists and matches block term
         new_offering = CourseOffering.query.get(data['offering_id'])
         if not new_offering:
             return jsonify({
                 'error': 'Not Found',
                 'message': f'Offering {data["offering_id"]} not found'
             }), HTTPStatus.NOT_FOUND
+            
+        # Validate term and year match
+        if new_offering.term != block.term or new_offering.academic_year != block.academic_year:
+            return jsonify({
+                'error': 'Term mismatch',
+                'message': f'Offering term ({new_offering.term}) does not match block term ({block.term})'
+            }), HTTPStatus.CONFLICT
         
         # Get existing offerings in block
         existing_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
         existing_offerings = [schedule.course_offering for schedule in existing_schedules]
         
-        # Check for conflicts using the conflicts module
+        # Check for conflicts
         conflicts = []
         for existing_offering in existing_offerings:
             if has_time_conflict(existing_offering, new_offering):
@@ -109,7 +117,8 @@ def add_offering_to_block(block_id):
                     'new_offering_id': new_offering.offering_id,
                     'new_course_id': new_offering.course_id,
                     'new_time': f"{new_offering.start_time.strftime('%H:%M')}-{new_offering.end_time.strftime('%H:%M')}",
-                    'day_of_week': new_offering.day_of_week
+                    'day_of_week': new_offering.day_of_week,
+                    'term': block.term
                 })
         
         if conflicts:
@@ -131,7 +140,9 @@ def add_offering_to_block(block_id):
             'section_code': new_offering.section_code,
             'day_of_week': new_offering.day_of_week,
             'start_time': new_offering.start_time.strftime('%H:%M'),
-            'end_time': new_offering.end_time.strftime('%H:%M')
+            'end_time': new_offering.end_time.strftime('%H:%M'),
+            'term': block.term,
+            'academic_year': block.academic_year
         }), HTTPStatus.CREATED
 
     except Exception as e:
@@ -144,6 +155,14 @@ def add_offering_to_block(block_id):
     
 @bp.route('/block/<block_id>/generate', methods=['POST'])
 def generate(block_id):
+    block = Block.query.get_or_404(block_id)
+    
+    # Get term-specific offerings
+    available_offerings = CourseOffering.query.filter_by(
+        term=block.term,
+        academic_year=block.academic_year
+    ).all()
+    
     return generate_block_schedule(block_id)
 
 
@@ -173,36 +192,58 @@ def remove_offering_from_block(block_id, offering_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/block/<block_id>/validate', methods=['GET'], strict_slashes=False)
+@bp.route('/block/<block_id>/validate', methods=['GET'])
 def validate(block_id):
+    block = Block.query.get_or_404(block_id)
+    requirements = ProgramRequirement.query.filter_by(
+        program_id=block.program_id,
+        term=block.term
+    ).all()
+    
     return validate_block_schedule(block_id)
+
 
 @bp.route('/block/<block_id>/rate', methods=['GET'])
 def rate(block_id):
+    block = Block.query.get_or_404(block_id)
+    requirements = ProgramRequirement.query.filter_by(
+        program_id=block.program_id,
+        term=block.term
+    ).all()
     return rate_block_schedule(block_id)
 
 @bp.route('/program/<program_id>/schedules', methods=['GET'])
 def get_all_possible_schedules(program_id):
     try:
+        # Get and validate term parameter
+        term = request.args.get('term')
+        academic_year = request.args.get('academic_year', '2025-2026')
+        
+        if not term or term not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid or missing term'}), HTTPStatus.BAD_REQUEST
+            
         # Validate program exists
         program = Program.query.get_or_404(program_id)
         
-        # Get program requirements
+        # Get program requirements for specific term
         program_requirements = ProgramRequirement.query.filter_by(
-            program_id=program_id
+            program_id=program_id,
+            term=term
         ).order_by(ProgramRequirement.requirement_id).all()
 
         if not program_requirements:
             return jsonify({
-                'error': 'No requirements found for program'
+                'error': f'No requirements found for program in {term} term'
             }), HTTPStatus.NOT_FOUND
 
         # Get required course IDs
         required_courses = [req.course_id for req in program_requirements]
 
-        # Get all available offerings for required courses
+        # Get all available offerings for required courses in specified term
         available_offerings = CourseOffering.query.filter(
-            CourseOffering.course_id.in_(required_courses)
+            CourseOffering.course_id.in_(required_courses),
+            CourseOffering.term == term,
+            CourseOffering.academic_year == academic_year
         ).all()
 
         # Group offerings by course
@@ -276,12 +317,16 @@ def get_all_possible_schedules(program_id):
                 'section_code': o.section_code,
                 'day_of_week': o.day_of_week,
                 'start_time': o.start_time.strftime('%H:%M'),
-                'end_time': o.end_time.strftime('%H:%M')
+                'end_time': o.end_time.strftime('%H:%M'),
+                'term': term,
+                'academic_year': academic_year
             } for o in schedule]
             formatted_schedules.append(formatted_offerings)
 
         return jsonify({
             'program_id': program_id,
+            'term': term,
+            'academic_year': academic_year,
             'total_schedules': len(formatted_schedules),
             'schedules': formatted_schedules
         }), HTTPStatus.OK

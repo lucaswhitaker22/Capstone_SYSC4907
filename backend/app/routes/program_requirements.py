@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from app.models import ProgramRequirement, Program, Course, BlockSchedule
+from app.models import ProgramRequirement, Program, Course, BlockSchedule, Block
 from app import db
 from http import HTTPStatus
 
@@ -10,11 +10,20 @@ def get_program_requirements(program_id):
         if not Program.query.get(program_id):
             return jsonify({'error': 'Program not found'}), HTTPStatus.NOT_FOUND
             
-        requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
+        term = request.args.get('term')  # Add term filter support
+        query = ProgramRequirement.query.filter_by(program_id=program_id)
+        
+        if term:
+            if term not in ['FALL', 'WINTER']:
+                return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
+            query = query.filter_by(term=term)
+            
+        requirements = query.all()
         return jsonify([{
             'requirement_id': r.requirement_id,
             'program_id': r.program_id,
-            'course_id': r.course_id
+            'course_id': r.course_id,
+            'term': r.term
         } for r in requirements]), HTTPStatus.OK
     except Exception as e:
         return jsonify({
@@ -30,9 +39,13 @@ def create_requirement():
         if not data:
             return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
             
-        required_fields = ['program_id', 'course_id']
+        required_fields = ['program_id', 'course_id', 'term']
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
+
+        # Validate term
+        if data['term'] not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
 
         # Validate program exists
         if not Program.query.get(data['program_id']):
@@ -42,14 +55,15 @@ def create_requirement():
         if not Course.query.get(data['course_id']):
             return jsonify({'error': 'Course not found'}), HTTPStatus.NOT_FOUND
 
-        # Check for duplicate requirement
+        # Check for duplicate requirement with term
         existing = ProgramRequirement.query.filter_by(
             program_id=data['program_id'],
-            course_id=data['course_id']
+            course_id=data['course_id'],
+            term=data['term']
         ).first()
         
         if existing:
-            return jsonify({'error': 'Requirement already exists'}), HTTPStatus.CONFLICT
+            return jsonify({'error': 'Requirement already exists for this term'}), HTTPStatus.CONFLICT
 
         requirement = ProgramRequirement(**data)
         db.session.add(requirement)
@@ -58,7 +72,8 @@ def create_requirement():
         return jsonify({
             'requirement_id': requirement.requirement_id,
             'program_id': requirement.program_id,
-            'course_id': requirement.course_id
+            'course_id': requirement.course_id,
+            'term': requirement.term
         }), HTTPStatus.CREATED
 
     except Exception as e:
@@ -67,6 +82,7 @@ def create_requirement():
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @bp.route('/<int:requirement_id>', methods=['DELETE'])
 def delete_requirement(requirement_id):
@@ -118,12 +134,22 @@ def validate_program_schedule(program_id):
         program = Program.query.get_or_404(program_id)
         data = request.get_json()
         schedule_ids = data.get('schedule_ids', [])
+        term = data.get('term')
         
         if not schedule_ids:
             return jsonify({'error': 'No schedules provided'}), HTTPStatus.BAD_REQUEST
             
-        requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
-        schedules = BlockSchedule.query.filter(BlockSchedule.schedule_id.in_(schedule_ids)).all()
+        if not term or term not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid or missing term'}), HTTPStatus.BAD_REQUEST
+            
+        requirements = ProgramRequirement.query.filter_by(
+            program_id=program_id,
+            term=term
+        ).all()
+        
+        schedules = BlockSchedule.query.filter(
+            BlockSchedule.schedule_id.in_(schedule_ids)
+        ).join(Block).filter_by(term=term).all()
         
         missing_requirements = []
         for req in requirements:
@@ -134,11 +160,13 @@ def validate_program_schedule(program_id):
                     break
             if not requirement_met:
                 missing_requirements.append({
-                    'course_id': req.course_id
+                    'course_id': req.course_id,
+                    'term': req.term
                 })
         
         return jsonify({
             'program_id': program_id,
+            'term': term,
             'is_valid': len(missing_requirements) == 0,
             'missing_requirements': missing_requirements
         }), HTTPStatus.OK

@@ -1,6 +1,6 @@
 # app/routes/courses.py
 from flask import Blueprint, jsonify, request
-from app.models import Course
+from app.models import Course,CourseOffering
 from app import db
 from http import HTTPStatus
 
@@ -8,12 +8,32 @@ bp = Blueprint('courses', __name__, url_prefix='/api/courses')
 
 @bp.route('/', methods=['GET'], strict_slashes=False)
 def get_courses():
+    # Add term filter for offerings
+    term = request.args.get('term')
+    academic_year = request.args.get('academic_year')
+    
     courses = Course.query.all()
-    return jsonify([{
-        'course_id': c.course_id,
-        'course_name': c.course_name,
-        'credits': float(c.credits)
-    } for c in courses]), HTTPStatus.OK
+    response = []
+    
+    for c in courses:
+        course_data = {
+            'course_id': c.course_id,
+            'course_name': c.course_name,
+            'credits': float(c.credits)
+        }
+        
+        # Add offering counts if term is specified
+        if term and academic_year:
+            offerings = CourseOffering.query.filter_by(
+                course_id=c.course_id,
+                term=term,
+                academic_year=academic_year
+            ).count()
+            course_data['offerings_count'] = offerings
+            
+        response.append(course_data)
+    
+    return jsonify(response), HTTPStatus.OK
 
 @bp.route('/bulk', methods=['POST'], strict_slashes=False)
 def create_courses_bulk():
@@ -87,10 +107,26 @@ def create_courses_bulk():
 @bp.route('/<course_id>', methods=['GET'], strict_slashes=False)
 def get_course(course_id):
     course = Course.query.get_or_404(course_id)
+    
+    # Get term-specific offering counts
+    fall_offerings = CourseOffering.query.filter_by(
+        course_id=course_id,
+        term='FALL',
+        academic_year='2025-2026'
+    ).count()
+    
+    winter_offerings = CourseOffering.query.filter_by(
+        course_id=course_id,
+        term='WINTER',
+        academic_year='2025-2026'
+    ).count()
+    
     return jsonify({
         'course_id': course.course_id,
         'course_name': course.course_name,
-        'credits': float(course.credits)
+        'credits': float(course.credits),
+        'fall_offerings_count': fall_offerings,
+        'winter_offerings_count': winter_offerings
     }), HTTPStatus.OK
 
 @bp.route('/', methods=['POST'], strict_slashes=False)

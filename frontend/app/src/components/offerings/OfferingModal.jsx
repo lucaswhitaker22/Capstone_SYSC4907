@@ -215,34 +215,39 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
               </Form.Group>
             </Col>
             <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Term</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="term"
-                  value={formData.term}
-                  onChange={handleChange}
-                  required
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a term.
-                </Form.Control.Feedback>
-              </Form.Group>
+            <Form.Group className="mb-3">
+  <Form.Label>Term</Form.Label>
+  <Form.Select
+    name="term"
+    value={formData.term}
+    onChange={handleChange}
+    required
+  >
+    <option value="">Select a term</option>
+    <option value="FALL">Fall</option>
+    <option value="WINTER">Winter</option>
+  </Form.Select>
+  <Form.Control.Feedback type="invalid">
+    Please select a term.
+  </Form.Control.Feedback>
+</Form.Group>
             </Col>
             <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Academic Year</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="academic_year"
-                  value={formData.academic_year}
-                  onChange={handleChange}
-                  required
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide an academic year.
-                </Form.Control.Feedback>
-              </Form.Group>
+            <Form.Group className="mb-3">
+  <Form.Label>Academic Year</Form.Label>
+  <Form.Control
+    type="text"
+    name="academic_year"
+    value={formData.academic_year}
+    onChange={handleChange}
+    required
+    pattern="\d{4}-\d{4}"
+    placeholder="2025-2026"
+  />
+  <Form.Control.Feedback type="invalid">
+    Please provide a valid academic year (YYYY-YYYY).
+  </Form.Control.Feedback>
+</Form.Group>
             </Col>
           </Row>
 

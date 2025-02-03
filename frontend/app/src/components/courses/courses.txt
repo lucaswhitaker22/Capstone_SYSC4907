@@ -1,0 +1,524 @@
+// CourseOfferingsModal.jsx
+import React, { useState, useEffect } from 'react';
+import { Modal, Table, Form, Row, Col } from 'react-bootstrap';
+
+const CourseOfferingsModal = ({ show, onHide, courseId }) => {
+    const [offerings, setOfferings] = useState([]);
+    const [filteredOfferings, setFilteredOfferings] = useState([]);
+    const [filters, setFilters] = useState({
+        sectionType: '',
+        sectionCode: ''
+    });
+    
+    useEffect(() => {
+        if (courseId && show) {
+            fetchOfferings();
+        }
+    }, [courseId, show]);
+    
+    useEffect(() => {
+        filterOfferings();
+    }, [offerings, filters]);
+    
+    const fetchOfferings = async () => {
+        try {
+            const response = await fetch(`http://127.0.0.1:5000/api/offerings/`);
+            const data = await response.json();
+            const courseOfferings = data.filter(offering => offering.course_id === courseId);
+            setOfferings(courseOfferings);
+            setFilteredOfferings(courseOfferings);
+        } catch (error) {
+            console.error('Error fetching offerings:', error);
+        }
+    };
+
+    const filterOfferings = () => {
+        let filtered = [...offerings];
+        
+        if (filters.sectionType) {
+            filtered = filtered.filter(offering => 
+                offering.section_type === filters.sectionType
+            );
+        }
+        
+        if (filters.sectionCode) {
+            filtered = filtered.filter(offering => 
+                offering.section_code.toLowerCase().includes(filters.sectionCode.toLowerCase())
+            );
+        }
+        
+        setFilteredOfferings(filtered);
+    };
+
+    const handleFilterChange = (e) => {
+        const { name, value } = e.target;
+        setFilters(prev => ({
+            ...prev,
+            [name]: value
+        }));
+    };
+
+    return (
+        <Modal show={show} onHide={onHide} size="lg">
+            <Modal.Header closeButton>
+                <Modal.Title>Course Offerings - {courseId}</Modal.Title>
+            </Modal.Header>
+            <Modal.Body>
+                <Row className="mb-3">
+                    <Col md={6}>
+                        <Form.Group>
+                            <Form.Label>Section Type</Form.Label>
+                            <Form.Select
+                                name="sectionType"
+                                value={filters.sectionType}
+                                onChange={handleFilterChange}
+                            >
+                                <option value="">All Types</option>
+                                <option value="LECTURE">Lecture</option>
+                                <option value="LAB">Lab</option>
+                                <option value="TUTORIAL">Tutorial</option>
+                            </Form.Select>
+                        </Form.Group>
+                    </Col>
+                    <Col md={6}>
+                        <Form.Group>
+                            <Form.Label>Section Code</Form.Label>
+                            <Form.Control
+                                type="text"
+                                name="sectionCode"
+                                value={filters.sectionCode}
+                                onChange={handleFilterChange}
+                                placeholder="Filter by section code..."
+                            />
+                        </Form.Group>
+                    </Col>
+                </Row>
+
+                <Table striped bordered hover>
+                    <thead>
+                        <tr>
+                            <th>Section</th>
+                            <th>Type</th>
+                            <th>Day</th>
+                            <th>Time</th>
+                            <th>Capacity</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {filteredOfferings.map((offering) => (
+                            <tr key={offering.offering_id}>
+                                <td>{offering.section_code}</td>
+                                <td>{offering.section_type}</td>
+                                <td>{offering.day_of_week}</td>
+                                <td>{`${offering.start_time} - ${offering.end_time}`}</td>
+                                <td>{`${offering.current_enrollment}/${offering.capacity}`}</td>
+                                <td>{offering.status}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </Table>
+            </Modal.Body>
+        </Modal>
+    );
+};
+
+export default CourseOfferingsModal;
+import React, { useState, useEffect } from 'react';
+import { Modal, Form, Button } from 'react-bootstrap';
+
+const CourseModal = ({ show, onHide, course, onSave }) => {
+  const initialFormData = {
+    course_id: '',
+    course_name: '',
+    credits: ''
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
+  const [validated, setValidated] = useState(false);
+
+  useEffect(() => {
+    if (course) {
+      setFormData({
+        course_id: course.course_id,
+        course_name: course.course_name,
+        credits: course.credits.toString()
+      });
+    } else {
+      setFormData(initialFormData);
+    }
+    setValidated(false);
+  }, [course, show]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    
+    if (form.checkValidity()) {
+      try {
+        const url = course 
+          ? `http://127.0.0.1:5000/api/courses/${course.course_id}`
+          : 'http://127.0.0.1:5000/api/courses/';
+        
+        const response = await fetch(url, {
+          method: course ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            ...formData,
+            credits: parseFloat(formData.credits)
+          })
+        });
+
+        if (response.ok) {
+          onSave();
+          onHide();
+        }
+      } catch (error) {
+        console.error('Error saving course:', error);
+      }
+    }
+    setValidated(true);
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  return (
+    <Modal show={show} onHide={onHide}>
+      <Modal.Header closeButton>
+        <Modal.Title>
+          {course ? 'Edit Course' : 'Add Course'}
+        </Modal.Title>
+      </Modal.Header>
+      <Form noValidate validated={validated} onSubmit={handleSubmit}>
+        <Modal.Body>
+          <Form.Group className="mb-3">
+            <Form.Label>Course ID</Form.Label>
+            <Form.Control
+              type="text"
+              name="course_id"
+              value={formData.course_id}
+              onChange={handleChange}
+              required
+              disabled={!!course}
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a course ID.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>Course Name</Form.Label>
+            <Form.Control
+              type="text"
+              name="course_name"
+              value={formData.course_name}
+              onChange={handleChange}
+              required
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a course name.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>Credits</Form.Label>
+            <Form.Control
+              type="number"
+              step="0.5"
+              name="credits"
+              value={formData.credits}
+              onChange={handleChange}
+              required
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide credits.
+            </Form.Control.Feedback>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onHide}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit">
+            Save
+          </Button>
+        </Modal.Footer>
+      </Form>
+    </Modal>
+  );
+};
+
+export default CourseModal;
+
+import React, { useState, useEffect } from 'react';
+import { Container, Table, Button, Badge } from 'react-bootstrap';
+import CourseModal from './CoursesModal';
+import CourseUploadModal from './CourseUploadModal';
+import Papa from 'papaparse';
+import CourseOfferingsModal from './CourseOfferingModal';
+
+const CoursesPage = () => {
+  const [courses, setCourses] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedCourse, setSelectedCourse] = useState(null);
+  const [error, setError] = useState(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showOfferingsModal, setShowOfferingsModal] = useState(false);
+  const [selectedCourseId, setSelectedCourseId] = useState(null);
+  const fetchCourses = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/courses/');
+      const data = await response.json();
+      setCourses(data);
+    } catch (error) {
+      setError('Error fetching courses');
+    }
+  };
+
+  useEffect(() => {
+    fetchCourses();
+  }, []);
+
+    const handleExportCSV = () => {
+      const csvData = courses.map(course => ({
+          course_id: course.course_id,
+          course_name: course.course_name,
+          credits: course.credits
+      }));
+      
+      const csv = Papa.unparse(csvData);
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `courses-${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  }
+
+  const handleDelete = async (courseId) => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/courses/${courseId}`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        fetchCourses();
+      }
+    } catch (error) {
+      setError('Error deleting course');
+    }
+  };
+
+  const handleEdit = (course) => {
+    setSelectedCourse(course);
+    setShowModal(true);
+  };
+
+  return (
+    <Container className="py-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1>Courses</h1>
+       {/*  <Button variant="outline-primary" className="me-2" onClick={() => setShowUploadModal(true)}>
+      Upload CSV
+    </Button>
+    <Button variant="success" className="me-2" onClick={handleExportCSV}>
+            Export CSV
+        </Button> */}
+        <Button variant="primary" onClick={() => setShowModal(true)}>
+          Add Course
+        </Button>
+      </div>
+
+      <Table striped bordered hover responsive>
+        <thead>
+          <tr>
+            <th>Course ID</th>
+            <th>Course Name</th>
+            <th>Credits</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {courses.map((course) => (
+            <tr key={course.course_id}>
+              <td>{course.course_id}</td>
+              <td>{course.course_name}</td>
+              <td>{course.credits}</td>
+              <td>
+                <Button 
+                  variant="primary" 
+                  size="sm" 
+                  className="me-2"
+                  onClick={() => handleEdit(course)}
+                >
+                  Edit
+                </Button>
+                <Button
+        variant="info"
+        size="sm"
+        className="me-2"
+        onClick={() => {
+            setSelectedCourseId(course.course_id);
+            setShowOfferingsModal(true);
+        }}
+    >
+        Offerings
+    </Button>
+                <Button 
+                  variant="danger" 
+                  size="sm"
+                  onClick={() => {
+                    handleDelete(course.course_id);
+                  }}
+                >
+                  Delete
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+
+      <CourseModal 
+        show={showModal}
+        onHide={() => {
+          setShowModal(false);
+          setSelectedCourse(null);
+        }}
+        course={selectedCourse}
+        onSave={fetchCourses}
+      />
+
+    <CourseUploadModal
+    show={showUploadModal}
+    onHide={() => setShowUploadModal(false)}
+    onSave={fetchCourses}
+    />
+
+
+<CourseOfferingsModal
+    show={showOfferingsModal}
+    onHide={() => setShowOfferingsModal(false)}
+    courseId={selectedCourseId}
+/>
+    </Container>
+  );
+};
+
+export default CoursesPage;
+import React, { useState } from 'react';
+import { Modal, Button, Table, Alert } from 'react-bootstrap';
+import Papa from 'papaparse';
+
+const CourseUploadModal = ({ show, onHide, onSave }) => {
+  const [parsedData, setParsedData] = useState([]);
+  const [error, setError] = useState(null);
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          if (results.errors.length > 0) {
+            setError('Error parsing CSV file');
+            return;
+          }
+          setParsedData(results.data);
+          setError(null);
+        }
+      });
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      const response = await fetch('http://127.0.0.1:5000/api/courses/bulk', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ courses: parsedData })
+      });
+
+      if (response.ok) {
+        onSave();
+        onHide();
+      } else {
+        const error = await response.json();
+        setError(error.message || 'Error uploading courses');
+      }
+    } catch (error) {
+      setError('Error uploading courses');
+    }
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Upload Courses CSV</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="mb-3">
+          <input
+            type="file"
+            accept=".csv"
+            onChange={handleFileUpload}
+            className="form-control"
+          />
+        </div>
+
+        {error && (
+          <Alert variant="danger" className="mb-3">
+            {error}
+          </Alert>
+        )}
+
+        {parsedData.length > 0 && (
+          <Table striped bordered hover>
+            <thead>
+              <tr>
+                <th>Course ID</th>
+                <th>Course Name</th>
+                <th>Credits</th>
+              </tr>
+            </thead>
+            <tbody>
+              {parsedData.map((course, index) => (
+                <tr key={index}>
+                  <td>{course.course_id}</td>
+                  <td>{course.course_name}</td>
+                  <td>{course.credits}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>
+          Cancel
+        </Button>
+        <Button
+          variant="primary"
+          onClick={handleSave}
+          disabled={parsedData.length === 0}
+        >
+          Save Courses
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default CourseUploadModal;

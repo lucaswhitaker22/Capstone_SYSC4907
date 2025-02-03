@@ -14,8 +14,10 @@ def get_programs():
             'program_id': p.program_id,
             'program_name': p.program_name,
             'total_enrollment': p.total_enrollment,
-            'blocks_20_count': p.blocks_20_count,
-            'blocks_10_count': p.blocks_10_count
+            'blocks_20_count_fall': p.blocks_20_count_fall,
+            'blocks_10_count_fall': p.blocks_10_count_fall,
+            'blocks_20_count_winter': p.blocks_20_count_winter,
+            'blocks_10_count_winter': p.blocks_10_count_winter
         } for p in programs]), HTTPStatus.OK
     except Exception as e:
         return jsonify({
@@ -30,9 +32,12 @@ def get_program(program_id):
         'program_id': program.program_id,
         'program_name': program.program_name,
         'total_enrollment': program.total_enrollment,
-        'blocks_20_count': program.blocks_20_count,
-        'blocks_10_count': program.blocks_10_count
+        'blocks_20_count_fall': program.blocks_20_count_fall,
+        'blocks_10_count_fall': program.blocks_10_count_fall,
+        'blocks_20_count_winter': program.blocks_20_count_winter,
+        'blocks_10_count_winter': program.blocks_10_count_winter
     }), HTTPStatus.OK
+
 
 @bp.route('/', methods=['POST'])
 def create_program():
@@ -40,57 +45,58 @@ def create_program():
         data = request.get_json()
         
         # Validate required fields
-        required_fields = ['program_id', 'program_name', 'total_enrollment', 
-                         'blocks_20_count', 'blocks_10_count']
+        required_fields = [
+            'program_id', 'program_name', 'total_enrollment',
+            'blocks_20_count_fall', 'blocks_10_count_fall',
+            'blocks_20_count_winter', 'blocks_10_count_winter',
+            'term', 'academic_year'
+        ]
         if not data or not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
             
-        # Check for existing program
-        if Program.query.get(data['program_id']):
-            return jsonify({'error': 'Program already exists'}), HTTPStatus.CONFLICT
-            
-        # Validate numeric fields
-        if not isinstance(data['total_enrollment'], int) or data['total_enrollment'] < 0:
-            return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
-            
-        if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
-            return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
-            
-        if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
-            return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
+        # Validate term
+        if data['term'] not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
 
         # Create program
-        program = Program(**data)
+        program = Program(
+            program_id=data['program_id'],
+            program_name=data['program_name'],
+            total_enrollment=data['total_enrollment'],
+            blocks_20_count_fall=data['blocks_20_count_fall'],
+            blocks_10_count_fall=data['blocks_10_count_fall'],
+            blocks_20_count_winter=data['blocks_20_count_winter'],
+            blocks_10_count_winter=data['blocks_10_count_winter']
+        )
         db.session.add(program)
         
-        # Generate blocks
+        # Generate blocks for specified term
         blocks = []
         
-        # Generate 20-student blocks
-        for i in range(data['blocks_20_count']):
-            block = Block(
-                block_id=f"{data['program_id']}_20_{i+1}",
-                program_id=data['program_id'],
-                block_size=20,
-                term="FALL",
-                academic_year="2025-2026",
-                status="ACTIVE"
-            )
-            blocks.append(block)
-            
-        # Generate 10-student blocks
-        for i in range(data['blocks_10_count']):
-            block = Block(
-                block_id=f"{data['program_id']}_10_{i+1}",
-                program_id=data['program_id'],
-                block_size=10,
-                term="FALL",
-                academic_year="2025-2026",
-                status="ACTIVE"
-            )
-            blocks.append(block)
+        if data['term'] == 'FALL':
+            block_counts = {
+                20: data['blocks_20_count_fall'],
+                10: data['blocks_10_count_fall']
+            }
+        else:  # WINTER
+            block_counts = {
+                20: data['blocks_20_count_winter'],
+                10: data['blocks_10_count_winter']
+            }
+
+        # Generate blocks
+        for size, count in block_counts.items():
+            for i in range(count):
+                block = Block(
+                    block_id=f"{data['program_id']}_{data['term'][0]}_{size}_{i+1}",
+                    program_id=data['program_id'],
+                    block_size=size,
+                    term=data['term'],
+                    academic_year=data['academic_year'],
+                    status="DRAFT"
+                )
+                blocks.append(block)
         
-        # Bulk save blocks
         db.session.bulk_save_objects(blocks)
         db.session.commit()
         
@@ -98,11 +104,13 @@ def create_program():
             'program_id': program.program_id,
             'program_name': program.program_name,
             'total_enrollment': program.total_enrollment,
-            'blocks_20_count': program.blocks_20_count,
-            'blocks_10_count': program.blocks_10_count,
+            'blocks_20_count_fall': program.blocks_20_count_fall,
+            'blocks_10_count_fall': program.blocks_10_count_fall,
+            'blocks_20_count_winter': program.blocks_20_count_winter,
+            'blocks_10_count_winter': program.blocks_10_count_winter,
             'blocks_created': len(blocks)
         }), HTTPStatus.CREATED
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({
@@ -129,30 +137,53 @@ def bulk_create_programs():
                 program_id=program_data['program_id'],
                 program_name=program_data['program_name'],
                 total_enrollment=int(program_data['total_enrollment']),
-                blocks_20_count=int(program_data['blocks_20_count']),
-                blocks_10_count=int(program_data['blocks_10_count'])
+                blocks_20_count_fall=int(program_data.get('blocks_20_count_fall', 0)),
+                blocks_10_count_fall=int(program_data.get('blocks_10_count_fall', 0)),
+                blocks_20_count_winter=int(program_data.get('blocks_20_count_winter', 0)),
+                blocks_10_count_winter=int(program_data.get('blocks_10_count_winter', 0))
             )
             programs.append(program)
             
-            # Generate blocks for each program
-            for i in range(int(program_data['blocks_20_count'])):
+            # Generate Fall blocks
+            for i in range(int(program_data.get('blocks_20_count_fall', 0))):
                 blocks.append(Block(
-                    block_id=f"{program_data['program_id']}_20_{i+1}",
+                    block_id=f"{program_data['program_id']}_F_20_{i+1}",
                     program_id=program_data['program_id'],
                     block_size=20,
                     term="FALL",
                     academic_year="2025-2026",
-                    status="ACTIVE"
+                    status="DRAFT"
                 ))
                 
-            for i in range(int(program_data['blocks_10_count'])):
+            for i in range(int(program_data.get('blocks_10_count_fall', 0))):
                 blocks.append(Block(
-                    block_id=f"{program_data['program_id']}_10_{i+1}",
+                    block_id=f"{program_data['program_id']}_F_10_{i+1}",
                     program_id=program_data['program_id'],
                     block_size=10,
                     term="FALL",
                     academic_year="2025-2026",
-                    status="ACTIVE"
+                    status="DRAFT"
+                ))
+                
+            # Generate Winter blocks
+            for i in range(int(program_data.get('blocks_20_count_winter', 0))):
+                blocks.append(Block(
+                    block_id=f"{program_data['program_id']}_W_20_{i+1}",
+                    program_id=program_data['program_id'],
+                    block_size=20,
+                    term="WINTER",
+                    academic_year="2025-2026",
+                    status="DRAFT"
+                ))
+                
+            for i in range(int(program_data.get('blocks_10_count_winter', 0))):
+                blocks.append(Block(
+                    block_id=f"{program_data['program_id']}_W_10_{i+1}",
+                    program_id=program_data['program_id'],
+                    block_size=10,
+                    term="WINTER",
+                    academic_year="2025-2026",
+                    status="DRAFT"
                 ))
         
         db.session.bulk_save_objects(programs)
@@ -166,6 +197,7 @@ def bulk_create_programs():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), HTTPStatus.BAD_REQUEST
+
     
 @bp.route('/<program_id>', methods=['PUT'], strict_slashes=False)
 def update_program(program_id):
@@ -185,88 +217,25 @@ def update_program(program_id):
                 return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
             program.total_enrollment = data['total_enrollment']
 
-        new_blocks = []
-        deleted_blocks = []
-        
-        # Handle 20-student blocks
-        if 'blocks_20_count' in data:
-            if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
-                
-            current_20_blocks = Block.query.filter_by(
-                program_id=program_id, 
-                block_size=20
-            ).order_by(Block.block_id.desc()).all()
-            
-            if data['blocks_20_count'] > len(current_20_blocks):
-                # Create additional blocks
-                for i in range(len(current_20_blocks), data['blocks_20_count']):
-                    block = Block(
-                        block_id=f"{program_id}_20_{i+1}",
-                        program_id=program_id,
-                        block_size=20,
-                        term="FALL",
-                        academic_year="2025-2026",
-                        status="ACTIVE"
-                    )
-                    new_blocks.append(block)
-            elif data['blocks_20_count'] < len(current_20_blocks):
-                # Delete excess blocks
-                blocks_to_delete = current_20_blocks[data['blocks_20_count']:]
-                for block in blocks_to_delete:
-                    # Delete associated schedules first
-                    BlockSchedule.query.filter_by(block_id=block.block_id).delete()
-                    deleted_blocks.append(block.block_id)
-                    db.session.delete(block)
-            
-            program.blocks_20_count = data['blocks_20_count']
+        # Update term-specific block counts
+        for term in ['fall', 'winter']:
+            for size in [10, 20]:
+                field = f'blocks_{size}_count_{term}'
+                if field in data:
+                    if not isinstance(data[field], int) or data[field] < 0:
+                        return jsonify({'error': f'Invalid {field}'}), HTTPStatus.BAD_REQUEST
+                    setattr(program, field, data[field])
 
-        # Handle 10-student blocks
-        if 'blocks_10_count' in data:
-            if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
-                
-            current_10_blocks = Block.query.filter_by(
-                program_id=program_id, 
-                block_size=10
-            ).order_by(Block.block_id.desc()).all()
-            
-            if data['blocks_10_count'] > len(current_10_blocks):
-                # Create additional blocks
-                for i in range(len(current_10_blocks), data['blocks_10_count']):
-                    block = Block(
-                        block_id=f"{program_id}_10_{i+1}",
-                        program_id=program_id,
-                        block_size=10,
-                        term="FALL",
-                        academic_year="2025-2026",
-                        status="ACTIVE"
-                    )
-                    new_blocks.append(block)
-            elif data['blocks_10_count'] < len(current_10_blocks):
-                # Delete excess blocks
-                blocks_to_delete = current_10_blocks[data['blocks_10_count']:]
-                for block in blocks_to_delete:
-                    # Delete associated schedules first
-                    BlockSchedule.query.filter_by(block_id=block.block_id).delete()
-                    deleted_blocks.append(block.block_id)
-                    db.session.delete(block)
-            
-            program.blocks_10_count = data['blocks_10_count']
-
-        # Save all changes
-        if new_blocks:
-            db.session.bulk_save_objects(new_blocks)
         db.session.commit()
 
         return jsonify({
             'program_id': program.program_id,
             'program_name': program.program_name,
             'total_enrollment': program.total_enrollment,
-            'blocks_20_count': program.blocks_20_count,
-            'blocks_10_count': program.blocks_10_count,
-            'new_blocks_created': len(new_blocks),
-            'blocks_deleted': deleted_blocks
+            'blocks_20_count_fall': program.blocks_20_count_fall,
+            'blocks_10_count_fall': program.blocks_10_count_fall,
+            'blocks_20_count_winter': program.blocks_20_count_winter,
+            'blocks_10_count_winter': program.blocks_10_count_winter
         }), HTTPStatus.OK
         
     except Exception as e:
@@ -275,7 +244,6 @@ def update_program(program_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
-
 
 
 @bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
@@ -328,28 +296,39 @@ def update_enrollment(program_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<program_id>/blocks', methods=['PATCH'], strict_slashes=False)
+@bp.route('/<program_id>/blocks', methods=['PATCH'])
 def update_block_counts(program_id):
     try:
         program = Program.query.get_or_404(program_id)
         data = request.get_json()
         
-        if 'blocks_20_count' in data:
-            if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
-            program.blocks_20_count = data['blocks_20_count']
+        # Validate term
+        term = data.get('term')
+        if term not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
             
-        if 'blocks_10_count' in data:
-            if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
-            program.blocks_10_count = data['blocks_10_count']
+        # Update term-specific block counts
+        term_suffix = term.lower()
+        if f'blocks_20_count_{term_suffix}' in data:
+            count = data[f'blocks_20_count_{term_suffix}']
+            if not isinstance(count, int) or count < 0:
+                return jsonify({'error': f'Invalid blocks_20_count_{term_suffix}'}), HTTPStatus.BAD_REQUEST
+            setattr(program, f'blocks_20_count_{term_suffix}', count)
+            
+        if f'blocks_10_count_{term_suffix}' in data:
+            count = data[f'blocks_10_count_{term_suffix}']
+            if not isinstance(count, int) or count < 0:
+                return jsonify({'error': f'Invalid blocks_10_count_{term_suffix}'}), HTTPStatus.BAD_REQUEST
+            setattr(program, f'blocks_10_count_{term_suffix}', count)
             
         db.session.commit()
         
         return jsonify({
             'program_id': program.program_id,
-            'blocks_20_count': program.blocks_20_count,
-            'blocks_10_count': program.blocks_10_count
+            'blocks_20_count_fall': program.blocks_20_count_fall,
+            'blocks_10_count_fall': program.blocks_10_count_fall,
+            'blocks_20_count_winter': program.blocks_20_count_winter,
+            'blocks_10_count_winter': program.blocks_10_count_winter
         }), HTTPStatus.OK
     except Exception as e:
         db.session.rollback()

@@ -4,12 +4,26 @@ from app.models import CourseOffering, Course, BlockSchedule
 from app import db
 from http import HTTPStatus
 from datetime import datetime
-
+import re
 bp = Blueprint('offerings', __name__, url_prefix='/api/offerings')
 
-@bp.route('/', methods=['GET'],  strict_slashes=False)
+@bp.route('/', methods=['GET'], strict_slashes=False)
 def get_offerings():
-    offerings = CourseOffering.query.all()
+    # Add term and year filtering
+    term = request.args.get('term')
+    academic_year = request.args.get('academic_year', '2025-2026')
+    
+    query = CourseOffering.query
+    
+    if term:
+        if term not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
+        query = query.filter_by(term=term)
+    
+    if academic_year:
+        query = query.filter_by(academic_year=academic_year)
+        
+    offerings = query.all()
     return jsonify([{
         'offering_id': o.offering_id,
         'course_id': o.course_id,
@@ -24,6 +38,7 @@ def get_offerings():
         'academic_year': o.academic_year,
         'status': o.status
     } for o in offerings]), HTTPStatus.OK
+
 
 @bp.route('/<int:offering_id>', methods=['GET'], strict_slashes=False)
 def get_offering(offering_id):
@@ -48,11 +63,14 @@ def create_offering():
     try:
         data = request.get_json()
         
-        # Validate required fields
         required_fields = ['course_id', 'section_type', 'section_code', 'day_of_week', 
                          'start_time', 'end_time', 'capacity', 'term', 'academic_year']
         if not data or not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
+            
+        # Validate term
+        if data['term'] not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
             
         # Validate course exists
         if not Course.query.get(data['course_id']):
@@ -68,6 +86,17 @@ def create_offering():
         # Validate day_of_week
         if not 1 <= data['day_of_week'] <= 7:
             return jsonify({'error': 'day_of_week must be between 1 and 7'}), HTTPStatus.BAD_REQUEST
+            
+        # Check for duplicate section in same term
+        existing = CourseOffering.query.filter_by(
+            course_id=data['course_id'],
+            section_code=data['section_code'],
+            term=data['term'],
+            academic_year=data['academic_year']
+        ).first()
+        
+        if existing:
+            return jsonify({'error': 'Section already exists for this term'}), HTTPStatus.CONFLICT
             
         offering = CourseOffering(**data)
         db.session.add(offering)
@@ -260,7 +289,17 @@ def create_offerings_bulk():
             ]
             
             if not all(k in offering_data for k in required_fields):
-                errors.append(f"Missing required fields for offering")
+                errors.append(f"Missing required fields for offering {offering_data.get('course_id', 'Unknown')}")
+                continue
+
+            # Validate term
+            if offering_data['term'] not in ['FALL', 'WINTER']:
+                errors.append(f"Invalid term for offering {offering_data['course_id']}")
+                continue
+
+            # Validate academic year format (YYYY-YYYY)
+            if not re.match(r'^\d{4}-\d{4}$', offering_data['academic_year']):
+                errors.append(f"Invalid academic year format for offering {offering_data['course_id']}")
                 continue
                 
             # Check if course exists, if not create it
@@ -276,7 +315,7 @@ def create_offerings_bulk():
             # Validate section_type
             valid_types = ['LECTURE', 'LAB', 'TUTORIAL']
             if offering_data['section_type'] not in valid_types:
-                errors.append(f"Invalid section_type for offering")
+                errors.append(f"Invalid section_type for offering {offering_data['course_id']}")
                 continue
                 
             # Validate times
@@ -284,10 +323,22 @@ def create_offerings_bulk():
                 start_time = datetime.strptime(offering_data['start_time'], '%H:%M').time()
                 end_time = datetime.strptime(offering_data['end_time'], '%H:%M').time()
                 if end_time <= start_time:
-                    errors.append(f"End time must be after start time")
+                    errors.append(f"End time must be after start time for offering {offering_data['course_id']}")
                     continue
             except ValueError:
-                errors.append(f"Invalid time format")
+                errors.append(f"Invalid time format for offering {offering_data['course_id']}")
+                continue
+
+            # Check for duplicate section in same term/year
+            existing = CourseOffering.query.filter_by(
+                course_id=offering_data['course_id'],
+                section_code=offering_data['section_code'],
+                term=offering_data['term'],
+                academic_year=offering_data['academic_year']
+            ).first()
+            
+            if existing:
+                errors.append(f"Section already exists for {offering_data['course_id']} in {offering_data['term']} {offering_data['academic_year']}")
                 continue
                 
             # Create offering
@@ -301,10 +352,16 @@ def create_offerings_bulk():
                 capacity=int(offering_data['capacity']),
                 term=offering_data['term'],
                 academic_year=offering_data['academic_year'],
-                status='OPEN'
+                status='OPEN',
+                current_enrollment=0
             )
             db.session.add(offering)
-            created_offerings.append(offering_data)
+            created_offerings.append({
+                'course_id': offering_data['course_id'],
+                'section_code': offering_data['section_code'],
+                'term': offering_data['term'],
+                'academic_year': offering_data['academic_year']
+            })
             
         if errors and not created_offerings:
             db.session.rollback()
@@ -315,7 +372,7 @@ def create_offerings_bulk():
             
         db.session.commit()
         return jsonify({
-            'message': 'Offerings created successfully',
+            'message': f'{len(created_offerings)} offerings created successfully',
             'created': created_offerings,
             'errors': errors
         }), HTTPStatus.CREATED
