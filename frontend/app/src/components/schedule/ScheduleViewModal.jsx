@@ -27,7 +27,7 @@ const ScheduleViewModal = ({ show, blockId, onHide }) => {
 
   const getDayName = (day) => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[day - 1];
+    return days[day];
   };
 
   const renderTimeSlot = (offering) => {
