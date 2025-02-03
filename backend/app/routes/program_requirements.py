@@ -10,20 +10,11 @@ def get_program_requirements(program_id):
         if not Program.query.get(program_id):
             return jsonify({'error': 'Program not found'}), HTTPStatus.NOT_FOUND
             
-        term = request.args.get('term')  # Add term filter support
-        query = ProgramRequirement.query.filter_by(program_id=program_id)
-        
-        if term:
-            if term not in ['FALL', 'WINTER']:
-                return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
-            query = query.filter_by(term=term)
-            
-        requirements = query.all()
+        requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
         return jsonify([{
             'requirement_id': r.requirement_id,
             'program_id': r.program_id,
-            'course_id': r.course_id,
-            'term': r.term
+            'course_id': r.course_id
         } for r in requirements]), HTTPStatus.OK
     except Exception as e:
         return jsonify({
@@ -39,13 +30,9 @@ def create_requirement():
         if not data:
             return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
             
-        required_fields = ['program_id', 'course_id', 'term']
+        required_fields = ['program_id', 'course_id']
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
-
-        # Validate term
-        if data['term'] not in ['FALL', 'WINTER']:
-            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
 
         # Validate program exists
         if not Program.query.get(data['program_id']):
@@ -55,15 +42,14 @@ def create_requirement():
         if not Course.query.get(data['course_id']):
             return jsonify({'error': 'Course not found'}), HTTPStatus.NOT_FOUND
 
-        # Check for duplicate requirement with term
+        # Check for duplicate requirement
         existing = ProgramRequirement.query.filter_by(
             program_id=data['program_id'],
-            course_id=data['course_id'],
-            term=data['term']
+            course_id=data['course_id']
         ).first()
         
         if existing:
-            return jsonify({'error': 'Requirement already exists for this term'}), HTTPStatus.CONFLICT
+            return jsonify({'error': 'Requirement already exists'}), HTTPStatus.CONFLICT
 
         requirement = ProgramRequirement(**data)
         db.session.add(requirement)
@@ -72,8 +58,7 @@ def create_requirement():
         return jsonify({
             'requirement_id': requirement.requirement_id,
             'program_id': requirement.program_id,
-            'course_id': requirement.course_id,
-            'term': requirement.term
+            'course_id': requirement.course_id
         }), HTTPStatus.CREATED
 
     except Exception as e:
@@ -134,22 +119,17 @@ def validate_program_schedule(program_id):
         program = Program.query.get_or_404(program_id)
         data = request.get_json()
         schedule_ids = data.get('schedule_ids', [])
-        term = data.get('term')
         
         if not schedule_ids:
             return jsonify({'error': 'No schedules provided'}), HTTPStatus.BAD_REQUEST
             
-        if not term or term not in ['FALL', 'WINTER']:
-            return jsonify({'error': 'Invalid or missing term'}), HTTPStatus.BAD_REQUEST
-            
         requirements = ProgramRequirement.query.filter_by(
-            program_id=program_id,
-            term=term
+            program_id=program_id
         ).all()
         
         schedules = BlockSchedule.query.filter(
             BlockSchedule.schedule_id.in_(schedule_ids)
-        ).join(Block).filter_by(term=term).all()
+        ).all()
         
         missing_requirements = []
         for req in requirements:
@@ -160,13 +140,11 @@ def validate_program_schedule(program_id):
                     break
             if not requirement_met:
                 missing_requirements.append({
-                    'course_id': req.course_id,
-                    'term': req.term
+                    'course_id': req.course_id
                 })
         
         return jsonify({
             'program_id': program_id,
-            'term': term,
             'is_valid': len(missing_requirements) == 0,
             'missing_requirements': missing_requirements
         }), HTTPStatus.OK

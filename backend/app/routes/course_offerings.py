@@ -11,7 +11,7 @@ bp = Blueprint('offerings', __name__, url_prefix='/api/offerings')
 def get_offerings():
     # Add term and year filtering
     term = request.args.get('term')
-    academic_year = request.args.get('academic_year', '2025-2026')
+    academic_year = request.args.get('academic_year', '')
     
     query = CourseOffering.query
     

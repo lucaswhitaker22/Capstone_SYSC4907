@@ -44,19 +44,15 @@ def create_program():
     try:
         data = request.get_json()
         
-        # Validate required fields
+        # Update required fields - remove term
         required_fields = [
             'program_id', 'program_name', 'total_enrollment',
             'blocks_20_count_fall', 'blocks_10_count_fall',
             'blocks_20_count_winter', 'blocks_10_count_winter',
-            'term', 'academic_year'
+            'academic_year'
         ]
         if not data or not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
-            
-        # Validate term
-        if data['term'] not in ['FALL', 'WINTER']:
-            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
 
         # Create program
         program = Program(
@@ -70,32 +66,48 @@ def create_program():
         )
         db.session.add(program)
         
-        # Generate blocks for specified term
+        # Generate blocks for both terms
         blocks = []
         
-        if data['term'] == 'FALL':
-            block_counts = {
-                20: data['blocks_20_count_fall'],
-                10: data['blocks_10_count_fall']
-            }
-        else:  # WINTER
-            block_counts = {
-                20: data['blocks_20_count_winter'],
-                10: data['blocks_10_count_winter']
-            }
-
-        # Generate blocks
-        for size, count in block_counts.items():
-            for i in range(count):
-                block = Block(
-                    block_id=f"{data['program_id']}_{data['term'][0]}_{size}_{i+1}",
-                    program_id=data['program_id'],
-                    block_size=size,
-                    term=data['term'],
-                    academic_year=data['academic_year'],
-                    status="DRAFT"
-                )
-                blocks.append(block)
+        # Fall blocks
+        for i in range(data['blocks_20_count_fall']):
+            blocks.append(Block(
+                block_id=f"{data['program_id']}_F_20_{i+1}",
+                program_id=data['program_id'],
+                block_size=20,
+                term='FALL',
+                academic_year=data['academic_year'],
+                status="DRAFT"
+            ))
+        for i in range(data['blocks_10_count_fall']):
+            blocks.append(Block(
+                block_id=f"{data['program_id']}_F_10_{i+1}",
+                program_id=data['program_id'],
+                block_size=10,
+                term='FALL',
+                academic_year=data['academic_year'],
+                status="DRAFT"
+            ))
+            
+        # Winter blocks
+        for i in range(data['blocks_20_count_winter']):
+            blocks.append(Block(
+                block_id=f"{data['program_id']}_W_20_{i+1}",
+                program_id=data['program_id'],
+                block_size=20,
+                term='WINTER',
+                academic_year=data['academic_year'],
+                status="DRAFT"
+            ))
+        for i in range(data['blocks_10_count_winter']):
+            blocks.append(Block(
+                block_id=f"{data['program_id']}_W_10_{i+1}",
+                program_id=data['program_id'],
+                block_size=10,
+                term='WINTER',
+                academic_year=data['academic_year'],
+                status="DRAFT"
+            ))
         
         db.session.bulk_save_objects(blocks)
         db.session.commit()
@@ -117,8 +129,6 @@ def create_program():
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
 @bp.route('/bulk', methods=['POST'])
 def bulk_create_programs():
     try:

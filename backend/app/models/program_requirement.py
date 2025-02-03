@@ -7,10 +7,9 @@ class ProgramRequirement(db.Model):
     requirement_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), nullable=False)
     course_id = db.Column(db.String(10), db.ForeignKey('course.course_id'), nullable=False)
-    term = db.Column(db.Enum(Term), nullable=False)
     
     __table_args__ = (
-        db.UniqueConstraint('program_id', 'course_id', 'term', name='unique_program_course_term'),
+        db.UniqueConstraint('program_id', 'course_id', name='unique_program_course_term'),
     )
 
     def __repr__(self):

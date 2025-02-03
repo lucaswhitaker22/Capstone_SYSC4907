@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Table, Button, Badge } from 'react-bootstrap';
 import CourseModal from './CoursesModal';
-import CourseUploadModal from './CourseUploadModal';
 import Papa from 'papaparse';
 import CourseOfferingsModal from './CourseOfferingModal';
 
@@ -10,7 +9,6 @@ const CoursesPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [error, setError] = useState(null);
-  const [showUploadModal, setShowUploadModal] = useState(false);
   const [showOfferingsModal, setShowOfferingsModal] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const fetchCourses = async () => {
@@ -26,24 +24,6 @@ const CoursesPage = () => {
   useEffect(() => {
     fetchCourses();
   }, []);
-
-    const handleExportCSV = () => {
-      const csvData = courses.map(course => ({
-          course_id: course.course_id,
-          course_name: course.course_name,
-          credits: course.credits
-      }));
-      
-      const csv = Papa.unparse(csvData);
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `courses-${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-  }
 
   const handleDelete = async (courseId) => {
     try {
@@ -67,12 +47,6 @@ const CoursesPage = () => {
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1>Courses</h1>
-       {/*  <Button variant="outline-primary" className="me-2" onClick={() => setShowUploadModal(true)}>
-      Upload CSV
-    </Button>
-    <Button variant="success" className="me-2" onClick={handleExportCSV}>
-            Export CSV
-        </Button> */}
         <Button variant="primary" onClick={() => setShowModal(true)}>
           Add Course
         </Button>
@@ -138,11 +112,6 @@ const CoursesPage = () => {
         onSave={fetchCourses}
       />
 
-    <CourseUploadModal
-    show={showUploadModal}
-    onHide={() => setShowUploadModal(false)}
-    onSave={fetchCourses}
-    />
 
 
 <CourseOfferingsModal

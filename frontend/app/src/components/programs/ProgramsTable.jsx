@@ -1,7 +1,7 @@
 import React from 'react';
 import { Table, Button, Badge, Spinner } from 'react-bootstrap';
 
-const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements,onViewSchedules  }) => {
+const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements, onViewSchedules }) => {
   if (isLoading) {
     return (
       <div className="text-center p-4">
@@ -20,12 +20,18 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
     <Table striped bordered hover responsive>
       <thead>
         <tr>
-          <th>Program ID</th>
-          <th>Program Name</th>
-          <th>Total Enrollment</th>
-          <th>20-Student Blocks</th>
-          <th>10-Student Blocks</th>
-          <th>Actions</th>
+          <th rowSpan="2">Program ID</th>
+          <th rowSpan="2">Program Name</th>
+          <th rowSpan="2">Total Enrollment</th>
+          <th colSpan="2" className="text-center">Fall Blocks</th>
+          <th colSpan="2" className="text-center">Winter Blocks</th>
+          <th rowSpan="2">Actions</th>
+        </tr>
+        <tr>
+          <th>20-Student</th>
+          <th>10-Student</th>
+          <th>20-Student</th>
+          <th>10-Student</th>
         </tr>
       </thead>
       <tbody>
@@ -40,12 +46,22 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
             </td>
             <td>
               <Badge bg="primary">
-                {program.blocks_20_count} blocks
+                {program.blocks_20_count_fall} blocks
               </Badge>
             </td>
             <td>
               <Badge bg="secondary">
-                {program.blocks_10_count} blocks
+                {program.blocks_10_count_fall} blocks
+              </Badge>
+            </td>
+            <td>
+              <Badge bg="primary">
+                {program.blocks_20_count_winter} blocks
+              </Badge>
+            </td>
+            <td>
+              <Badge bg="secondary">
+                {program.blocks_10_count_winter} blocks
               </Badge>
             </td>
             <td>

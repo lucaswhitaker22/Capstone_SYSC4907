@@ -17,8 +17,8 @@ const OfferingsPage = () => {
     try {
       // Add default term and year to the request
       const params = new URLSearchParams({
-        term: 'FALL',  // Default term
-        academic_year: '2025-2026'  // Default year
+        term: '',  // Default term
+        academic_year: ''  // Default year
       });
       const response = await fetch(`${API_URL}/offerings?${params}`);
       const data = await response.json();

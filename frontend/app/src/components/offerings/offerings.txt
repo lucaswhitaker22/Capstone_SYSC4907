@@ -215,34 +215,39 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
               </Form.Group>
             </Col>
             <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Term</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="term"
-                  value={formData.term}
-                  onChange={handleChange}
-                  required
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a term.
-                </Form.Control.Feedback>
-              </Form.Group>
+            <Form.Group className="mb-3">
+  <Form.Label>Term</Form.Label>
+  <Form.Select
+    name="term"
+    value={formData.term}
+    onChange={handleChange}
+    required
+  >
+    <option value="">Select a term</option>
+    <option value="FALL">Fall</option>
+    <option value="WINTER">Winter</option>
+  </Form.Select>
+  <Form.Control.Feedback type="invalid">
+    Please select a term.
+  </Form.Control.Feedback>
+</Form.Group>
             </Col>
             <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Academic Year</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="academic_year"
-                  value={formData.academic_year}
-                  onChange={handleChange}
-                  required
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide an academic year.
-                </Form.Control.Feedback>
-              </Form.Group>
+            <Form.Group className="mb-3">
+  <Form.Label>Academic Year</Form.Label>
+  <Form.Control
+    type="text"
+    name="academic_year"
+    value={formData.academic_year}
+    onChange={handleChange}
+    required
+    pattern="\d{4}-\d{4}"
+    placeholder="2025-2026"
+  />
+  <Form.Control.Feedback type="invalid">
+    Please provide a valid academic year (YYYY-YYYY).
+  </Form.Control.Feedback>
+</Form.Group>
             </Col>
           </Row>
 
@@ -297,7 +302,12 @@ const OfferingsPage = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const fetchOfferings = async () => {
     try {
-      const response = await fetch(`${API_URL}/offerings/`);
+      // Add default term and year to the request
+      const params = new URLSearchParams({
+        term: '',  // Default term
+        academic_year: ''  // Default year
+      });
+      const response = await fetch(`${API_URL}/offerings?${params}`);
       const data = await response.json();
       setOfferings(data);
     } catch (error) {
@@ -305,7 +315,7 @@ const OfferingsPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+};
 
   useEffect(() => {
     fetchOfferings();
@@ -440,8 +450,8 @@ const OfferingsPage = () => {
 
 export default OfferingsPage;
 
-import React from 'react';
-import { Table, Button } from 'react-bootstrap';
+import React, { useState } from 'react';
+import { Table, Button, Form, Row, Col } from 'react-bootstrap';
 
 const getDayName = (day) => {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -449,59 +459,100 @@ const getDayName = (day) => {
 };
 
 const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
+  const [termFilter, setTermFilter] = useState('');
+  const [yearFilter, setYearFilter] = useState('2025-2026');
+
   if (!offerings) {
     return <div>No offerings available</div>;
   }
 
+  const filteredOfferings = offerings.filter(offering => {
+    if (termFilter && offering.term !== termFilter) return false;
+    if (yearFilter && offering.academic_year !== yearFilter) return false;
+    return true;
+  });
+
   return (
-    <Table striped bordered hover responsive>
-      <thead>
-        <tr>
-          <th>Course ID</th>
-          <th>Section Type</th>
-          <th>Section Code</th>
-          <th>Day</th>
-          <th>Time</th>
-          <th>Capacity</th>
-          <th>Enrollment</th>
-          <th>Term</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {offerings.map((offering) => (
-          <tr key={offering.offering_id}>
-            <td>{offering.course_id}</td>
-            <td>{offering.section_type}</td>
-            <td>{offering.section_code}</td>
-            <td>{getDayName(offering.day_of_week)}</td>
-            <td>{`${offering.start_time}-${offering.end_time}`}</td>
-            <td>{offering.capacity}</td>
-            <td>{offering.current_enrollment}</td>
-            <td>{`${offering.term} ${offering.academic_year}`}</td>
-            <td>{offering.status}</td>
-            <td>
-              <Button
-                variant="primary"
-                size="sm"
-                className="me-2"
-                onClick={() => onEdit(offering)}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => onDelete(offering.offering_id)}
-              >
-                Delete
-              </Button>
-            </td>
+    <>
+      <Row className="mb-3">
+        <Col md={3}>
+          <Form.Group>
+            <Form.Label>Term</Form.Label>
+            <Form.Select
+              value={termFilter}
+              onChange={(e) => setTermFilter(e.target.value)}
+            >
+              <option value="">All Terms</option>
+              <option value="FALL">Fall</option>
+              <option value="WINTER">Winter</option>
+            </Form.Select>
+          </Form.Group>
+        </Col>
+        <Col md={3}>
+          <Form.Group>
+            <Form.Label>Academic Year</Form.Label>
+            <Form.Control
+              type="text"
+              value={yearFilter}
+              onChange={(e) => setYearFilter(e.target.value)}
+              placeholder="2025-2026"
+              pattern="\d{4}-\d{4}"
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+
+      <Table striped bordered hover responsive>
+        <thead>
+          <tr>
+            <th>Course ID</th>
+            <th>Section Type</th>
+            <th>Section Code</th>
+            <th>Day</th>
+            <th>Time</th>
+            <th>Capacity</th>
+            <th>Enrollment</th>
+            <th>Term</th>
+            <th>Academic Year</th>
+            <th>Status</th>
+            <th>Actions</th>
           </tr>
-        ))}
-      </tbody>
-    </Table>
+        </thead>
+        <tbody>
+          {filteredOfferings.map((offering) => (
+            <tr key={offering.offering_id}>
+              <td>{offering.course_id}</td>
+              <td>{offering.section_type}</td>
+              <td>{offering.section_code}</td>
+              <td>{getDayName(offering.day_of_week)}</td>
+              <td>{`${offering.start_time}-${offering.end_time}`}</td>
+              <td>{offering.capacity}</td>
+              <td>{offering.current_enrollment}</td>
+              <td>{offering.term}</td>
+              <td>{offering.academic_year}</td>
+              <td>{offering.status}</td>
+              <td>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="me-2"
+                  onClick={() => onEdit(offering)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => onDelete(offering.offering_id)}
+                >
+                  Delete
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </>
   );
 };
 
@@ -525,14 +576,39 @@ const OfferingUploadModal = ({ show, onHide, onSave }) => {
             setError('Error parsing CSV file');
             return;
           }
+
+          // Validate and format the data
+          const validData = results.data.filter(row => {
+            // Validate term
+            if (!row.term || !['FALL', 'WINTER'].includes(row.term.toUpperCase())) {
+              setError(`Invalid term "${row.term}" found. Must be FALL or WINTER`);
+              return false;
+            }
+
+            // Validate academic year format
+            if (!row.academic_year || !/^\d{4}-\d{4}$/.test(row.academic_year)) {
+              setError(`Invalid academic year format "${row.academic_year}". Must be YYYY-YYYY`);
+              return false;
+            }
+
+            return true;
+          });
+
+          if (validData.length === 0) {
+            return;
+          }
+
           // Convert string values to appropriate types
-          const formattedData = results.data.map(row => ({
+          const formattedData = validData.map(row => ({
             ...row,
             offering_id: parseInt(row.offering_id),
             day_of_week: parseInt(row.day_of_week),
             capacity: parseInt(row.capacity),
-            current_enrollment: parseInt(row.current_enrollment)
+            current_enrollment: parseInt(row.current_enrollment),
+            term: row.term.toUpperCase(),
+            academic_year: row.academic_year || '2025-2026'
           }));
+
           setParsedData(formattedData);
           setError(null);
         }
@@ -580,6 +656,9 @@ const OfferingUploadModal = ({ show, onHide, onSave }) => {
             onChange={handleFileUpload}
             className="form-control"
           />
+          <small className="text-muted">
+            Note: Term must be FALL or WINTER, Academic Year format: YYYY-YYYY
+          </small>
         </div>
 
         {error && (

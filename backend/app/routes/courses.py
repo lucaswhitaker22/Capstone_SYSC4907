@@ -172,12 +172,10 @@ def delete_course(course_id):
     try:
         course = Course.query.get_or_404(course_id)
         
-        # Check for related course offerings
-        if course.offerings:
-            return jsonify({
-                'error': 'Cannot delete course with existing offerings'
-            }), HTTPStatus.CONFLICT
+        # Delete all associated course offerings first
+        CourseOffering.query.filter_by(course_id=course_id).delete()
             
+        # Then delete the course
         db.session.delete(course)
         db.session.commit()
         return '', HTTPStatus.NO_CONTENT
@@ -188,3 +186,4 @@ def delete_course(course_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+

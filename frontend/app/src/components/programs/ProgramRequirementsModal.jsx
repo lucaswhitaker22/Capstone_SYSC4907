@@ -23,6 +23,32 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
         }
     };
 
+    const handleAddRequirement = async (e) => {
+        e.preventDefault();
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/requirements', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    program_id: programId,
+                    course_id: newRequirement.course_id
+                }),
+            });
+    
+            if (response.ok) {
+                await fetchRequirements();
+                setNewRequirement({ course_id: '' });
+            } else {
+                const error = await response.json();
+                alert(error.error || 'Error adding requirement');
+            }
+        } catch (error) {
+            console.error('Error adding requirement:', error);
+        }
+    };
+
     const fetchCourses = async () => {
         try {
             const response = await fetch('http://127.0.0.1:5000/api/courses');
@@ -42,40 +68,12 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
         }
     }, [show, programId]);
 
-    const handleAddRequirement = async (e) => {
-        e.preventDefault();
-        try {
-            const response = await fetch('http://127.0.0.1:5000/api/requirements', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    program_id: programId,
-                    ...newRequirement,
-                }),
-            });
-
-            if (response.ok) {
-                await fetchRequirements();
-                setNewRequirement({ course_id: '' });
-            } else {
-                const error = await response.json();
-                alert(error.error || 'Error adding requirement');
-            }
-        } catch (error) {
-            console.error('Error adding requirement:', error);
-        }
-    };
-
     const handleDeleteRequirement = async (requirementId) => {
         if (window.confirm('Are you sure you want to delete this requirement?')) {
             try {
                 const response = await fetch(
                     `http://127.0.0.1:5000/api/requirements/${requirementId}`,
-                    {
-                        method: 'DELETE'
-                    }
+                    { method: 'DELETE' }
                 );
                 if (response.ok) {
                     await fetchRequirements();
@@ -104,35 +102,29 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
             </Modal.Header>
             <Modal.Body>
                 <Form onSubmit={handleAddRequirement} className="mb-4">
-                    <Row>
-                        <Col md={9}>
-                            <Form.Group className="mb-3">
-                                <Form.Label>Course</Form.Label>
-                                <Form.Select
-                                    value={newRequirement.course_id}
-                                    onChange={(e) => setNewRequirement({
-                                        course_id: e.target.value
-                                    })}
-                                    required
-                                >
-                                    <option value="">Select a course...</option>
-                                    {courses.map(course => (
-                                        <option key={course.course_id} value={course.course_id}>
-                                            {course.course_id} - {course.course_name}
-                                        </option>
-                                    ))}
-                                </Form.Select>
-                            </Form.Group>
-                        </Col>
-                        <Col md={3} className="d-flex align-items-end">
-                            <Button type="submit" variant="primary" className="mb-3 w-100">
-                                Add Requirement
-                            </Button>
-                        </Col>
-                    </Row>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Course</Form.Label>
+                        <Form.Select
+                            value={newRequirement.course_id}
+                            onChange={(e) => setNewRequirement({
+                                course_id: e.target.value
+                            })}
+                            required
+                        >
+                            <option value="">Select a course...</option>
+                            {courses.map(course => (
+                                <option key={course.course_id} value={course.course_id}>
+                                    {course.course_id} - {course.course_name}
+                                </option>
+                            ))}
+                        </Form.Select>
+                    </Form.Group>
+                    <Button type="submit" variant="primary" className="w-100">
+                        Add Requirement
+                    </Button>
                 </Form>
 
-                <Table striped bordered hover>
+                <Table striped bordered hover className="mt-4">
                     <thead>
                         <tr>
                             <th>Course ID</th>
@@ -148,7 +140,6 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
                                         variant="danger"
                                         size="sm"
                                         onClick={() => handleDeleteRequirement(req.requirement_id)}
-                                        className="me-2"
                                     >
                                         Delete
                                     </Button>
@@ -158,11 +149,6 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
                     </tbody>
                 </Table>
             </Modal.Body>
-            <Modal.Footer>
-                <Button variant="secondary" onClick={onHide}>
-                    Close
-                </Button>
-            </Modal.Footer>
         </Modal>
     );
 };
