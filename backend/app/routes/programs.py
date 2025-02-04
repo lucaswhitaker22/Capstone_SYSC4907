@@ -306,7 +306,7 @@ def update_enrollment(program_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<program_id>/blocks', methods=['PATCH'])
+@bp.route('/blocks', methods=['PATCH'])
 def update_block_counts(program_id):
     try:
         program = Program.query.get_or_404(program_id)
@@ -317,20 +317,63 @@ def update_block_counts(program_id):
         if term not in ['FALL', 'WINTER']:
             return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
             
-        # Update term-specific block counts
         term_suffix = term.lower()
+        term_prefix = 'F' if term == 'FALL' else 'W'
+        
+        # Update 20-student blocks
         if f'blocks_20_count_{term_suffix}' in data:
-            count = data[f'blocks_20_count_{term_suffix}']
-            if not isinstance(count, int) or count < 0:
+            new_count = data[f'blocks_20_count_{term_suffix}']
+            if not isinstance(new_count, int) or new_count < 0:
                 return jsonify({'error': f'Invalid blocks_20_count_{term_suffix}'}), HTTPStatus.BAD_REQUEST
-            setattr(program, f'blocks_20_count_{term_suffix}', count)
+                
+            # Delete existing blocks
+            Block.query.filter_by(
+                program_id=program_id,
+                term=term,
+                block_size=20
+            ).delete()
             
+            # Create new blocks
+            for i in range(new_count):
+                block = Block(
+                    block_id=f"{program_id}_{term_prefix}_20_{i+1}",
+                    program_id=program_id,
+                    block_size=20,
+                    term=term,
+                    academic_year=data.get('academic_year', '2025-2026'),
+                    status="DRAFT"
+                )
+                db.session.add(block)
+            
+            setattr(program, f'blocks_20_count_{term_suffix}', new_count)
+            
+        # Update 10-student blocks
         if f'blocks_10_count_{term_suffix}' in data:
-            count = data[f'blocks_10_count_{term_suffix}']
-            if not isinstance(count, int) or count < 0:
+            new_count = data[f'blocks_10_count_{term_suffix}']
+            if not isinstance(new_count, int) or new_count < 0:
                 return jsonify({'error': f'Invalid blocks_10_count_{term_suffix}'}), HTTPStatus.BAD_REQUEST
-            setattr(program, f'blocks_10_count_{term_suffix}', count)
+                
+            # Delete existing blocks
+            Block.query.filter_by(
+                program_id=program_id,
+                term=term,
+                block_size=10
+            ).delete()
             
+            # Create new blocks
+            for i in range(new_count):
+                block = Block(
+                    block_id=f"{program_id}_{term_prefix}_10_{i+1}",
+                    program_id=program_id,
+                    block_size=10,
+                    term=term,
+                    academic_year=data.get('academic_year', '2025-2026'),
+                    status="DRAFT"
+                )
+                db.session.add(block)
+                
+            setattr(program, f'blocks_10_count_{term_suffix}', new_count)
+        
         db.session.commit()
         
         return jsonify({
@@ -340,6 +383,7 @@ def update_block_counts(program_id):
             'blocks_20_count_winter': program.blocks_20_count_winter,
             'blocks_10_count_winter': program.blocks_10_count_winter
         }), HTTPStatus.OK
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({

@@ -16,9 +16,8 @@ def generate_block_schedule(block_id):
 
         # Get term-specific program requirements
         program_requirements = ProgramRequirement.query.filter_by(
-            program_id=block.program_id,
-            term=block.term
-        ).order_by(ProgramRequirement.requirement_id).all()
+    program_id=block.program_id
+).order_by(ProgramRequirement.requirement_id).all()
 
         if not program_requirements:
             return jsonify({
@@ -131,11 +130,12 @@ def generate_block_schedule(block_id):
         # Calculate and set the rating
         rating_response = rate_block_schedule(block_id)
         if isinstance(rating_response, tuple):
-            rating = rating_response[0].get_json()
+            rating_data = rating_response[0].get_json()
+            rating = rating_data.get('rating', 0)  # Extract just the numerical rating
         else:
-            rating = rating_response
+            rating = rating_response.get('rating', 0)
 
-        block.schedule_rating = rating
+        block.schedule_rating = rating 
         db.session.commit()
 
         formatted_offerings = [{
@@ -178,9 +178,7 @@ def rate_block_schedule(block_id):
         
         # Get block schedules for specific term/year
         block_schedules = BlockSchedule.query.join(CourseOffering).filter(
-            BlockSchedule.block_id == block_id,
-            CourseOffering.term == block.term,
-            CourseOffering.academic_year == block.academic_year
+            BlockSchedule.block_id == block_id
         ).all()
         
         if not block_schedules:
@@ -190,7 +188,21 @@ def rate_block_schedule(block_id):
                 'academic_year': block.academic_year
             }), HTTPStatus.OK
             
-        offerings = [schedule.course_offering for schedule in block_schedules]
+        # Filter offerings by term and academic year
+        offerings = [
+            schedule.course_offering for schedule in block_schedules 
+            if schedule.course_offering.term == block.term 
+            and schedule.course_offering.academic_year == block.academic_year
+        ]
+        
+        if not offerings:
+            return jsonify({
+                'rating': 0,
+                'term': block.term,
+                'academic_year': block.academic_year,
+                'error': 'No offerings found for specified term and year'
+            }), HTTPStatus.OK
+            
         total_points = 0
         
         # Criterion 1: Time Distribution (40 points)

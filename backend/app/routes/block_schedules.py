@@ -196,8 +196,7 @@ def remove_offering_from_block(block_id, offering_id):
 def validate(block_id):
     block = Block.query.get_or_404(block_id)
     requirements = ProgramRequirement.query.filter_by(
-        program_id=block.program_id,
-        term=block.term
+        program_id=block.program_id
     ).all()
     
     return validate_block_schedule(block_id)
@@ -207,39 +206,39 @@ def validate(block_id):
 def rate(block_id):
     block = Block.query.get_or_404(block_id)
     requirements = ProgramRequirement.query.filter_by(
-        program_id=block.program_id,
-        term=block.term
+        program_id=block.program_id
     ).all()
     return rate_block_schedule(block_id)
 
+# Update get_all_possible_schedules route
 @bp.route('/program/<program_id>/schedules', methods=['GET'])
 def get_all_possible_schedules(program_id):
     try:
-        # Get and validate term parameter
-        term = request.args.get('term')
+        # Remove term validation from parameters
         academic_year = request.args.get('academic_year', '2025-2026')
         
-        if not term or term not in ['FALL', 'WINTER']:
-            return jsonify({'error': 'Invalid or missing term'}), HTTPStatus.BAD_REQUEST
-            
         # Validate program exists
         program = Program.query.get_or_404(program_id)
         
-        # Get program requirements for specific term
+        # Get ALL program requirements (remove term filter)
         program_requirements = ProgramRequirement.query.filter_by(
-            program_id=program_id,
-            term=term
+            program_id=program_id
         ).order_by(ProgramRequirement.requirement_id).all()
 
         if not program_requirements:
             return jsonify({
-                'error': f'No requirements found for program in {term} term'
+                'error': f'No requirements found for program {program_id}'  # Remove term reference
             }), HTTPStatus.NOT_FOUND
+
+        # Keep term filter for OFFERINGS only
+        term = request.args.get('term')  # Keep term for offerings filter
+        if not term or term not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid or missing term'}), HTTPStatus.BAD_REQUEST
 
         # Get required course IDs
         required_courses = [req.course_id for req in program_requirements]
 
-        # Get all available offerings for required courses in specified term
+        # Get offerings with term filter
         available_offerings = CourseOffering.query.filter(
             CourseOffering.course_id.in_(required_courses),
             CourseOffering.term == term,

@@ -43,8 +43,7 @@ def validate_block_schedule(block_id):
 
         # Get term-specific program requirements
         requirements = ProgramRequirement.query.filter_by(
-            program_id=block.program_id,
-            term=block.term
+            program_id=block.program_id
         ).all()
 
         missing_requirements = []

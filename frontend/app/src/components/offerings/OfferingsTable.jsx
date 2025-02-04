@@ -39,13 +39,14 @@ const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
         <Col md={3}>
           <Form.Group>
             <Form.Label>Academic Year</Form.Label>
-            <Form.Control
-              type="text"
-              value={yearFilter}
-              onChange={(e) => setYearFilter(e.target.value)}
-              placeholder="2025-2026"
-              pattern="\d{4}-\d{4}"
-            />
+            <Form.Select 
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+            >
+                <option value="2024-2025">2024-2025</option>
+                <option value="2025-2026">2025-2026</option>
+                <option value="2026-2027">2026-2027</option>
+            </Form.Select>
           </Form.Group>
         </Col>
       </Row>

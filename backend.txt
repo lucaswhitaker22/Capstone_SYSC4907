@@ -11,6 +11,7 @@ ma = Marshmallow()
 === backend/app/models/block.py ===
 # app/models/block.py
 from app import db
+from .enums import Term, BlockStatus
 
 class Block(db.Model):
     __tablename__ = 'block'
@@ -18,15 +19,14 @@ class Block(db.Model):
     block_id = db.Column(db.String(20), primary_key=True)
     program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), nullable=False)
     block_size = db.Column(db.Integer, nullable=False)
-    term = db.Column(db.String(10), nullable=False)
+    term = db.Column(db.Enum(Term), nullable=False)  # Change to Enum type
     academic_year = db.Column(db.String(9), nullable=False)
     schedule_rating = db.Column(db.Numeric(5,2))
     early_starts = db.Column(db.Integer)
     late_ends = db.Column(db.Integer)
     long_breaks = db.Column(db.Integer)
     consecutive_days = db.Column(db.Integer)
-    status = db.Column(db.String(20), default='DRAFT')
-
+    status = db.Column(db.Enum(BlockStatus), default=BlockStatus.DRAFT)
     # Relationships
     block_schedules = db.relationship('BlockSchedule', backref='block', lazy=True)
 
@@ -76,30 +76,32 @@ class Course(db.Model):
 === backend/app/models/course_offering.py ===
 # app/models/course_offering.py
 from app import db
-
+from .enums import Term, OfferingStatus
+# app/models/course_offering.py
 class CourseOffering(db.Model):
     __tablename__ = 'course_offering'
 
     offering_id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.String(10), db.ForeignKey('course.course_id'), nullable=False)
-    section_type = db.Column(db.String(20), nullable=False)
+    section_type = db.Column(db.String(20), nullable=False)  # Use enum
     section_code = db.Column(db.String(5), nullable=False)
     day_of_week = db.Column(db.Integer, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
     capacity = db.Column(db.Integer, nullable=False)
     current_enrollment = db.Column(db.Integer, default=0)
-    term = db.Column(db.String(10), nullable=False)
+    term = db.Column(db.Enum(Term), nullable=False)  # Use enum
     academic_year = db.Column(db.String(9), nullable=False)
-    status = db.Column(db.String(20), default='OPEN')
-
-    # Relationships
-    block_schedules = db.relationship('BlockSchedule', backref='course_offering', lazy=True)
+    status = db.Column(db.Enum(OfferingStatus), default=OfferingStatus.OPEN)  # Use enum
 
     __table_args__ = (
         db.UniqueConstraint('course_id', 'section_type', 'section_code', 
                           'term', 'academic_year', name='unique_section'),
+        db.Index('idx_term_year', 'term', 'academic_year')  # Add index for common queries
     )
+
+    # Relationships
+    block_schedules = db.relationship('BlockSchedule', backref='course_offering', lazy=True)
 
     def __repr__(self):
         return f'<CourseOffering {self.course_id} {self.section_code}>'
@@ -129,6 +131,8 @@ class OfferingStatus(str, Enum):
     CANCELLED = 'CANCELLED'
 
 
+
+
 === backend/app/models/mixins.py ===
 # app/models/mixins.py
 from datetime import datetime
@@ -149,13 +153,14 @@ class Program(db.Model):
     program_id = db.Column(db.String(10), primary_key=True)
     program_name = db.Column(db.String(100), nullable=False)
     total_enrollment = db.Column(db.Integer, nullable=False)
-    blocks_20_count = db.Column(db.Integer, nullable=False)
-    blocks_10_count = db.Column(db.Integer, nullable=False)
+    blocks_20_count_fall = db.Column(db.Integer, nullable=False, default=0)  # New field
+    blocks_10_count_fall = db.Column(db.Integer, nullable=False, default=0)  # New field
+    blocks_20_count_winter = db.Column(db.Integer, nullable=False, default=0)  # New field
+    blocks_10_count_winter = db.Column(db.Integer, nullable=False, default=0)  # New field
 
     # Relationships
     blocks = db.relationship('Block', backref='program', lazy=True)
     program_requirements = db.relationship('ProgramRequirement', backref='program', lazy=True)
-
     def __repr__(self):
         return f'<Program {self.program_id}>'
 
@@ -163,15 +168,16 @@ class Program(db.Model):
 === backend/app/models/program_requirement.py ===
 # app/models/program_requirement.py
 from app import db
-
+from .enums import Term
 class ProgramRequirement(db.Model):
     __tablename__ = 'program_requirement'
+    
     requirement_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), nullable=False)
     course_id = db.Column(db.String(10), db.ForeignKey('course.course_id'), nullable=False)
     
     __table_args__ = (
-        db.UniqueConstraint('program_id', 'course_id', name='unique_program_course'),
+        db.UniqueConstraint('program_id', 'course_id', name='unique_program_course_term'),
     )
 
     def __repr__(self):
@@ -201,7 +207,9 @@ __all__ = [
 === backend/app/routes/blocks.py ===
 # app/routes/blocks.py
 from flask import Blueprint, jsonify, request
-from app.models import Block, BlockSchedule
+import re
+from app.models import Block, BlockSchedule, CourseOffering
+import time
 from app import db
 from http import HTTPStatus
 
@@ -209,7 +217,21 @@ bp = Blueprint('blocks', __name__, url_prefix='/api/blocks')
 
 @bp.route('/', methods=['GET'], strict_slashes=False)
 def get_blocks():
-    blocks = Block.query.all()
+    # Add term and year filtering
+    term = request.args.get('term')
+    academic_year = request.args.get('academic_year')
+    
+    query = Block.query
+    
+    if term:
+        if term not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
+        query = query.filter_by(term=term)
+        
+    if academic_year:
+        query = query.filter_by(academic_year=academic_year)
+        
+    blocks = query.all()
     return jsonify([{
         'block_id': b.block_id,
         'program_id': b.program_id,
@@ -220,6 +242,7 @@ def get_blocks():
         'status': b.status
     } for b in blocks]), HTTPStatus.OK
 
+
 @bp.route('/<block_id>', methods=['GET'], strict_slashes=False)
 def get_block(block_id):
     block = Block.query.get_or_404(block_id)
@@ -229,7 +252,7 @@ def get_block(block_id):
         'block_size': block.block_size,
         'term': block.term,
         'academic_year': block.academic_year,
-        'schedule_rating': float(block.schedule_rating) if block.schedule_rating else None,
+        'schedule_rating': float(block.schedule_rating) if b.schedule_rating else None,
         'early_starts': block.early_starts,
         'late_ends': block.late_ends,
         'long_breaks': block.long_breaks,
@@ -241,18 +264,27 @@ def get_block(block_id):
 def create_block():
     data = request.get_json()
     
-    # Validate required fields
     required_fields = ['block_id', 'program_id', 'block_size', 'term', 'academic_year']
     if not data or not all(field in data for field in required_fields):
         return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
         
-    # Validate block size before attempting insert
+    if data['term'] not in ['FALL', 'WINTER']:
+        return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
+        
     if data['block_size'] not in (10, 20):
         return jsonify({'error': 'Block size must be 10 or 20'}), HTTPStatus.BAD_REQUEST
         
-    # Check if block already exists
-    if Block.query.get(data['block_id']):
-        return jsonify({'error': 'Block already exists'}), HTTPStatus.CONFLICT
+    if not re.match(r'^\d{4}-\d{4}$', data['academic_year']):
+        return jsonify({'error': 'Invalid academic year format'}), HTTPStatus.BAD_REQUEST
+        
+    existing = Block.query.filter_by(
+        program_id=data['program_id'],
+        term=data['term'],
+        academic_year=data['academic_year']
+    ).first()
+    
+    if existing:
+        return jsonify({'error': f"Block already exists for {data['term']} {data['academic_year']}"}), HTTPStatus.CONFLICT
         
     try:
         block = Block(**data)
@@ -268,9 +300,9 @@ def create_block():
             'status': block.status
         }), HTTPStatus.CREATED
         
-    except IntegrityError as e:
+    except Exception as e:
         db.session.rollback()
-        return jsonify({'error': 'Invalid block data'}), HTTPStatus.BAD_REQUEST
+        return jsonify({'error': str(e)}), HTTPStatus.BAD_REQUEST
 
 @bp.route('/<block_id>/status', methods=['PATCH'], strict_slashes=False)
 def update_block_status(block_id):
@@ -281,7 +313,6 @@ def update_block_status(block_id):
         if 'status' not in data:
             return jsonify({'error': 'Status is required'}), HTTPStatus.BAD_REQUEST
             
-        # Validate status value
         valid_statuses = ['DRAFT', 'PUBLISHED', 'LOCKED']
         if data['status'] not in valid_statuses:
             return jsonify({'error': f'Status must be one of: {", ".join(valid_statuses)}'}), HTTPStatus.BAD_REQUEST
@@ -291,7 +322,9 @@ def update_block_status(block_id):
         
         return jsonify({
             'block_id': block.block_id,
-            'status': block.status
+            'status': block.status,
+            'term': block.term,
+            'academic_year': block.academic_year
         }), HTTPStatus.OK
         
     except Exception as e:
@@ -369,54 +402,48 @@ def delete_block(block_id):
 def calculate_block_rating(block_id):
     try:
         block = Block.query.get_or_404(block_id)
-        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
         
-        # Initialize counters
+        # Get schedules for specific term/year
+        schedules = BlockSchedule.query.join(CourseOffering).filter(
+            BlockSchedule.block_id == block_id,
+            CourseOffering.term == block.term,
+            CourseOffering.academic_year == block.academic_year
+        ).all()
+        
         early_starts = 0
         late_ends = 0
         long_breaks = 0
         consecutive_days = set()
         
-        # Get all offerings for the block
         offerings = [schedule.course_offering for schedule in schedules]
         
         for offering in offerings:
-            # Check for early starts (before 8:30)
             if offering.start_time < time.fromisoformat('08:30'):
                 early_starts += 1
-                
-            # Check for late ends (after 17:30)
             if offering.end_time > time.fromisoformat('17:30'):
                 late_ends += 1
-                
-            # Add day to consecutive days set
             consecutive_days.add(offering.day_of_week)
             
-        # Sort offerings by day and time to check for breaks
         offerings.sort(key=lambda x: (x.day_of_week, x.start_time))
         
-        # Check for long breaks (> 2 hours) between classes on same day
         for i in range(len(offerings)-1):
             if (offerings[i].day_of_week == offerings[i+1].day_of_week and 
                 (offerings[i+1].start_time.hour - offerings[i].end_time.hour) > 2):
                 long_breaks += 1
         
-        # Calculate consecutive days penalty
         consecutive_days_count = 0
         days = sorted(list(consecutive_days))
         for i in range(len(days)-1):
             if days[i+1] - days[i] == 1:
                 consecutive_days_count += 1
         
-        # Update block ratings
         block.early_starts = early_starts
         block.late_ends = late_ends
         block.long_breaks = long_breaks
         block.consecutive_days = consecutive_days_count
         
-        # Calculate overall rating (0-100 scale)
         total_penalties = early_starts + late_ends + long_breaks + consecutive_days_count
-        max_penalties = len(offerings)  # Maximum possible penalties per category
+        max_penalties = len(offerings)
         if max_penalties > 0:
             block.schedule_rating = max(0, 100 - (total_penalties / max_penalties) * 25)
         else:
@@ -426,6 +453,8 @@ def calculate_block_rating(block_id):
         
         return jsonify({
             'block_id': block.block_id,
+            'term': block.term,
+            'academic_year': block.academic_year,
             'schedule_rating': float(block.schedule_rating),
             'early_starts': block.early_starts,
             'late_ends': block.late_ends,
@@ -454,6 +483,7 @@ import logging
 
 bp = Blueprint('schedules', __name__, url_prefix='/api/schedules')
 
+
 @bp.route('/block/<block_id>', methods=['GET'], strict_slashes=False)
 def get_block_schedule(block_id):
     try:
@@ -475,7 +505,9 @@ def get_block_schedule(block_id):
                 'section_code': offering.section_code,
                 'day_of_week': offering.day_of_week,
                 'start_time': offering.start_time.strftime('%H:%M'),
-                'end_time': offering.end_time.strftime('%H:%M')
+                'end_time': offering.end_time.strftime('%H:%M'),
+                'term': block.term,
+                'academic_year': block.academic_year
             })
         return jsonify(offerings), HTTPStatus.OK
     except Exception as e:
@@ -521,8 +553,6 @@ def add_offering_to_block(block_id):
                 'message': 'offering_id is required'
             }), HTTPStatus.BAD_REQUEST
 
-        current_app.logger.info(f"Adding offering to block: {block_id}, offering_id: {data['offering_id']}")
-        
         # Check if block exists
         block = Block.query.get(block_id)
         if not block:
@@ -531,19 +561,26 @@ def add_offering_to_block(block_id):
                 'message': f'Block {block_id} not found'
             }), HTTPStatus.NOT_FOUND
 
-        # Check if offering exists
+        # Check if offering exists and matches block term
         new_offering = CourseOffering.query.get(data['offering_id'])
         if not new_offering:
             return jsonify({
                 'error': 'Not Found',
                 'message': f'Offering {data["offering_id"]} not found'
             }), HTTPStatus.NOT_FOUND
+            
+        # Validate term and year match
+        if new_offering.term != block.term or new_offering.academic_year != block.academic_year:
+            return jsonify({
+                'error': 'Term mismatch',
+                'message': f'Offering term ({new_offering.term}) does not match block term ({block.term})'
+            }), HTTPStatus.CONFLICT
         
         # Get existing offerings in block
         existing_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
         existing_offerings = [schedule.course_offering for schedule in existing_schedules]
         
-        # Check for conflicts using the conflicts module
+        # Check for conflicts
         conflicts = []
         for existing_offering in existing_offerings:
             if has_time_conflict(existing_offering, new_offering):
@@ -554,7 +591,8 @@ def add_offering_to_block(block_id):
                     'new_offering_id': new_offering.offering_id,
                     'new_course_id': new_offering.course_id,
                     'new_time': f"{new_offering.start_time.strftime('%H:%M')}-{new_offering.end_time.strftime('%H:%M')}",
-                    'day_of_week': new_offering.day_of_week
+                    'day_of_week': new_offering.day_of_week,
+                    'term': block.term
                 })
         
         if conflicts:
@@ -576,7 +614,9 @@ def add_offering_to_block(block_id):
             'section_code': new_offering.section_code,
             'day_of_week': new_offering.day_of_week,
             'start_time': new_offering.start_time.strftime('%H:%M'),
-            'end_time': new_offering.end_time.strftime('%H:%M')
+            'end_time': new_offering.end_time.strftime('%H:%M'),
+            'term': block.term,
+            'academic_year': block.academic_year
         }), HTTPStatus.CREATED
 
     except Exception as e:
@@ -589,6 +629,14 @@ def add_offering_to_block(block_id):
     
 @bp.route('/block/<block_id>/generate', methods=['POST'])
 def generate(block_id):
+    block = Block.query.get_or_404(block_id)
+    
+    # Get term-specific offerings
+    available_offerings = CourseOffering.query.filter_by(
+        term=block.term,
+        academic_year=block.academic_year
+    ).all()
+    
     return generate_block_schedule(block_id)
 
 
@@ -618,36 +666,58 @@ def remove_offering_from_block(block_id, offering_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/block/<block_id>/validate', methods=['GET'], strict_slashes=False)
+@bp.route('/block/<block_id>/validate', methods=['GET'])
 def validate(block_id):
+    block = Block.query.get_or_404(block_id)
+    requirements = ProgramRequirement.query.filter_by(
+        program_id=block.program_id,
+        term=block.term
+    ).all()
+    
     return validate_block_schedule(block_id)
+
 
 @bp.route('/block/<block_id>/rate', methods=['GET'])
 def rate(block_id):
+    block = Block.query.get_or_404(block_id)
+    requirements = ProgramRequirement.query.filter_by(
+        program_id=block.program_id,
+        term=block.term
+    ).all()
     return rate_block_schedule(block_id)
 
 @bp.route('/program/<program_id>/schedules', methods=['GET'])
 def get_all_possible_schedules(program_id):
     try:
+        # Get and validate term parameter
+        term = request.args.get('term')
+        academic_year = request.args.get('academic_year', '2025-2026')
+        
+        if not term or term not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid or missing term'}), HTTPStatus.BAD_REQUEST
+            
         # Validate program exists
         program = Program.query.get_or_404(program_id)
         
-        # Get program requirements
+        # Get program requirements for specific term
         program_requirements = ProgramRequirement.query.filter_by(
-            program_id=program_id
+            program_id=program_id,
+            term=term
         ).order_by(ProgramRequirement.requirement_id).all()
 
         if not program_requirements:
             return jsonify({
-                'error': 'No requirements found for program'
+                'error': f'No requirements found for program in {term} term'
             }), HTTPStatus.NOT_FOUND
 
         # Get required course IDs
         required_courses = [req.course_id for req in program_requirements]
 
-        # Get all available offerings for required courses
+        # Get all available offerings for required courses in specified term
         available_offerings = CourseOffering.query.filter(
-            CourseOffering.course_id.in_(required_courses)
+            CourseOffering.course_id.in_(required_courses),
+            CourseOffering.term == term,
+            CourseOffering.academic_year == academic_year
         ).all()
 
         # Group offerings by course
@@ -721,12 +791,16 @@ def get_all_possible_schedules(program_id):
                 'section_code': o.section_code,
                 'day_of_week': o.day_of_week,
                 'start_time': o.start_time.strftime('%H:%M'),
-                'end_time': o.end_time.strftime('%H:%M')
+                'end_time': o.end_time.strftime('%H:%M'),
+                'term': term,
+                'academic_year': academic_year
             } for o in schedule]
             formatted_schedules.append(formatted_offerings)
 
         return jsonify({
             'program_id': program_id,
+            'term': term,
+            'academic_year': academic_year,
             'total_schedules': len(formatted_schedules),
             'schedules': formatted_schedules
         }), HTTPStatus.OK
@@ -740,9 +814,8 @@ def get_all_possible_schedules(program_id):
 
 
 === backend/app/routes/conflicts.py ===
-# app/routes/conflicts.py
 from flask import Blueprint, jsonify, request
-from app.models import CourseOffering, BlockSchedule
+from app.models import CourseOffering, BlockSchedule, Block
 from http import HTTPStatus
 
 bp = Blueprint('conflicts', __name__, url_prefix='/api/conflicts')
@@ -752,22 +825,54 @@ def check_offering_conflict(offering1_id, offering2_id):
     offering1 = CourseOffering.query.get_or_404(offering1_id)
     offering2 = CourseOffering.query.get_or_404(offering2_id)
     
+    # Check if offerings are in the same term and year
+    if offering1.term != offering2.term or offering1.academic_year != offering2.academic_year:
+        return jsonify({
+            'has_conflict': False,
+            'message': 'Offerings are in different terms/years',
+            'offering1': {
+                'course_id': offering1.course_id,
+                'term': offering1.term,
+                'academic_year': offering1.academic_year
+            },
+            'offering2': {
+                'course_id': offering2.course_id,
+                'term': offering2.term,
+                'academic_year': offering2.academic_year
+            }
+        }), HTTPStatus.OK
+    
     has_conflict = has_time_conflict(offering1, offering2)
     
     return jsonify({
         'has_conflict': has_conflict,
-        'offering1': offering1.course_id,
-        'offering2': offering2.course_id
+        'offering1': {
+            'course_id': offering1.course_id,
+            'term': offering1.term,
+            'academic_year': offering1.academic_year
+        },
+        'offering2': {
+            'course_id': offering2.course_id,
+            'term': offering2.term,
+            'academic_year': offering2.academic_year
+        }
     }), HTTPStatus.OK
 
 @bp.route('/schedule/conflicts', methods=['POST'], strict_slashes=False)
 def check_schedule_conflicts():
     data = request.get_json()
     offering_ids = data.get('offering_ids', [])
+    term = data.get('term')
+    academic_year = data.get('academic_year')
     
-    conflicts = _find_schedule_conflicts(offering_ids)
+    if not term or term not in ['FALL', 'WINTER']:
+        return jsonify({'error': 'Invalid or missing term'}), HTTPStatus.BAD_REQUEST
+        
+    conflicts = _find_schedule_conflicts(offering_ids, term, academic_year)
     
     return jsonify({
+        'term': term,
+        'academic_year': academic_year,
         'conflicts': conflicts
     }), HTTPStatus.OK
 
@@ -777,11 +882,15 @@ def check_course_conflicts():
     schedule_offering_ids = data.get('schedule_offering_ids', [])
     new_offering_id = data.get('new_offering_id')
     
-    # Get the offerings
-    schedule_offerings = CourseOffering.query.filter(
-        CourseOffering.offering_id.in_(schedule_offering_ids)
-    ).all()
+    # Get the new offering first to check its term
     new_offering = CourseOffering.query.get_or_404(new_offering_id)
+    
+    # Get the offerings from the same term and year
+    schedule_offerings = CourseOffering.query.filter(
+        CourseOffering.offering_id.in_(schedule_offering_ids),
+        CourseOffering.term == new_offering.term,
+        CourseOffering.academic_year == new_offering.academic_year
+    ).all()
     
     conflicts = []
     for existing_offering in schedule_offerings:
@@ -793,12 +902,22 @@ def check_course_conflicts():
                 'new_offering_id': new_offering.offering_id,
                 'new_course_id': new_offering.course_id,
                 'new_time': f"{new_offering.start_time.strftime('%H:%M')}-{new_offering.end_time.strftime('%H:%M')}",
-                'day_of_week': new_offering.day_of_week
+                'day_of_week': new_offering.day_of_week,
+                'term': new_offering.term,
+                'academic_year': new_offering.academic_year
             })
     
-    return jsonify({'conflicts': conflicts}), HTTPStatus.OK
+    return jsonify({
+        'conflicts': conflicts,
+        'term': new_offering.term,
+        'academic_year': new_offering.academic_year
+    }), HTTPStatus.OK
 
 def has_time_conflict(offering1, offering2):
+    # First check term and year match
+    if offering1.term != offering2.term or offering1.academic_year != offering2.academic_year:
+        return False
+        
     # Only check conflicts on the same day
     if offering1.day_of_week != offering2.day_of_week:
         return False
@@ -815,8 +934,14 @@ def has_time_conflict(offering1, offering2):
         (start2 <= end1 and end2 >= start1)      # offering2 overlaps with offering1
     )
 
-def _find_schedule_conflicts(offering_ids):
-    offerings = [CourseOffering.query.get(id) for id in offering_ids]
+def _find_schedule_conflicts(offering_ids, term, academic_year):
+    # Get offerings only from specified term and year
+    offerings = CourseOffering.query.filter(
+        CourseOffering.offering_id.in_(offering_ids),
+        CourseOffering.term == term,
+        CourseOffering.academic_year == academic_year
+    ).all()
+    
     conflicts = []
     
     for i, offering1 in enumerate(offerings):
@@ -828,17 +953,20 @@ def _find_schedule_conflicts(offering_ids):
                     'course1_id': offering1.course_id,
                     'course2_id': offering2.course_id,
                     'day': offering1.day_of_week,
-                    'time1': f"{offering1.start_time}-{offering1.end_time}",
-                    'time2': f"{offering2.start_time}-{offering2.end_time}"
+                    'time1': f"{offering1.start_time.strftime('%H:%M')}-{offering1.end_time.strftime('%H:%M')}",
+                    'time2': f"{offering2.start_time.strftime('%H:%M')}-{offering2.end_time.strftime('%H:%M')}",
+                    'term': term,
+                    'academic_year': academic_year
                 })
     
     return conflicts
 
 
+
 === backend/app/routes/courses.py ===
 # app/routes/courses.py
 from flask import Blueprint, jsonify, request
-from app.models import Course
+from app.models import Course,CourseOffering
 from app import db
 from http import HTTPStatus
 
@@ -846,12 +974,32 @@ bp = Blueprint('courses', __name__, url_prefix='/api/courses')
 
 @bp.route('/', methods=['GET'], strict_slashes=False)
 def get_courses():
+    # Add term filter for offerings
+    term = request.args.get('term')
+    academic_year = request.args.get('academic_year')
+    
     courses = Course.query.all()
-    return jsonify([{
-        'course_id': c.course_id,
-        'course_name': c.course_name,
-        'credits': float(c.credits)
-    } for c in courses]), HTTPStatus.OK
+    response = []
+    
+    for c in courses:
+        course_data = {
+            'course_id': c.course_id,
+            'course_name': c.course_name,
+            'credits': float(c.credits)
+        }
+        
+        # Add offering counts if term is specified
+        if term and academic_year:
+            offerings = CourseOffering.query.filter_by(
+                course_id=c.course_id,
+                term=term,
+                academic_year=academic_year
+            ).count()
+            course_data['offerings_count'] = offerings
+            
+        response.append(course_data)
+    
+    return jsonify(response), HTTPStatus.OK
 
 @bp.route('/bulk', methods=['POST'], strict_slashes=False)
 def create_courses_bulk():
@@ -925,10 +1073,26 @@ def create_courses_bulk():
 @bp.route('/<course_id>', methods=['GET'], strict_slashes=False)
 def get_course(course_id):
     course = Course.query.get_or_404(course_id)
+    
+    # Get term-specific offering counts
+    fall_offerings = CourseOffering.query.filter_by(
+        course_id=course_id,
+        term='FALL',
+        academic_year='2025-2026'
+    ).count()
+    
+    winter_offerings = CourseOffering.query.filter_by(
+        course_id=course_id,
+        term='WINTER',
+        academic_year='2025-2026'
+    ).count()
+    
     return jsonify({
         'course_id': course.course_id,
         'course_name': course.course_name,
-        'credits': float(course.credits)
+        'credits': float(course.credits),
+        'fall_offerings_count': fall_offerings,
+        'winter_offerings_count': winter_offerings
     }), HTTPStatus.OK
 
 @bp.route('/', methods=['POST'], strict_slashes=False)
@@ -974,12 +1138,10 @@ def delete_course(course_id):
     try:
         course = Course.query.get_or_404(course_id)
         
-        # Check for related course offerings
-        if course.offerings:
-            return jsonify({
-                'error': 'Cannot delete course with existing offerings'
-            }), HTTPStatus.CONFLICT
+        # Delete all associated course offerings first
+        CourseOffering.query.filter_by(course_id=course_id).delete()
             
+        # Then delete the course
         db.session.delete(course)
         db.session.commit()
         return '', HTTPStatus.NO_CONTENT
@@ -993,6 +1155,7 @@ def delete_course(course_id):
 
 
 
+
 === backend/app/routes/course_offerings.py ===
 # app/routes/course_offerings.py
 from flask import Blueprint, jsonify, request
@@ -1000,12 +1163,26 @@ from app.models import CourseOffering, Course, BlockSchedule
 from app import db
 from http import HTTPStatus
 from datetime import datetime
-
+import re
 bp = Blueprint('offerings', __name__, url_prefix='/api/offerings')
 
-@bp.route('/', methods=['GET'],  strict_slashes=False)
+@bp.route('/', methods=['GET'], strict_slashes=False)
 def get_offerings():
-    offerings = CourseOffering.query.all()
+    # Add term and year filtering
+    term = request.args.get('term')
+    academic_year = request.args.get('academic_year', '')
+    
+    query = CourseOffering.query
+    
+    if term:
+        if term not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
+        query = query.filter_by(term=term)
+    
+    if academic_year:
+        query = query.filter_by(academic_year=academic_year)
+        
+    offerings = query.all()
     return jsonify([{
         'offering_id': o.offering_id,
         'course_id': o.course_id,
@@ -1020,6 +1197,7 @@ def get_offerings():
         'academic_year': o.academic_year,
         'status': o.status
     } for o in offerings]), HTTPStatus.OK
+
 
 @bp.route('/<int:offering_id>', methods=['GET'], strict_slashes=False)
 def get_offering(offering_id):
@@ -1044,11 +1222,14 @@ def create_offering():
     try:
         data = request.get_json()
         
-        # Validate required fields
         required_fields = ['course_id', 'section_type', 'section_code', 'day_of_week', 
                          'start_time', 'end_time', 'capacity', 'term', 'academic_year']
         if not data or not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
+            
+        # Validate term
+        if data['term'] not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
             
         # Validate course exists
         if not Course.query.get(data['course_id']):
@@ -1064,6 +1245,17 @@ def create_offering():
         # Validate day_of_week
         if not 1 <= data['day_of_week'] <= 7:
             return jsonify({'error': 'day_of_week must be between 1 and 7'}), HTTPStatus.BAD_REQUEST
+            
+        # Check for duplicate section in same term
+        existing = CourseOffering.query.filter_by(
+            course_id=data['course_id'],
+            section_code=data['section_code'],
+            term=data['term'],
+            academic_year=data['academic_year']
+        ).first()
+        
+        if existing:
+            return jsonify({'error': 'Section already exists for this term'}), HTTPStatus.CONFLICT
             
         offering = CourseOffering(**data)
         db.session.add(offering)
@@ -1256,7 +1448,17 @@ def create_offerings_bulk():
             ]
             
             if not all(k in offering_data for k in required_fields):
-                errors.append(f"Missing required fields for offering")
+                errors.append(f"Missing required fields for offering {offering_data.get('course_id', 'Unknown')}")
+                continue
+
+            # Validate term
+            if offering_data['term'] not in ['FALL', 'WINTER']:
+                errors.append(f"Invalid term for offering {offering_data['course_id']}")
+                continue
+
+            # Validate academic year format (YYYY-YYYY)
+            if not re.match(r'^\d{4}-\d{4}$', offering_data['academic_year']):
+                errors.append(f"Invalid academic year format for offering {offering_data['course_id']}")
                 continue
                 
             # Check if course exists, if not create it
@@ -1272,7 +1474,7 @@ def create_offerings_bulk():
             # Validate section_type
             valid_types = ['LECTURE', 'LAB', 'TUTORIAL']
             if offering_data['section_type'] not in valid_types:
-                errors.append(f"Invalid section_type for offering")
+                errors.append(f"Invalid section_type for offering {offering_data['course_id']}")
                 continue
                 
             # Validate times
@@ -1280,10 +1482,22 @@ def create_offerings_bulk():
                 start_time = datetime.strptime(offering_data['start_time'], '%H:%M').time()
                 end_time = datetime.strptime(offering_data['end_time'], '%H:%M').time()
                 if end_time <= start_time:
-                    errors.append(f"End time must be after start time")
+                    errors.append(f"End time must be after start time for offering {offering_data['course_id']}")
                     continue
             except ValueError:
-                errors.append(f"Invalid time format")
+                errors.append(f"Invalid time format for offering {offering_data['course_id']}")
+                continue
+
+            # Check for duplicate section in same term/year
+            existing = CourseOffering.query.filter_by(
+                course_id=offering_data['course_id'],
+                section_code=offering_data['section_code'],
+                term=offering_data['term'],
+                academic_year=offering_data['academic_year']
+            ).first()
+            
+            if existing:
+                errors.append(f"Section already exists for {offering_data['course_id']} in {offering_data['term']} {offering_data['academic_year']}")
                 continue
                 
             # Create offering
@@ -1297,10 +1511,16 @@ def create_offerings_bulk():
                 capacity=int(offering_data['capacity']),
                 term=offering_data['term'],
                 academic_year=offering_data['academic_year'],
-                status='OPEN'
+                status='OPEN',
+                current_enrollment=0
             )
             db.session.add(offering)
-            created_offerings.append(offering_data)
+            created_offerings.append({
+                'course_id': offering_data['course_id'],
+                'section_code': offering_data['section_code'],
+                'term': offering_data['term'],
+                'academic_year': offering_data['academic_year']
+            })
             
         if errors and not created_offerings:
             db.session.rollback()
@@ -1311,7 +1531,7 @@ def create_offerings_bulk():
             
         db.session.commit()
         return jsonify({
-            'message': 'Offerings created successfully',
+            'message': f'{len(created_offerings)} offerings created successfully',
             'created': created_offerings,
             'errors': errors
         }), HTTPStatus.CREATED
@@ -1322,6 +1542,7 @@ def create_offerings_bulk():
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 
 === backend/app/routes/programs.py ===
@@ -1341,8 +1562,10 @@ def get_programs():
             'program_id': p.program_id,
             'program_name': p.program_name,
             'total_enrollment': p.total_enrollment,
-            'blocks_20_count': p.blocks_20_count,
-            'blocks_10_count': p.blocks_10_count
+            'blocks_20_count_fall': p.blocks_20_count_fall,
+            'blocks_10_count_fall': p.blocks_10_count_fall,
+            'blocks_20_count_winter': p.blocks_20_count_winter,
+            'blocks_10_count_winter': p.blocks_10_count_winter
         } for p in programs]), HTTPStatus.OK
     except Exception as e:
         return jsonify({
@@ -1357,67 +1580,83 @@ def get_program(program_id):
         'program_id': program.program_id,
         'program_name': program.program_name,
         'total_enrollment': program.total_enrollment,
-        'blocks_20_count': program.blocks_20_count,
-        'blocks_10_count': program.blocks_10_count
+        'blocks_20_count_fall': program.blocks_20_count_fall,
+        'blocks_10_count_fall': program.blocks_10_count_fall,
+        'blocks_20_count_winter': program.blocks_20_count_winter,
+        'blocks_10_count_winter': program.blocks_10_count_winter
     }), HTTPStatus.OK
+
 
 @bp.route('/', methods=['POST'])
 def create_program():
     try:
         data = request.get_json()
         
-        # Validate required fields
-        required_fields = ['program_id', 'program_name', 'total_enrollment', 
-                         'blocks_20_count', 'blocks_10_count']
+        # Update required fields - remove term
+        required_fields = [
+            'program_id', 'program_name', 'total_enrollment',
+            'blocks_20_count_fall', 'blocks_10_count_fall',
+            'blocks_20_count_winter', 'blocks_10_count_winter',
+            'academic_year'
+        ]
         if not data or not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
-            
-        # Check for existing program
-        if Program.query.get(data['program_id']):
-            return jsonify({'error': 'Program already exists'}), HTTPStatus.CONFLICT
-            
-        # Validate numeric fields
-        if not isinstance(data['total_enrollment'], int) or data['total_enrollment'] < 0:
-            return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
-            
-        if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
-            return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
-            
-        if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
-            return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
 
         # Create program
-        program = Program(**data)
+        program = Program(
+            program_id=data['program_id'],
+            program_name=data['program_name'],
+            total_enrollment=data['total_enrollment'],
+            blocks_20_count_fall=data['blocks_20_count_fall'],
+            blocks_10_count_fall=data['blocks_10_count_fall'],
+            blocks_20_count_winter=data['blocks_20_count_winter'],
+            blocks_10_count_winter=data['blocks_10_count_winter']
+        )
         db.session.add(program)
         
-        # Generate blocks
+        # Generate blocks for both terms
         blocks = []
         
-        # Generate 20-student blocks
-        for i in range(data['blocks_20_count']):
-            block = Block(
-                block_id=f"{data['program_id']}_20_{i+1}",
+        # Fall blocks
+        for i in range(data['blocks_20_count_fall']):
+            blocks.append(Block(
+                block_id=f"{data['program_id']}_F_20_{i+1}",
                 program_id=data['program_id'],
                 block_size=20,
-                term="FALL",
-                academic_year="2025-2026",
-                status="ACTIVE"
-            )
-            blocks.append(block)
-            
-        # Generate 10-student blocks
-        for i in range(data['blocks_10_count']):
-            block = Block(
-                block_id=f"{data['program_id']}_10_{i+1}",
+                term='FALL',
+                academic_year=data['academic_year'],
+                status="DRAFT"
+            ))
+        for i in range(data['blocks_10_count_fall']):
+            blocks.append(Block(
+                block_id=f"{data['program_id']}_F_10_{i+1}",
                 program_id=data['program_id'],
                 block_size=10,
-                term="FALL",
-                academic_year="2025-2026",
-                status="ACTIVE"
-            )
-            blocks.append(block)
+                term='FALL',
+                academic_year=data['academic_year'],
+                status="DRAFT"
+            ))
+            
+        # Winter blocks
+        for i in range(data['blocks_20_count_winter']):
+            blocks.append(Block(
+                block_id=f"{data['program_id']}_W_20_{i+1}",
+                program_id=data['program_id'],
+                block_size=20,
+                term='WINTER',
+                academic_year=data['academic_year'],
+                status="DRAFT"
+            ))
+        for i in range(data['blocks_10_count_winter']):
+            blocks.append(Block(
+                block_id=f"{data['program_id']}_W_10_{i+1}",
+                program_id=data['program_id'],
+                block_size=10,
+                term='WINTER',
+                academic_year=data['academic_year'],
+                status="DRAFT"
+            ))
         
-        # Bulk save blocks
         db.session.bulk_save_objects(blocks)
         db.session.commit()
         
@@ -1425,19 +1664,19 @@ def create_program():
             'program_id': program.program_id,
             'program_name': program.program_name,
             'total_enrollment': program.total_enrollment,
-            'blocks_20_count': program.blocks_20_count,
-            'blocks_10_count': program.blocks_10_count,
+            'blocks_20_count_fall': program.blocks_20_count_fall,
+            'blocks_10_count_fall': program.blocks_10_count_fall,
+            'blocks_20_count_winter': program.blocks_20_count_winter,
+            'blocks_10_count_winter': program.blocks_10_count_winter,
             'blocks_created': len(blocks)
         }), HTTPStatus.CREATED
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
 @bp.route('/bulk', methods=['POST'])
 def bulk_create_programs():
     try:
@@ -1456,30 +1695,53 @@ def bulk_create_programs():
                 program_id=program_data['program_id'],
                 program_name=program_data['program_name'],
                 total_enrollment=int(program_data['total_enrollment']),
-                blocks_20_count=int(program_data['blocks_20_count']),
-                blocks_10_count=int(program_data['blocks_10_count'])
+                blocks_20_count_fall=int(program_data.get('blocks_20_count_fall', 0)),
+                blocks_10_count_fall=int(program_data.get('blocks_10_count_fall', 0)),
+                blocks_20_count_winter=int(program_data.get('blocks_20_count_winter', 0)),
+                blocks_10_count_winter=int(program_data.get('blocks_10_count_winter', 0))
             )
             programs.append(program)
             
-            # Generate blocks for each program
-            for i in range(int(program_data['blocks_20_count'])):
+            # Generate Fall blocks
+            for i in range(int(program_data.get('blocks_20_count_fall', 0))):
                 blocks.append(Block(
-                    block_id=f"{program_data['program_id']}_20_{i+1}",
+                    block_id=f"{program_data['program_id']}_F_20_{i+1}",
                     program_id=program_data['program_id'],
                     block_size=20,
                     term="FALL",
                     academic_year="2025-2026",
-                    status="ACTIVE"
+                    status="DRAFT"
                 ))
                 
-            for i in range(int(program_data['blocks_10_count'])):
+            for i in range(int(program_data.get('blocks_10_count_fall', 0))):
                 blocks.append(Block(
-                    block_id=f"{program_data['program_id']}_10_{i+1}",
+                    block_id=f"{program_data['program_id']}_F_10_{i+1}",
                     program_id=program_data['program_id'],
                     block_size=10,
                     term="FALL",
                     academic_year="2025-2026",
-                    status="ACTIVE"
+                    status="DRAFT"
+                ))
+                
+            # Generate Winter blocks
+            for i in range(int(program_data.get('blocks_20_count_winter', 0))):
+                blocks.append(Block(
+                    block_id=f"{program_data['program_id']}_W_20_{i+1}",
+                    program_id=program_data['program_id'],
+                    block_size=20,
+                    term="WINTER",
+                    academic_year="2025-2026",
+                    status="DRAFT"
+                ))
+                
+            for i in range(int(program_data.get('blocks_10_count_winter', 0))):
+                blocks.append(Block(
+                    block_id=f"{program_data['program_id']}_W_10_{i+1}",
+                    program_id=program_data['program_id'],
+                    block_size=10,
+                    term="WINTER",
+                    academic_year="2025-2026",
+                    status="DRAFT"
                 ))
         
         db.session.bulk_save_objects(programs)
@@ -1493,6 +1755,7 @@ def bulk_create_programs():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), HTTPStatus.BAD_REQUEST
+
     
 @bp.route('/<program_id>', methods=['PUT'], strict_slashes=False)
 def update_program(program_id):
@@ -1512,88 +1775,25 @@ def update_program(program_id):
                 return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
             program.total_enrollment = data['total_enrollment']
 
-        new_blocks = []
-        deleted_blocks = []
-        
-        # Handle 20-student blocks
-        if 'blocks_20_count' in data:
-            if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
-                
-            current_20_blocks = Block.query.filter_by(
-                program_id=program_id, 
-                block_size=20
-            ).order_by(Block.block_id.desc()).all()
-            
-            if data['blocks_20_count'] > len(current_20_blocks):
-                # Create additional blocks
-                for i in range(len(current_20_blocks), data['blocks_20_count']):
-                    block = Block(
-                        block_id=f"{program_id}_20_{i+1}",
-                        program_id=program_id,
-                        block_size=20,
-                        term="FALL",
-                        academic_year="2025-2026",
-                        status="ACTIVE"
-                    )
-                    new_blocks.append(block)
-            elif data['blocks_20_count'] < len(current_20_blocks):
-                # Delete excess blocks
-                blocks_to_delete = current_20_blocks[data['blocks_20_count']:]
-                for block in blocks_to_delete:
-                    # Delete associated schedules first
-                    BlockSchedule.query.filter_by(block_id=block.block_id).delete()
-                    deleted_blocks.append(block.block_id)
-                    db.session.delete(block)
-            
-            program.blocks_20_count = data['blocks_20_count']
+        # Update term-specific block counts
+        for term in ['fall', 'winter']:
+            for size in [10, 20]:
+                field = f'blocks_{size}_count_{term}'
+                if field in data:
+                    if not isinstance(data[field], int) or data[field] < 0:
+                        return jsonify({'error': f'Invalid {field}'}), HTTPStatus.BAD_REQUEST
+                    setattr(program, field, data[field])
 
-        # Handle 10-student blocks
-        if 'blocks_10_count' in data:
-            if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
-                
-            current_10_blocks = Block.query.filter_by(
-                program_id=program_id, 
-                block_size=10
-            ).order_by(Block.block_id.desc()).all()
-            
-            if data['blocks_10_count'] > len(current_10_blocks):
-                # Create additional blocks
-                for i in range(len(current_10_blocks), data['blocks_10_count']):
-                    block = Block(
-                        block_id=f"{program_id}_10_{i+1}",
-                        program_id=program_id,
-                        block_size=10,
-                        term="FALL",
-                        academic_year="2025-2026",
-                        status="ACTIVE"
-                    )
-                    new_blocks.append(block)
-            elif data['blocks_10_count'] < len(current_10_blocks):
-                # Delete excess blocks
-                blocks_to_delete = current_10_blocks[data['blocks_10_count']:]
-                for block in blocks_to_delete:
-                    # Delete associated schedules first
-                    BlockSchedule.query.filter_by(block_id=block.block_id).delete()
-                    deleted_blocks.append(block.block_id)
-                    db.session.delete(block)
-            
-            program.blocks_10_count = data['blocks_10_count']
-
-        # Save all changes
-        if new_blocks:
-            db.session.bulk_save_objects(new_blocks)
         db.session.commit()
 
         return jsonify({
             'program_id': program.program_id,
             'program_name': program.program_name,
             'total_enrollment': program.total_enrollment,
-            'blocks_20_count': program.blocks_20_count,
-            'blocks_10_count': program.blocks_10_count,
-            'new_blocks_created': len(new_blocks),
-            'blocks_deleted': deleted_blocks
+            'blocks_20_count_fall': program.blocks_20_count_fall,
+            'blocks_10_count_fall': program.blocks_10_count_fall,
+            'blocks_20_count_winter': program.blocks_20_count_winter,
+            'blocks_10_count_winter': program.blocks_10_count_winter
         }), HTTPStatus.OK
         
     except Exception as e:
@@ -1602,7 +1802,6 @@ def update_program(program_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
-
 
 
 @bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
@@ -1655,28 +1854,39 @@ def update_enrollment(program_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<program_id>/blocks', methods=['PATCH'], strict_slashes=False)
+@bp.route('/<program_id>/blocks', methods=['PATCH'])
 def update_block_counts(program_id):
     try:
         program = Program.query.get_or_404(program_id)
         data = request.get_json()
         
-        if 'blocks_20_count' in data:
-            if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
-            program.blocks_20_count = data['blocks_20_count']
+        # Validate term
+        term = data.get('term')
+        if term not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
             
-        if 'blocks_10_count' in data:
-            if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
-            program.blocks_10_count = data['blocks_10_count']
+        # Update term-specific block counts
+        term_suffix = term.lower()
+        if f'blocks_20_count_{term_suffix}' in data:
+            count = data[f'blocks_20_count_{term_suffix}']
+            if not isinstance(count, int) or count < 0:
+                return jsonify({'error': f'Invalid blocks_20_count_{term_suffix}'}), HTTPStatus.BAD_REQUEST
+            setattr(program, f'blocks_20_count_{term_suffix}', count)
+            
+        if f'blocks_10_count_{term_suffix}' in data:
+            count = data[f'blocks_10_count_{term_suffix}']
+            if not isinstance(count, int) or count < 0:
+                return jsonify({'error': f'Invalid blocks_10_count_{term_suffix}'}), HTTPStatus.BAD_REQUEST
+            setattr(program, f'blocks_10_count_{term_suffix}', count)
             
         db.session.commit()
         
         return jsonify({
             'program_id': program.program_id,
-            'blocks_20_count': program.blocks_20_count,
-            'blocks_10_count': program.blocks_10_count
+            'blocks_20_count_fall': program.blocks_20_count_fall,
+            'blocks_10_count_fall': program.blocks_10_count_fall,
+            'blocks_20_count_winter': program.blocks_20_count_winter,
+            'blocks_10_count_winter': program.blocks_10_count_winter
         }), HTTPStatus.OK
     except Exception as e:
         db.session.rollback()
@@ -1688,7 +1898,7 @@ def update_block_counts(program_id):
 
 === backend/app/routes/program_requirements.py ===
 from flask import Blueprint, jsonify, request
-from app.models import ProgramRequirement, Program, Course, BlockSchedule
+from app.models import ProgramRequirement, Program, Course, BlockSchedule, Block
 from app import db
 from http import HTTPStatus
 
@@ -1757,6 +1967,7 @@ def create_requirement():
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
+
 @bp.route('/<int:requirement_id>', methods=['DELETE'])
 def delete_requirement(requirement_id):
     try:
@@ -1811,8 +2022,13 @@ def validate_program_schedule(program_id):
         if not schedule_ids:
             return jsonify({'error': 'No schedules provided'}), HTTPStatus.BAD_REQUEST
             
-        requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
-        schedules = BlockSchedule.query.filter(BlockSchedule.schedule_id.in_(schedule_ids)).all()
+        requirements = ProgramRequirement.query.filter_by(
+            program_id=program_id
+        ).all()
+        
+        schedules = BlockSchedule.query.filter(
+            BlockSchedule.schedule_id.in_(schedule_ids)
+        ).all()
         
         missing_requirements = []
         for req in requirements:
@@ -1856,22 +2072,25 @@ def generate_block_schedule(block_id):
                 'error': 'Cannot modify locked block'
             }), HTTPStatus.FORBIDDEN
 
-        # Get program requirements
+        # Get term-specific program requirements
         program_requirements = ProgramRequirement.query.filter_by(
-            program_id=block.program_id
+            program_id=block.program_id,
+            term=block.term
         ).order_by(ProgramRequirement.requirement_id).all()
 
         if not program_requirements:
             return jsonify({
-                'error': 'No requirements found for program'
+                'error': f'No requirements found for program in {block.term} term'
             }), HTTPStatus.NOT_FOUND
 
         # Get required course IDs
         required_courses = [req.course_id for req in program_requirements]
 
-        # Get all existing schedules to check for duplicates
-        existing_schedules = BlockSchedule.query.filter(
-            BlockSchedule.block_id != block_id
+        # Get all existing schedules to check for duplicates (within same term/year)
+        existing_schedules = BlockSchedule.query.join(Block).filter(
+            BlockSchedule.block_id != block_id,
+            Block.term == block.term,
+            Block.academic_year == block.academic_year
         ).all()
 
         # Group existing schedules by block for comparison
@@ -1881,9 +2100,11 @@ def generate_block_schedule(block_id):
                 existing_block_schedules[schedule.block_id] = []
             existing_block_schedules[schedule.block_id].append(schedule.offering_id)
 
-        # Get all available offerings for required courses
+        # Get all available offerings for required courses in the same term/year
         available_offerings = CourseOffering.query.filter(
-            CourseOffering.course_id.in_(required_courses)
+            CourseOffering.course_id.in_(required_courses),
+            CourseOffering.term == block.term,
+            CourseOffering.academic_year == block.academic_year
         ).all()
 
         # Group offerings by course
@@ -1897,7 +2118,6 @@ def generate_block_schedule(block_id):
 
         def try_schedule_combination(current_schedule, remaining_courses, course_offerings):
             if not remaining_courses:
-                # Check if this schedule is identical to any existing block schedule
                 current_offering_ids = set(o.offering_id for o in current_schedule)
                 for block_schedule in existing_block_schedules.values():
                     if set(block_schedule) == current_offering_ids:
@@ -1922,7 +2142,6 @@ def generate_block_schedule(block_id):
                 all_lectures_fit = True
                 temp_schedule = current_schedule.copy()
 
-                # Add all lectures from this section group
                 for lecture in lectures:
                     if any(has_time_conflict(lecture, selected) for selected in temp_schedule):
                         all_lectures_fit = False
@@ -1931,7 +2150,6 @@ def generate_block_schedule(block_id):
 
                 if all_lectures_fit:
                     if course_offerings[current_course]['LAB']:
-                        # Try each lab with this lecture group
                         for lab in course_offerings[current_course]['LAB']:
                             if not any(has_time_conflict(lab, selected) for selected in temp_schedule):
                                 try_schedule_combination(
@@ -1940,7 +2158,6 @@ def generate_block_schedule(block_id):
                                     course_offerings
                                 )
                     else:
-                        # No lab required, continue with next course
                         try_schedule_combination(
                             temp_schedule,
                             remaining_courses[1:],
@@ -1952,10 +2169,10 @@ def generate_block_schedule(block_id):
 
         if not valid_schedules:
             return jsonify({
-                'error': 'No valid schedule found that satisfies all requirements'
+                'error': f'No valid schedule found for {block.term} term that satisfies all requirements'
             }), HTTPStatus.BAD_REQUEST
 
-        # Select the first valid schedule (you could implement a selection strategy here)
+        # Select the first valid schedule
         selected_schedule = valid_schedules[0]
 
         # Clear existing schedule
@@ -1972,16 +2189,13 @@ def generate_block_schedule(block_id):
         # Calculate and set the rating
         rating_response = rate_block_schedule(block_id)
         if isinstance(rating_response, tuple):
-            rating = rating_response[0].get_json()  # Extract the rating value from jsonify response
+            rating = rating_response[0].get_json()
         else:
             rating = rating_response
 
-        # Update block with new rating
         block.schedule_rating = rating
         db.session.commit()
 
-
-        # Format response
         formatted_offerings = [{
             'offering_id': o.offering_id,
             'course_id': o.course_id,
@@ -1993,10 +2207,15 @@ def generate_block_schedule(block_id):
             'section_code': o.section_code,
             'day_of_week': o.day_of_week,
             'start_time': o.start_time.strftime('%H:%M'),
-            'end_time': o.end_time.strftime('%H:%M')
+            'end_time': o.end_time.strftime('%H:%M'),
+            'term': block.term,
+            'academic_year': block.academic_year
         } for o in selected_schedule]
 
         return jsonify({
+            'block_id': block_id,
+            'term': block.term,
+            'academic_year': block.academic_year,
             'schedule': formatted_offerings,
             'scheduled_courses': required_courses,
             'total_valid_schedules': len(valid_schedules),
@@ -2010,13 +2229,24 @@ def generate_block_schedule(block_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
+
 def rate_block_schedule(block_id):
     try:
         block = Block.query.get_or_404(block_id)
-        block_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        
+        # Get block schedules for specific term/year
+        block_schedules = BlockSchedule.query.join(CourseOffering).filter(
+            BlockSchedule.block_id == block_id,
+            CourseOffering.term == block.term,
+            CourseOffering.academic_year == block.academic_year
+        ).all()
         
         if not block_schedules:
-            return jsonify(0), HTTPStatus.OK
+            return jsonify({
+                'rating': 0,
+                'term': block.term,
+                'academic_year': block.academic_year
+            }), HTTPStatus.OK
             
         offerings = [schedule.course_offering for schedule in block_schedules]
         total_points = 0
@@ -2069,12 +2299,27 @@ def rate_block_schedule(block_id):
             gap_score = 30 * (1 - (gap_penalties / len(offerings)))
             total_points += gap_score
         
-        return jsonify(round(total_points, 1)), HTTPStatus.OK
+        return jsonify({
+            'block_id': block_id,
+            'term': block.term,
+            'academic_year': block.academic_year,
+            'rating': round(total_points, 1),
+            'time_distribution': {
+                'morning': time_slots['morning'],
+                'afternoon': time_slots['afternoon'],
+                'evening': time_slots['evening']
+            },
+            'days_used': days_used,
+            'gap_penalties': gap_penalties
+        }), HTTPStatus.OK
         
     except Exception as e:
-        current_app.logger.error(f"Error rating schedule: {str(e)}")
-        return jsonify(0), HTTPStatus.OK
-
+        current_app.logger.error(f"Error rating schedule for block {block_id}: {str(e)}")
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': str(e),
+            'block_id': block_id
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
 
@@ -2084,17 +2329,22 @@ from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement,
 from app.database import db
 from http import HTTPStatus
 import logging
-
 def validate_block_schedule(block_id):
     try:
         # Get block and its schedules
         block = Block.query.get_or_404(block_id)
-        block_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        block_schedules = BlockSchedule.query.join(CourseOffering).filter(
+            BlockSchedule.block_id == block_id,
+            CourseOffering.term == block.term,
+            CourseOffering.academic_year == block.academic_year
+        ).all()
         
         if not block_schedules:
             return jsonify({
                 'is_valid': False,
-                'error': 'No schedule found for block'
+                'error': f'No schedule found for block in {block.term} {block.academic_year}',
+                'term': block.term,
+                'academic_year': block.academic_year
             }), HTTPStatus.NOT_FOUND
 
         # Get all offerings in the block
@@ -2117,9 +2367,10 @@ def validate_block_schedule(block_id):
             else:
                 course_schedules[offering.course_id][offering.section_type].append(offering)
 
-        # Get program requirements
+        # Get term-specific program requirements
         requirements = ProgramRequirement.query.filter_by(
-            program_id=block.program_id
+            program_id=block.program_id,
+            term=block.term
         ).all()
 
         missing_requirements = []
@@ -2130,13 +2381,16 @@ def validate_block_schedule(block_id):
             if course_id not in course_schedules:
                 missing_requirements.append({
                     'course_id': course_id,
-                    'error': 'Course not scheduled'
+                    'error': f'Course not scheduled in {block.term}',
+                    'term': block.term
                 })
                 continue
 
-            # Get all available sections for this course
+            # Get all available sections for this course in the same term/year
             available_sections = CourseOffering.query.filter_by(
-                course_id=course_id
+                course_id=course_id,
+                term=block.term,
+                academic_year=block.academic_year
             ).all()
 
             # Group available lectures by prefix
@@ -2157,7 +2411,8 @@ def validate_block_schedule(block_id):
                     if scheduled_sections != required_sections:
                         missing_requirements.append({
                             'course_id': course_id,
-                            'error': f'Missing lecture sections for group {prefix}'
+                            'error': f'Missing lecture sections for group {prefix} in {block.term}',
+                            'term': block.term
                         })
 
             # Check if lab is required and present
@@ -2165,22 +2420,25 @@ def validate_block_schedule(block_id):
             if has_labs and not course_schedules[course_id]['LAB']:
                 missing_requirements.append({
                     'course_id': course_id,
-                    'error': 'Missing lab section'
+                    'error': f'Missing lab section in {block.term}',
+                    'term': block.term
                 })
 
         return jsonify({
             'block_id': block_id,
+            'term': block.term,
+            'academic_year': block.academic_year,
             'is_valid': len(missing_requirements) == 0,
             'missing_requirements': missing_requirements
         }), HTTPStatus.OK
 
     except Exception as e:
+        current_app.logger.error(f"Error validating block {block_id}: {str(e)}")
         return jsonify({
             'error': 'Internal Server Error',
-            'message': str(e)
+            'message': str(e),
+            'block_id': block_id
         }), HTTPStatus.INTERNAL_SERVER_ERROR
-    
-
 
 
 

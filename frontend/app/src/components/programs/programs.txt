@@ -23,6 +23,32 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
         }
     };
 
+    const handleAddRequirement = async (e) => {
+        e.preventDefault();
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/requirements', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    program_id: programId,
+                    course_id: newRequirement.course_id
+                }),
+            });
+    
+            if (response.ok) {
+                await fetchRequirements();
+                setNewRequirement({ course_id: '' });
+            } else {
+                const error = await response.json();
+                alert(error.error || 'Error adding requirement');
+            }
+        } catch (error) {
+            console.error('Error adding requirement:', error);
+        }
+    };
+
     const fetchCourses = async () => {
         try {
             const response = await fetch('http://127.0.0.1:5000/api/courses');
@@ -42,40 +68,12 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
         }
     }, [show, programId]);
 
-    const handleAddRequirement = async (e) => {
-        e.preventDefault();
-        try {
-            const response = await fetch('http://127.0.0.1:5000/api/requirements', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    program_id: programId,
-                    ...newRequirement,
-                }),
-            });
-
-            if (response.ok) {
-                await fetchRequirements();
-                setNewRequirement({ course_id: '' });
-            } else {
-                const error = await response.json();
-                alert(error.error || 'Error adding requirement');
-            }
-        } catch (error) {
-            console.error('Error adding requirement:', error);
-        }
-    };
-
     const handleDeleteRequirement = async (requirementId) => {
         if (window.confirm('Are you sure you want to delete this requirement?')) {
             try {
                 const response = await fetch(
                     `http://127.0.0.1:5000/api/requirements/${requirementId}`,
-                    {
-                        method: 'DELETE'
-                    }
+                    { method: 'DELETE' }
                 );
                 if (response.ok) {
                     await fetchRequirements();
@@ -104,35 +102,29 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
             </Modal.Header>
             <Modal.Body>
                 <Form onSubmit={handleAddRequirement} className="mb-4">
-                    <Row>
-                        <Col md={9}>
-                            <Form.Group className="mb-3">
-                                <Form.Label>Course</Form.Label>
-                                <Form.Select
-                                    value={newRequirement.course_id}
-                                    onChange={(e) => setNewRequirement({
-                                        course_id: e.target.value
-                                    })}
-                                    required
-                                >
-                                    <option value="">Select a course...</option>
-                                    {courses.map(course => (
-                                        <option key={course.course_id} value={course.course_id}>
-                                            {course.course_id} - {course.course_name}
-                                        </option>
-                                    ))}
-                                </Form.Select>
-                            </Form.Group>
-                        </Col>
-                        <Col md={3} className="d-flex align-items-end">
-                            <Button type="submit" variant="primary" className="mb-3 w-100">
-                                Add Requirement
-                            </Button>
-                        </Col>
-                    </Row>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Course</Form.Label>
+                        <Form.Select
+                            value={newRequirement.course_id}
+                            onChange={(e) => setNewRequirement({
+                                course_id: e.target.value
+                            })}
+                            required
+                        >
+                            <option value="">Select a course...</option>
+                            {courses.map(course => (
+                                <option key={course.course_id} value={course.course_id}>
+                                    {course.course_id} - {course.course_name}
+                                </option>
+                            ))}
+                        </Form.Select>
+                    </Form.Group>
+                    <Button type="submit" variant="primary" className="w-100">
+                        Add Requirement
+                    </Button>
                 </Form>
 
-                <Table striped bordered hover>
+                <Table striped bordered hover className="mt-4">
                     <thead>
                         <tr>
                             <th>Course ID</th>
@@ -148,7 +140,6 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
                                         variant="danger"
                                         size="sm"
                                         onClick={() => handleDeleteRequirement(req.requirement_id)}
-                                        className="me-2"
                                     >
                                         Delete
                                     </Button>
@@ -158,17 +149,11 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
                     </tbody>
                 </Table>
             </Modal.Body>
-            <Modal.Footer>
-                <Button variant="secondary" onClick={onHide}>
-                    Close
-                </Button>
-            </Modal.Footer>
         </Modal>
     );
 };
 
-export default ProgramRequirementsModal;
-import React, { useEffect, useState } from 'react';
+export default ProgramRequirementsModal;import React, { useEffect, useState } from 'react';
 import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
 
 const ProgramsModal = ({ show, program, onHide, onSave }) => {
@@ -176,37 +161,49 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
     program_id: '',
     program_name: '',
     total_enrollment: 0,
-    blocks_20_count: 0,
-    blocks_10_count: 0
-  };
+    blocks_20_count_fall: 0,
+    blocks_10_count_fall: 0,
+    blocks_20_count_winter: 0,
+    blocks_10_count_winter: 0,
+    academic_year: '2025-2026'  // Add default academic year
+};
 
   const [formData, setFormData] = useState(initialFormData);
   const [validated, setValidated] = useState(false);
 
   useEffect(() => {
     if (program) {
-      setFormData({
-        program_id: program.program_id,
-        program_name: program.program_name,
-        total_enrollment: program.total_enrollment,
-        blocks_20_count: program.blocks_20_count,
-        blocks_10_count: program.blocks_10_count
-      });
+        setFormData({
+            program_id: program.program_id,
+            program_name: program.program_name,
+            total_enrollment: program.total_enrollment,
+            blocks_20_count_fall: program.blocks_20_count_fall,
+            blocks_10_count_fall: program.blocks_10_count_fall,
+            blocks_20_count_winter: program.blocks_20_count_winter,
+            blocks_10_count_winter: program.blocks_10_count_winter,
+            academic_year: program.academic_year || '2025-2026'
+        });
     } else {
-      setFormData(initialFormData);
+        setFormData(initialFormData);
     }
     setValidated(false);
-  }, [program, show]);
+}, [program, show]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const numericFields = ['total_enrollment', 'blocks_20_count', 'blocks_10_count'];
+    const numericFields = [
+        'total_enrollment', 
+        'blocks_20_count_fall', 
+        'blocks_10_count_fall',
+        'blocks_20_count_winter', 
+        'blocks_10_count_winter'
+    ];
     
     setFormData(prev => ({
-      ...prev,
-      [name]: numericFields.includes(name) ? parseInt(value) || 0 : value
+        ...prev,
+        [name]: numericFields.includes(name) ? parseInt(value) || 0 : value
     }));
-  };
+};
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -245,6 +242,22 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
               </Form.Group>
             </Col>
             <Col md={6}>
+  <Form.Label>Academic Year</Form.Label>
+  <Form.Control
+    type="text"
+    name="academic_year"
+    value={formData.academic_year}
+    onChange={handleChange}
+    required
+    pattern="\d{4}-\d{4}"
+    placeholder="2025-2026"
+  />
+  <Form.Control.Feedback type="invalid">
+    Please provide a valid academic year (YYYY-YYYY).
+  </Form.Control.Feedback>
+  </Col>
+
+            <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Label>Program Name</Form.Label>
                 <Form.Control
@@ -261,52 +274,88 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
             </Col>
           </Row>
 
+          <Form.Group className="mb-3">
+            <Form.Label>Total Enrollment</Form.Label>
+            <Form.Control
+              type="number"
+              name="total_enrollment"
+              value={formData.total_enrollment}
+              onChange={handleChange}
+              required
+              min="0"
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a valid enrollment number.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <h5 className="mb-3">Fall Term Blocks</h5>
+          <Row className="mb-4">
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>20-Student Blocks (Fall)</Form.Label>
+                <Form.Control
+                  type="number"
+                  name="blocks_20_count_fall"
+                  value={formData.blocks_20_count_fall}
+                  onChange={handleChange}
+                  required
+                  min="0"
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid number of blocks.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>10-Student Blocks (Fall)</Form.Label>
+                <Form.Control
+                  type="number"
+                  name="blocks_10_count_fall"
+                  value={formData.blocks_10_count_fall}
+                  onChange={handleChange}
+                  required
+                  min="0"
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid number of blocks.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <h5 className="mb-3">Winter Term Blocks</h5>
           <Row>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Total Enrollment</Form.Label>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>20-Student Blocks (Winter)</Form.Label>
                 <Form.Control
                   type="number"
-                  name="total_enrollment"
-                  value={formData.total_enrollment}
+                  name="blocks_20_count_winter"
+                  value={formData.blocks_20_count_winter}
                   onChange={handleChange}
                   required
                   min="0"
                 />
                 <Form.Control.Feedback type="invalid">
-                  Please provide a valid enrollment number.
+                  Please provide a valid number of blocks.
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>20-Student Blocks</Form.Label>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>10-Student Blocks (Winter)</Form.Label>
                 <Form.Control
                   type="number"
-                  name="blocks_20_count"
-                  value={formData.blocks_20_count}
+                  name="blocks_10_count_winter"
+                  value={formData.blocks_10_count_winter}
                   onChange={handleChange}
                   required
                   min="0"
                 />
                 <Form.Control.Feedback type="invalid">
-                  Please provide a valid number of 20-student blocks.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>10-Student Blocks</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="blocks_10_count"
-                  value={formData.blocks_10_count}
-                  onChange={handleChange}
-                  required
-                  min="0"
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a valid number of 10-student blocks.
+                  Please provide a valid number of blocks.
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
@@ -327,39 +376,42 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
 
 export default ProgramsModal;
 import React, { useState, useEffect } from 'react';
-import { Container, Button } from 'react-bootstrap';
+import { Container, Button, Form } from 'react-bootstrap';
 import ProgramsTable from './ProgramsTable';
 import ProgramsModal from './ProgramsModal';
 import ProgramRequirementsModal from './ProgramRequirementsModal';
-import ProgramUploadModal from './ProgramUploadModal';
 import Papa from 'papaparse';
 
 const API_URL = 'http://127.0.0.1:5000/api';
 
 const ProgramsPage = () => {
-    const [programs, setPrograms] = useState([]);
-    const [showModal, setShowModal] = useState(false);
-    const [showRequirementsModal, setShowRequirementsModal] = useState(false);
-    const [selectedProgram, setSelectedProgram] = useState(null);
-    const [selectedProgramId, setSelectedProgramId] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [showUploadModal, setShowUploadModal] = useState(false);
+  const [programs, setPrograms] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [showRequirementsModal, setShowRequirementsModal] = useState(false);
+  const [selectedProgram, setSelectedProgram] = useState(null);
+  const [selectedProgramId, setSelectedProgramId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentYear, setCurrentYear] = useState('2025-2026');
 
   const fetchPrograms = async () => {
-    try {
-      const response = await fetch(`${API_URL}/programs/`);
-      const data = await response.json();
-      setPrograms(data);
-    } catch (error) {
-      console.error('Error fetching programs:', error);
-    } finally {
-      setIsLoading(false);
-    }
+      try {
+          const params = new URLSearchParams({
+              academic_year: currentYear
+          });
+          const response = await fetch(`${API_URL}/programs/?${params}`);
+          const data = await response.json();
+          setPrograms(data);
+      } catch (error) {
+          console.error('Error fetching programs:', error);
+      } finally {
+          setIsLoading(false);
+      }
   };
 
   useEffect(() => {
-    fetchPrograms();
-  }, []);
+      fetchPrograms();
+  }, [currentYear]);
+
 
   const handleAddNew = () => {
     setSelectedProgram(null);
@@ -421,25 +473,6 @@ const handleViewRequirements = (programId) => {
     setShowRequirementsModal(true);
   };
 
-// Add export function
-const handleExportCSV = () => {
-  const csv = Papa.unparse(programs.map(program => ({
-      program_id: program.program_id,
-      program_name: program.program_name,
-      total_enrollment: program.total_enrollment,
-      blocks_20_count: program.blocks_20_count,
-      blocks_10_count: program.blocks_10_count
-  })));
-  
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.href = url;
-  link.setAttribute('download', 'programs.csv');
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
 const handleViewSchedules = async (programId) => {
   try {
       const response = await fetch(`${API_URL}/schedules/program/${programId}/schedules`);
@@ -456,56 +489,59 @@ const handleViewSchedules = async (programId) => {
       alert('Error fetching schedules');
   }
 };
-  return (
-    <Container className="py-4">
+return (
+  <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1>Program Management</h1>
-        {/* <Button variant="secondary" className="me-2" onClick={() => setShowUploadModal(true)}>
-            Upload CSV
-        </Button>
-        <Button variant="success" className="me-2" onClick={handleExportCSV}>
-            Export CSV
-        </Button> */}
-        <Button variant="primary" onClick={handleAddNew}>
-          Create New Program
-        </Button>
+          <h1>Program Management</h1>
+          <div>
+              <Form.Control
+                  type="text"
+                  className="me-2 d-inline-block"
+                  style={{width: 'auto'}}
+                  value={currentYear}
+                  onChange={(e) => setCurrentYear(e.target.value)}
+                  pattern="\d{4}-\d{4}"
+                  placeholder="2025-2026"
+              />
+              <Button variant="primary" onClick={handleAddNew}>
+                  Create New Program
+              </Button>
+          </div>
       </div>
 
       <ProgramsTable 
-                programs={programs}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onViewRequirements={handleViewRequirements}
-                onViewSchedules={handleViewSchedules}
-                isLoading={isLoading}
-            />
+          programs={programs}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onViewRequirements={handleViewRequirements}
+          onViewSchedules={handleViewSchedules}
+          isLoading={isLoading}
+          academicYear={currentYear}
+      />
 
       <ProgramsModal
-        show={showModal}
-        program={selectedProgram}
-        onHide={() => setShowModal(false)}
-        onSave={handleSave}
+          show={showModal}
+          program={selectedProgram}
+          onHide={() => setShowModal(false)}
+          onSave={handleSave}
+          academicYear={currentYear}
       />
 
-        <ProgramRequirementsModal
-        show={showRequirementsModal}
-        programId={selectedProgramId}
-        onHide={() => setShowRequirementsModal(false)}
+      <ProgramRequirementsModal
+          show={showRequirementsModal}
+          programId={selectedProgramId}
+          onHide={() => setShowRequirementsModal(false)}
+          academicYear={currentYear}
       />
-      <ProgramUploadModal
-    show={showUploadModal}
-    onHide={() => setShowUploadModal(false)}
-    onSave={fetchPrograms}
-/>
-    </Container>
-  );
+  </Container>
+);
 };
 
 export default ProgramsPage;
 import React from 'react';
 import { Table, Button, Badge, Spinner } from 'react-bootstrap';
 
-const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements,onViewSchedules  }) => {
+const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements, onViewSchedules }) => {
   if (isLoading) {
     return (
       <div className="text-center p-4">
@@ -524,12 +560,18 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
     <Table striped bordered hover responsive>
       <thead>
         <tr>
-          <th>Program ID</th>
-          <th>Program Name</th>
-          <th>Total Enrollment</th>
-          <th>20-Student Blocks</th>
-          <th>10-Student Blocks</th>
-          <th>Actions</th>
+          <th rowSpan="2">Program ID</th>
+          <th rowSpan="2">Program Name</th>
+          <th rowSpan="2">Total Enrollment</th>
+          <th colSpan="2" className="text-center">Fall Blocks</th>
+          <th colSpan="2" className="text-center">Winter Blocks</th>
+          <th rowSpan="2">Actions</th>
+        </tr>
+        <tr>
+          <th>20-Student</th>
+          <th>10-Student</th>
+          <th>20-Student</th>
+          <th>10-Student</th>
         </tr>
       </thead>
       <tbody>
@@ -544,12 +586,22 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
             </td>
             <td>
               <Badge bg="primary">
-                {program.blocks_20_count} blocks
+                {program.blocks_20_count_fall} blocks
               </Badge>
             </td>
             <td>
               <Badge bg="secondary">
-                {program.blocks_10_count} blocks
+                {program.blocks_10_count_fall} blocks
+              </Badge>
+            </td>
+            <td>
+              <Badge bg="primary">
+                {program.blocks_20_count_winter} blocks
+              </Badge>
+            </td>
+            <td>
+              <Badge bg="secondary">
+                {program.blocks_10_count_winter} blocks
               </Badge>
             </td>
             <td>
@@ -593,112 +645,3 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
 };
 
 export default ProgramsTable;
-// ProgramUploadModal.jsx
-import React, { useState } from 'react';
-import { Modal, Button, Table, Alert } from 'react-bootstrap';
-import Papa from 'papaparse';
-
-const ProgramUploadModal = ({ show, onHide, onSave }) => {
-    const [parsedData, setParsedData] = useState([]);
-    const [error, setError] = useState(null);
-
-    const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            Papa.parse(file, {
-                header: true,
-                skipEmptyLines: true,
-                complete: (results) => {
-                    if (results.errors.length > 0) {
-                        setError('Error parsing CSV file');
-                        return;
-                    }
-                    const validData = results.data.map(item => ({
-                        ...item,
-                        total_enrollment: parseInt(item.total_enrollment),
-                        blocks_20_count: parseInt(item.blocks_20_count),
-                        blocks_10_count: parseInt(item.blocks_10_count)
-                    }));
-                    setParsedData(validData);
-                    setError(null);
-                }
-            });
-        }
-    };
-
-    const handleSave = async () => {
-        try {
-            const response = await fetch('http://127.0.0.1:5000/api/programs/bulk', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ programs: parsedData })
-            });
-            if (response.ok) {
-                onSave();
-                onHide();
-            } else {
-                const error = await response.json();
-                setError(error.message || 'Error uploading programs');
-            }
-        } catch (error) {
-            setError('Error uploading programs');
-        }
-    };
-
-    return (
-        <Modal show={show} onHide={onHide} size="lg">
-            <Modal.Header closeButton>
-                <Modal.Title>Upload Programs CSV</Modal.Title>
-            </Modal.Header>
-            <Modal.Body>
-                <input
-                    type="file"
-                    accept=".csv"
-                    onChange={handleFileUpload}
-                    className="mb-3"
-                />
-                {error && (
-                    <Alert variant="danger">{error}</Alert>
-                )}
-                {parsedData.length > 0 && (
-                    <Table striped bordered hover>
-                        <thead>
-                            <tr>
-                                <th>Program ID</th>
-                                <th>Program Name</th>
-                                <th>Total Enrollment</th>
-                                <th>20-Student Blocks</th>
-                                <th>10-Student Blocks</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {parsedData.map((program, index) => (
-                                <tr key={index}>
-                                    <td>{program.program_id}</td>
-                                    <td>{program.program_name}</td>
-                                    <td>{program.total_enrollment}</td>
-                                    <td>{program.blocks_20_count}</td>
-                                    <td>{program.blocks_10_count}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </Table>
-                )}
-            </Modal.Body>
-            <Modal.Footer>
-                <Button variant="secondary" onClick={onHide}>Cancel</Button>
-                <Button 
-                    variant="primary" 
-                    onClick={handleSave}
-                    disabled={parsedData.length === 0}
-                >
-                    Save Programs
-                </Button>
-            </Modal.Footer>
-        </Modal>
-    );
-};
-
-export default ProgramUploadModal;

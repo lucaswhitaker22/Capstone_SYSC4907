@@ -1,13 +1,15 @@
 import React from 'react';
-import { Table, Button, Badge, Spinner } from 'react-bootstrap';
+import { Table, Button, Badge, Spinner, Tabs, Tab } from 'react-bootstrap';
 
-const ScheduleTable = ({   schedules = [], 
-    onView, 
-    onEdit, 
-    onValidate, 
-    onDelete, 
-    isLoading,
-onGenerate }) => {
+const ScheduleTable = ({
+  schedules = [],
+  onView,
+  onEdit,
+  onValidate,
+  onDelete,
+  isLoading,
+  onGenerate
+}) => {
   if (isLoading) {
     return (
       <div className="text-center p-4">
@@ -54,12 +56,13 @@ onGenerate }) => {
     return dayNames.join(', ');
   };
 
-  return (
+  const renderScheduleTable = (termSchedules) => (
     <Table striped bordered hover responsive>
       <thead>
         <tr>
           <th>Block ID</th>
           <th>Program</th>
+          <th>Term</th>
           <th>Courses</th>
           <th>Days</th>
           <th>Rating</th>
@@ -67,10 +70,15 @@ onGenerate }) => {
         </tr>
       </thead>
       <tbody>
-        {schedules.map((schedule) => (
+        {termSchedules.map((schedule) => (
           <tr key={schedule.block_id}>
             <td>Block {schedule.block_id}</td>
             <td>{schedule.program_id}</td>
+            <td>
+              <Badge bg={schedule.term === 'FALL' ? 'warning' : 'info'}>
+                {schedule.term}
+              </Badge>
+            </td>
             <td>
               <Badge bg="info">
                 {getCoursesCount(schedule.offerings)} courses
@@ -121,6 +129,21 @@ onGenerate }) => {
         ))}
       </tbody>
     </Table>
+  );
+
+  // Split schedules by term
+  const fallSchedules = schedules.filter(s => s.term === 'FALL');
+  const winterSchedules = schedules.filter(s => s.term === 'WINTER');
+
+  return (
+    <Tabs defaultActiveKey="fall" className="mb-3">
+      <Tab eventKey="fall" title="Fall Term">
+        {renderScheduleTable(fallSchedules)}
+      </Tab>
+      <Tab eventKey="winter" title="Winter Term">
+        {renderScheduleTable(winterSchedules)}
+      </Tab>
+    </Tabs>
   );
 };
 
