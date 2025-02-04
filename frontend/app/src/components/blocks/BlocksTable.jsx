@@ -6,7 +6,6 @@ const BlocksTable = ({
     onEdit, 
     onDelete, 
     onViewSchedule, 
-    onCalculateRating, 
     isLoading 
   }) => {
   if (isLoading) {
@@ -114,16 +113,7 @@ const BlocksTable = ({
               >
                 View Schedule
               </Button>
-              {block.status !== 'LOCKED' && (
-                <Button
-                  variant="success"
-                  size="sm"
-                  className="ms-2"
-                  onClick={() => onCalculateRating(block.block_id)}
-                >
-                  Calculate Rating
-                </Button>
-              )}
+
             </td>
           </tr>
         ))}

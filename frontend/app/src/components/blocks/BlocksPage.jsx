@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Button } from 'react-bootstrap';
+import { Container, Button, Form } from 'react-bootstrap';
 import BlocksTable from './BlocksTable';
 import BlocksModal from './BlocksModal';
 import BlockScheduleModal from './BlockScheduleModal';
+
 const API_URL = 'http://127.0.0.1:5000/api';
 
 const BlocksPage = () => {
@@ -12,23 +13,29 @@ const BlocksPage = () => {
     const [selectedBlock, setSelectedBlock] = useState(null);
     const [selectedBlockId, setSelectedBlockId] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-  
+    const [selectedTerm, setSelectedTerm] = useState('FALL');
+    const [selectedYear, setSelectedYear] = useState('2025-2026');
 
-  const fetchBlocks = async () => {
-    try {
-      const response = await fetch(`${API_URL}/blocks`);
-      const data = await response.json();
-      setBlocks(data);
-    } catch (error) {
-      console.error('Error fetching blocks:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const fetchBlocks = async () => {
+        try {
+            const response = await fetch(`${API_URL}/blocks`);
+            const data = await response.json();
+            setBlocks(data);
+        } catch (error) {
+            console.error('Error fetching blocks:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-  useEffect(() => {
-    fetchBlocks();
-  }, []);
+    useEffect(() => {
+        fetchBlocks();
+    }, []);
+
+    // Filter blocks by term and year
+    const filteredBlocks = blocks.filter(
+        block => block.term === selectedTerm && block.academic_year === selectedYear
+    );
 
   const handleAddNew = () => {
     setSelectedBlock(null);
@@ -138,36 +145,61 @@ const BlocksPage = () => {
 
   return (
     <Container className="py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1>Block Management</h1>
-        <Button variant="primary" onClick={handleAddNew}>
-          Create New Block
-        </Button>
-      </div>
+        <div className="d-flex justify-content-between align-items-center mb-4">
+            <h1>Block Management</h1>
+            <div className="d-flex gap-3">
+                <Form.Group style={{ width: '150px' }}>
+                    <Form.Select
+                        value={selectedTerm}
+                        onChange={(e) => setSelectedTerm(e.target.value)}
+                    >
+                        <option value="FALL">Fall Term</option>
+                        <option value="WINTER">Winter Term</option>
+                    </Form.Select>
+                </Form.Group>
 
-      <BlocksTable 
-        blocks={blocks}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onViewSchedule={handleViewSchedule}
-        onCalculateRating={handleCalculateRating}
-        onStatusUpdate={handleStatusUpdate}
-        isLoading={isLoading}
-      />
+                <Form.Group style={{ width: '150px' }}>
+                    <Form.Select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                    >
+                        <option value="2024-2025">2024-2025</option>
+                        <option value="2025-2026">2025-2026</option>
+                        <option value="2026-2027">2026-2027</option>
+                    </Form.Select>
+                </Form.Group>
+            </div>
+        </div>
 
-      <BlocksModal
-        show={showModal}
-        block={selectedBlock}
-        onHide={() => setShowModal(false)}
-        onSave={handleSave}
-      />
-            <BlockScheduleModal
-        show={showScheduleModal}
-        blockId={selectedBlockId}
-        onHide={() => setShowScheduleModal(false)}
-      />
+        <BlocksTable 
+            blocks={filteredBlocks}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onViewSchedule={handleViewSchedule}
+            onStatusUpdate={handleStatusUpdate}
+            isLoading={isLoading}
+            term={selectedTerm}
+            academicYear={selectedYear}
+        />
+
+        <BlocksModal
+            show={showModal}
+            block={selectedBlock}
+            onHide={() => setShowModal(false)}
+            onSave={handleSave}
+            defaultTerm={selectedTerm}
+            defaultYear={selectedYear}
+        />
+
+        <BlockScheduleModal
+            show={showScheduleModal}
+            blockId={selectedBlockId}
+            onHide={() => setShowScheduleModal(false)}
+            term={selectedTerm}
+            academicYear={selectedYear}
+        />
     </Container>
-  );
+);
 };
 
 export default BlocksPage;

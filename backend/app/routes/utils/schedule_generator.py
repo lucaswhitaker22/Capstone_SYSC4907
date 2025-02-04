@@ -48,6 +48,23 @@ def generate_block_schedule(block_id):
             CourseOffering.academic_year == block.academic_year
         ).all()
 
+        # Add validation for available offerings
+        if not available_offerings:
+            return jsonify({
+                'error': f'No course offerings found for {block.term} term, {block.academic_year}'
+            }), HTTPStatus.NOT_FOUND
+
+        # Check which required courses have offerings this term
+        available_courses = set(offering.course_id for offering in available_offerings)
+        courses_with_offerings = set(required_courses) & available_courses
+
+        # Log for debugging
+        current_app.logger.debug(
+            f"Required courses: {required_courses}\n"
+            f"Courses with {block.term} offerings: {courses_with_offerings}"
+        )
+
+
         # Group offerings by course
         course_offerings = {}
         for offering in available_offerings:
@@ -106,11 +123,13 @@ def generate_block_schedule(block_id):
                         )
 
         # Generate all valid schedules
-        try_schedule_combination([], required_courses, course_offerings)
+        try_schedule_combination([], list(courses_with_offerings), course_offerings)
 
         if not valid_schedules:
             return jsonify({
-                'error': f'No valid schedule found for {block.term} term that satisfies all requirements'
+                'error': f'Could not create valid schedule for available courses in {block.term} term',
+                'available_courses': list(courses_with_offerings),
+                'total_required': len(required_courses)
             }), HTTPStatus.BAD_REQUEST
 
         # Select the first valid schedule
