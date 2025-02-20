@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Table, Button, Form, Row, Col } from 'react-bootstrap';
+import { Table, Button, Form, Card, Collapse, Row, Col } from 'react-bootstrap';
 
 const getDayName = (day) => {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -18,6 +18,7 @@ const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
     academic_year: '2025-2026',
     status: ''
   });
+  const [showFilters, setShowFilters] = useState(false);
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }));
@@ -31,7 +32,7 @@ const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
     return Object.entries(filters).every(([key, value]) => {
       if (!value) return true;
       if (key === 'day_of_week') {
-        return getDayName(offering[key]).toLowerCase().includes(value.toLowerCase());
+        return offering[key] === parseInt(value);
       }
       return offering[key].toString().toLowerCase().includes(value.toLowerCase());
     });
@@ -39,62 +40,115 @@ const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
 
   return (
     <>
-      <Row className="mb-3">
-        {Object.keys(filters).map(key => (
-          <Col md={3} key={key}>
-            <Form.Group>
-              <Form.Label>{key.replace('_', ' ').toUpperCase()}</Form.Label>
-              {key === 'academic_year' ? (
-                <Form.Select
-                  value={filters[key]}
-                  onChange={(e) => handleFilterChange(key, e.target.value)}
-                >
-                  <option value="">All Years</option>
-                  <option value="2024-2025">2024-2025</option>
-                  <option value="2025-2026">2025-2026</option>
-                  <option value="2026-2027">2026-2027</option>
-                </Form.Select>
-              ) : key === 'term' ? (
-                <Form.Select
-                  value={filters[key]}
-                  onChange={(e) => handleFilterChange(key, e.target.value)}
-                >
-                  <option value="">All Terms</option>
-                  <option value="FALL">Fall</option>
-                  <option value="WINTER">Winter</option>
-                </Form.Select>
-              ) : key === 'section_type' ? (
-                <Form.Select
-                  value={filters[key]}
-                  onChange={(e) => handleFilterChange(key, e.target.value)}
-                >
-                  <option value="">All Types</option>
-                  <option value="LECTURE">Lecture</option>
-                  <option value="LAB">Lab</option>
-                  <option value="TUTORIAL">Tutorial</option>
-                </Form.Select>
-              ) : key === 'status' ? (
-                <Form.Select
-                  value={filters[key]}
-                  onChange={(e) => handleFilterChange(key, e.target.value)}
-                >
-                  <option value="">All Statuses</option>
-                  <option value="OPEN">Open</option>
-                  <option value="FULL">Full</option>
-                  <option value="CANCELLED">Cancelled</option>
-                </Form.Select>
-              ) : (
-                <Form.Control
-                  type="text"
-                  value={filters[key]}
-                  onChange={(e) => handleFilterChange(key, e.target.value)}
-                  placeholder={`Filter by ${key.replace('_', ' ')}`}
-                />
-              )}
-            </Form.Group>
-          </Col>
-        ))}
-      </Row>
+      <Card className="mb-3">
+        <Card.Header 
+          className="d-flex justify-content-between align-items-center" 
+          style={{ cursor: 'pointer' }}
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <span>Filters</span>
+          <span>{showFilters ? '▼' : '▶'}</span>
+        </Card.Header>
+        <Collapse in={showFilters}>
+          <div>
+            <Card.Body>
+              <Row className="g-3">
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Course ID</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={filters.course_id}
+                      onChange={(e) => handleFilterChange('course_id', e.target.value)}
+                      placeholder="Filter by course ID"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Section Type</Form.Label>
+                    <Form.Select
+                      value={filters.section_type}
+                      onChange={(e) => handleFilterChange('section_type', e.target.value)}
+                    >
+                      <option value="">All Types</option>
+                      <option value="LECTURE">Lecture</option>
+                      <option value="LAB">Lab</option>
+                      <option value="TUTORIAL">Tutorial</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Section Code</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={filters.section_code}
+                      onChange={(e) => handleFilterChange('section_code', e.target.value)}
+                      placeholder="Filter by section"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Day</Form.Label>
+                    <Form.Select
+                      value={filters.day_of_week}
+                      onChange={(e) => handleFilterChange('day_of_week', e.target.value)}
+                    >
+                      <option value="">All Days</option>
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day, index) => (
+                        <option key={day} value={index + 2}>{day}</option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Term</Form.Label>
+                    <Form.Select
+                      value={filters.term}
+                      onChange={(e) => handleFilterChange('term', e.target.value)}
+                    >
+                      <option value="">All Terms</option>
+                      <option value="FALL">Fall</option>
+                      <option value="WINTER">Winter</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Academic Year</Form.Label>
+                    <Form.Select
+                      value={filters.academic_year}
+                      onChange={(e) => handleFilterChange('academic_year', e.target.value)}
+                    >
+                      <option value="">All Years</option>
+                      <option value="2024-2025">2024-2025</option>
+                      <option value="2025-2026">2025-2026</option>
+                      <option value="2026-2027">2026-2027</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Status</Form.Label>
+                    <Form.Select
+                      value={filters.status}
+                      onChange={(e) => handleFilterChange('status', e.target.value)}
+                    >
+                      <option value="">All Statuses</option>
+                      <option value="OPEN">Open</option>
+                      <option value="FULL">Full</option>
+                      <option value="CANCELLED">Cancelled</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+            </Card.Body>
+          </div>
+        </Collapse>
+      </Card>
 
       <Table striped bordered hover responsive>
         <thead>
