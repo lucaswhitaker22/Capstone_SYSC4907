@@ -5,7 +5,6 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
   const initialFormData = {
     program_id: '',
     program_name: '',
-    total_enrollment: 0,
     blocks_20_count: 0,
     blocks_10_count: 0,
     academic_year: '2025-2026'
@@ -19,7 +18,6 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
       setFormData({
         program_id: program.program_id,
         program_name: program.program_name,
-        total_enrollment: program.total_enrollment,
         blocks_20_count: program.blocks_20_count_fall,
         blocks_10_count: program.blocks_10_count_fall,
         academic_year: program.academic_year || '2025-2026'
@@ -110,20 +108,6 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
             </Form.Control.Feedback>
           </Form.Group>
 
-          <Form.Group className="mb-3">
-            <Form.Label>Total Enrollment</Form.Label>
-            <Form.Control
-              type="number"
-              name="total_enrollment"
-              value={formData.total_enrollment}
-              onChange={handleChange}
-              required
-              min="0"
-            />
-            <Form.Control.Feedback type="invalid">
-              Please provide a valid enrollment number.
-            </Form.Control.Feedback>
-          </Form.Group>
 
           <h5 className="mb-3">Block Configuration (Applied to Both Terms)</h5>
           <Row>

@@ -42,16 +42,19 @@ def create_program():
         data = request.get_json()
         
         required_fields = [
-            'program_id', 'program_name', 'total_enrollment',
+            'program_id', 'program_name', 
             'blocks_20_count', 'blocks_10_count', 'academic_year'
         ]
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
 
+        # Calculate total enrollment based on block counts
+        total_enrollment = (data['blocks_20_count'] * 20) + (data['blocks_10_count'] * 10)
+
         program = Program(
             program_id=data['program_id'],
             program_name=data['program_name'],
-            total_enrollment=data['total_enrollment'],
+            total_enrollment=total_enrollment,  # Use calculated value
             blocks_20_count=data['blocks_20_count'],
             blocks_10_count=data['blocks_10_count']
         )
@@ -108,14 +111,91 @@ def update_program(program_id):
         program = Program.query.get_or_404(program_id)
         data = request.get_json()
         
+        # Handle 20-student blocks update
+        if 'blocks_20_count' in data:
+            new_count = data['blocks_20_count']
+            current_count = program.blocks_20_count
+            
+            if new_count < current_count:
+                # Delete excess blocks for both terms
+                for term in ['FALL', 'WINTER']:
+                    blocks_to_delete = Block.query.filter_by(
+                        program_id=program_id,
+                        term=term,
+                        block_size=20
+                    ).limit(current_count - new_count).all()
+                    
+                    for block in blocks_to_delete:
+                        schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+                        for schedule in schedules:
+                            offering = CourseOffering.query.get(schedule.offering_id)
+                            offering.current_enrollment -= block.block_size
+                            if offering.current_enrollment < offering.capacity:
+                                offering.status = 'OPEN'
+                        BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+                        db.session.delete(block)
+            
+            elif new_count > current_count:
+                # Create additional blocks for both terms
+                for term, prefix in [('FALL', 'F'), ('WINTER', 'W')]:
+                    for i in range(current_count + 1, new_count + 1):
+                        block = Block(
+                            block_id=f"{program_id}_{prefix}_20_{i}",
+                            program_id=program_id,
+                            block_size=20,
+                            term=term,
+                            academic_year=program.blocks[0].academic_year,
+                            status="DRAFT"
+                        )
+                        db.session.add(block)
+            
+            program.blocks_20_count = new_count
+
+        # Handle 10-student blocks update
+        if 'blocks_10_count' in data:
+            new_count = data['blocks_10_count']
+            current_count = program.blocks_10_count
+            
+            if new_count < current_count:
+                # Delete excess blocks for both terms
+                for term in ['FALL', 'WINTER']:
+                    blocks_to_delete = Block.query.filter_by(
+                        program_id=program_id,
+                        term=term,
+                        block_size=10
+                    ).limit(current_count - new_count).all()
+                    
+                    for block in blocks_to_delete:
+                        schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+                        for schedule in schedules:
+                            offering = CourseOffering.query.get(schedule.offering_id)
+                            offering.current_enrollment -= block.block_size
+                            if offering.current_enrollment < offering.capacity:
+                                offering.status = 'OPEN'
+                        BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+                        db.session.delete(block)
+            
+            elif new_count > current_count:
+                # Create additional blocks for both terms
+                for term, prefix in [('FALL', 'F'), ('WINTER', 'W')]:
+                    for i in range(current_count + 1, new_count + 1):
+                        block = Block(
+                            block_id=f"{program_id}_{prefix}_10_{i}",
+                            program_id=program_id,
+                            block_size=10,
+                            term=term,
+                            academic_year=program.blocks[0].academic_year,
+                            status="DRAFT"
+                        )
+                        db.session.add(block)
+            
+            program.blocks_10_count = new_count
+
         if 'program_name' in data:
             program.program_name = data['program_name']
-        if 'total_enrollment' in data:
-            program.total_enrollment = data['total_enrollment']
-        if 'blocks_20_count' in data:
-            program.blocks_20_count = data['blocks_20_count']
-        if 'blocks_10_count' in data:
-            program.blocks_10_count = data['blocks_10_count']
+
+        # Update total enrollment based on block counts
+        program.total_enrollment = (program.blocks_20_count * 20) + (program.blocks_10_count * 10)
             
         db.session.commit()
         
@@ -133,6 +213,7 @@ def update_program(program_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 
 @bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
@@ -218,6 +299,22 @@ def update_block_counts(program_id):
         term_suffix = term.lower()
         term_prefix = 'F' if term == 'FALL' else 'W'
         
+        # Get existing blocks to update enrollments
+        existing_blocks = Block.query.filter_by(
+            program_id=program_id,
+            term=term
+        ).all()
+        
+        # Update enrollments before deleting blocks
+        for block in existing_blocks:
+            schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+            for schedule in schedules:
+                offering = CourseOffering.query.get(schedule.offering_id)
+                offering.current_enrollment -= block.block_size
+                if offering.current_enrollment < offering.capacity:
+                    offering.status = 'OPEN'
+            BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+        
         # Update 20-student blocks
         if f'blocks_20_count_{term_suffix}' in data:
             new_count = data[f'blocks_20_count_{term_suffix}']
@@ -272,6 +369,13 @@ def update_block_counts(program_id):
                 
             setattr(program, f'blocks_10_count_{term_suffix}', new_count)
         
+        # Update total enrollment
+        total_20_students = (getattr(program, 'blocks_20_count_fall', 0) + 
+                           getattr(program, 'blocks_20_count_winter', 0)) * 20
+        total_10_students = (getattr(program, 'blocks_10_count_fall', 0) + 
+                           getattr(program, 'blocks_10_count_winter', 0)) * 10
+        program.total_enrollment = total_20_students + total_10_students
+        
         db.session.commit()
         
         return jsonify({
@@ -279,7 +383,8 @@ def update_block_counts(program_id):
             'blocks_20_count_fall': program.blocks_20_count_fall,
             'blocks_10_count_fall': program.blocks_10_count_fall,
             'blocks_20_count_winter': program.blocks_20_count_winter,
-            'blocks_10_count_winter': program.blocks_10_count_winter
+            'blocks_10_count_winter': program.blocks_10_count_winter,
+            'total_enrollment': program.total_enrollment
         }), HTTPStatus.OK
         
     except Exception as e:
