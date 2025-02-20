@@ -6,48 +6,39 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
     program_id: '',
     program_name: '',
     total_enrollment: 0,
-    blocks_20_count_fall: 0,
-    blocks_10_count_fall: 0,
-    blocks_20_count_winter: 0,
-    blocks_10_count_winter: 0,
-    academic_year: '2025-2026'  // Add default academic year
-};
+    blocks_20_count: 0,
+    blocks_10_count: 0,
+    academic_year: '2025-2026'
+  };
 
   const [formData, setFormData] = useState(initialFormData);
   const [validated, setValidated] = useState(false);
-
   useEffect(() => {
     if (program) {
-        setFormData({
-            program_id: program.program_id,
-            program_name: program.program_name,
-            total_enrollment: program.total_enrollment,
-            blocks_20_count_fall: program.blocks_20_count_fall,
-            blocks_10_count_fall: program.blocks_10_count_fall,
-            blocks_20_count_winter: program.blocks_20_count_winter,
-            blocks_10_count_winter: program.blocks_10_count_winter,
-            academic_year: program.academic_year || '2025-2026'
-        });
+      // When editing, take the Fall term counts (should be same as Winter)
+      setFormData({
+        program_id: program.program_id,
+        program_name: program.program_name,
+        total_enrollment: program.total_enrollment,
+        blocks_20_count: program.blocks_20_count_fall,
+        blocks_10_count: program.blocks_10_count_fall,
+        academic_year: program.academic_year || '2025-2026'
+      });
     } else {
-        setFormData(initialFormData);
+      setFormData(initialFormData);
     }
     setValidated(false);
-}, [program, show]);
+  }, [program, show]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const numericFields = [
-        'total_enrollment', 
-        'blocks_20_count_fall', 
-        'blocks_10_count_fall',
-        'blocks_20_count_winter', 
-        'blocks_10_count_winter'
-    ];
+    const numericFields = ['total_enrollment', 'blocks_20_count', 'blocks_10_count'];
     
     setFormData(prev => ({
-        ...prev,
-        [name]: numericFields.includes(name) ? parseInt(value) || 0 : value
+      ...prev,
+      [name]: numericFields.includes(name) ? parseInt(value) || 0 : value
     }));
+
 };
 
   const handleSubmit = (e) => {
@@ -60,7 +51,7 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
     setValidated(true);
   };
 
-  return (
+   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
         <Modal.Title>
@@ -87,37 +78,37 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
               </Form.Group>
             </Col>
             <Col md={6}>
-  <Form.Label>Academic Year</Form.Label>
-  <Form.Control
-    type="text"
-    name="academic_year"
-    value={formData.academic_year}
-    onChange={handleChange}
-    required
-    pattern="\d{4}-\d{4}"
-    placeholder="2025-2026"
-  />
-  <Form.Control.Feedback type="invalid">
-    Please provide a valid academic year (YYYY-YYYY).
-  </Form.Control.Feedback>
-  </Col>
-
-            <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Program Name</Form.Label>
+                <Form.Label>Academic Year</Form.Label>
                 <Form.Control
                   type="text"
-                  name="program_name"
-                  value={formData.program_name}
+                  name="academic_year"
+                  value={formData.academic_year}
                   onChange={handleChange}
                   required
+                  pattern="\d{4}-\d{4}"
+                  placeholder="2025-2026"
                 />
                 <Form.Control.Feedback type="invalid">
-                  Please provide a program name.
+                  Please provide a valid academic year (YYYY-YYYY).
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
           </Row>
+
+          <Form.Group className="mb-3">
+            <Form.Label>Program Name</Form.Label>
+            <Form.Control
+              type="text"
+              name="program_name"
+              value={formData.program_name}
+              onChange={handleChange}
+              required
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a program name.
+            </Form.Control.Feedback>
+          </Form.Group>
 
           <Form.Group className="mb-3">
             <Form.Label>Total Enrollment</Form.Label>
@@ -134,51 +125,15 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
             </Form.Control.Feedback>
           </Form.Group>
 
-          <h5 className="mb-3">Fall Term Blocks</h5>
-          <Row className="mb-4">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>20-Student Blocks (Fall)</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="blocks_20_count_fall"
-                  value={formData.blocks_20_count_fall}
-                  onChange={handleChange}
-                  required
-                  min="0"
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a valid number of blocks.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>10-Student Blocks (Fall)</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="blocks_10_count_fall"
-                  value={formData.blocks_10_count_fall}
-                  onChange={handleChange}
-                  required
-                  min="0"
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a valid number of blocks.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-          </Row>
-
-          <h5 className="mb-3">Winter Term Blocks</h5>
+          <h5 className="mb-3">Block Configuration (Applied to Both Terms)</h5>
           <Row>
             <Col md={6}>
               <Form.Group>
-                <Form.Label>20-Student Blocks (Winter)</Form.Label>
+                <Form.Label>20-Student Blocks</Form.Label>
                 <Form.Control
                   type="number"
-                  name="blocks_20_count_winter"
-                  value={formData.blocks_20_count_winter}
+                  name="blocks_20_count"
+                  value={formData.blocks_20_count}
                   onChange={handleChange}
                   required
                   min="0"
@@ -190,11 +145,11 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
             </Col>
             <Col md={6}>
               <Form.Group>
-                <Form.Label>10-Student Blocks (Winter)</Form.Label>
+                <Form.Label>10-Student Blocks</Form.Label>
                 <Form.Control
                   type="number"
-                  name="blocks_10_count_winter"
-                  value={formData.blocks_10_count_winter}
+                  name="blocks_10_count"
+                  value={formData.blocks_10_count}
                   onChange={handleChange}
                   required
                   min="0"

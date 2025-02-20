@@ -175,7 +175,17 @@ def delete_block(block_id):
                 'error': 'Cannot delete locked block'
             }), HTTPStatus.FORBIDDEN
 
-        # Delete associated block schedules first
+        # Get all schedules and update enrollments before deletion
+        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        for schedule in schedules:
+            offering = CourseOffering.query.get(schedule.offering_id)
+            # Decrease enrollment by block size
+            offering.current_enrollment -= block.block_size
+            # Update offering status if no longer full
+            if offering.current_enrollment < offering.capacity:
+                offering.status = 'OPEN'
+
+        # Delete associated block schedules
         BlockSchedule.query.filter_by(block_id=block_id).delete()
         
         # Delete the block
@@ -190,6 +200,7 @@ def delete_block(block_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @bp.route('/<block_id>/rating', methods=['POST'], strict_slashes=False)
 def calculate_block_rating(block_id):

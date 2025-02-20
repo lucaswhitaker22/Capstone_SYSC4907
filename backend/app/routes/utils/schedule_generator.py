@@ -7,65 +7,53 @@ import logging
 
 def generate_block_schedule(block_id):
     try:
-        # Get block and validate
         block = Block.query.get_or_404(block_id)
         if block.status == 'LOCKED':
             return jsonify({
                 'error': 'Cannot modify locked block'
             }), HTTPStatus.FORBIDDEN
 
-        # Get term-specific program requirements
         program_requirements = ProgramRequirement.query.filter_by(
-    program_id=block.program_id
-).order_by(ProgramRequirement.requirement_id).all()
+            program_id=block.program_id
+        ).order_by(ProgramRequirement.requirement_id).all()
 
         if not program_requirements:
             return jsonify({
-                'error': f'No requirements found for program in {block.term} term'
+                'error': f'No requirements found for program'
             }), HTTPStatus.NOT_FOUND
 
-        # Get required course IDs
         required_courses = [req.course_id for req in program_requirements]
 
-        # Get all existing schedules to check for duplicates (within same term/year)
+        # Get existing schedules to check for duplicates
         existing_schedules = BlockSchedule.query.join(Block).filter(
             BlockSchedule.block_id != block_id,
             Block.term == block.term,
             Block.academic_year == block.academic_year
         ).all()
 
-        # Group existing schedules by block for comparison
         existing_block_schedules = {}
         for schedule in existing_schedules:
             if schedule.block_id not in existing_block_schedules:
                 existing_block_schedules[schedule.block_id] = []
             existing_block_schedules[schedule.block_id].append(schedule.offering_id)
 
-        # Get all available offerings for required courses in the same term/year
+        # Get offerings with sufficient capacity
         available_offerings = CourseOffering.query.filter(
             CourseOffering.course_id.in_(required_courses),
             CourseOffering.term == block.term,
-            CourseOffering.academic_year == block.academic_year
+            CourseOffering.academic_year == block.academic_year,
+            CourseOffering.status != 'CANCELLED',
+            CourseOffering.capacity - CourseOffering.current_enrollment >= block.block_size
         ).all()
 
-        # Add validation for available offerings
         if not available_offerings:
             return jsonify({
-                'error': f'No course offerings found for {block.term} term, {block.academic_year}'
+                'error': f'No course offerings found with sufficient capacity for block size {block.block_size}'
             }), HTTPStatus.NOT_FOUND
 
-        # Check which required courses have offerings this term
         available_courses = set(offering.course_id for offering in available_offerings)
         courses_with_offerings = set(required_courses) & available_courses
 
-        # Log for debugging
-        current_app.logger.debug(
-            f"Required courses: {required_courses}\n"
-            f"Courses with {block.term} offerings: {courses_with_offerings}"
-        )
-
-
-        # Group offerings by course
         course_offerings = {}
         for offering in available_offerings:
             if offering.course_id not in course_offerings:
@@ -87,15 +75,15 @@ def generate_block_schedule(block_id):
             if current_course not in course_offerings:
                 return
 
-            # Group lectures by their section prefix
             lecture_groups = {}
             for lecture in course_offerings[current_course]['LECTURE']:
+                if lecture.capacity - lecture.current_enrollment < block.block_size:
+                    continue
                 prefix = lecture.section_code.split('-')[0]
                 if prefix not in lecture_groups:
                     lecture_groups[prefix] = []
                 lecture_groups[prefix].append(lecture)
 
-            # Try each lecture group
             for prefix, lectures in lecture_groups.items():
                 all_lectures_fit = True
                 temp_schedule = current_schedule.copy()
@@ -109,6 +97,8 @@ def generate_block_schedule(block_id):
                 if all_lectures_fit:
                     if course_offerings[current_course]['LAB']:
                         for lab in course_offerings[current_course]['LAB']:
+                            if lab.capacity - lab.current_enrollment < block.block_size:
+                                continue
                             if not any(has_time_conflict(lab, selected) for selected in temp_schedule):
                                 try_schedule_combination(
                                     temp_schedule + [lab],
@@ -122,39 +112,41 @@ def generate_block_schedule(block_id):
                             course_offerings
                         )
 
-        # Generate all valid schedules
         try_schedule_combination([], list(courses_with_offerings), course_offerings)
 
         if not valid_schedules:
             return jsonify({
-                'error': f'Could not create valid schedule for available courses in {block.term} term',
-                'available_courses': list(courses_with_offerings),
-                'total_required': len(required_courses)
+                'error': f'Could not create valid schedule with available courses having sufficient capacity'
             }), HTTPStatus.BAD_REQUEST
 
-        # Select the first valid schedule
         selected_schedule = valid_schedules[0]
 
-        # Clear existing schedule
+        # Reset enrollments for old schedule
+        old_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        for old_schedule in old_schedules:
+            old_offering = CourseOffering.query.get(old_schedule.offering_id)
+            old_offering.current_enrollment -= block.block_size
+            if old_offering.current_enrollment < old_offering.capacity:
+                old_offering.status = 'OPEN'
         BlockSchedule.query.filter_by(block_id=block_id).delete()
 
-        # Create block schedules for selected offerings
+        # Create new schedule and update enrollments
         for offering in selected_schedule:
             block_schedule = BlockSchedule(
                 block_id=block_id,
                 offering_id=offering.offering_id
             )
             db.session.add(block_schedule)
+            
+            offering.current_enrollment += block.block_size
+            if offering.current_enrollment >= offering.capacity:
+                offering.status = 'FULL'
 
-        # Calculate and set the rating
         rating_response = rate_block_schedule(block_id)
-        if isinstance(rating_response, tuple):
-            rating_data = rating_response[0].get_json()
-            rating = rating_data.get('rating', 0)  # Extract just the numerical rating
-        else:
-            rating = rating_response.get('rating', 0)
+        rating_data = rating_response[0].get_json()
+        rating = rating_data.get('rating', 0)
 
-        block.schedule_rating = rating 
+        block.schedule_rating = rating
         db.session.commit()
 
         formatted_offerings = [{
@@ -170,7 +162,10 @@ def generate_block_schedule(block_id):
             'start_time': o.start_time.strftime('%H:%M'),
             'end_time': o.end_time.strftime('%H:%M'),
             'term': block.term,
-            'academic_year': block.academic_year
+            'academic_year': block.academic_year,
+            'current_enrollment': o.current_enrollment,
+            'capacity': o.capacity,
+            'status': o.status
         } for o in selected_schedule]
 
         return jsonify({
@@ -178,7 +173,7 @@ def generate_block_schedule(block_id):
             'term': block.term,
             'academic_year': block.academic_year,
             'schedule': formatted_offerings,
-            'scheduled_courses': required_courses,
+            'scheduled_courses': list(courses_with_offerings),
             'total_valid_schedules': len(valid_schedules),
             'schedule_rating': rating
         }), HTTPStatus.CREATED
@@ -189,6 +184,7 @@ def generate_block_schedule(block_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 
 def rate_block_schedule(block_id):

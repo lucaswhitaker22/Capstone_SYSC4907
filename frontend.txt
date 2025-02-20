@@ -443,10 +443,11 @@ export default BlocksModal;
 
 === frontend/app/src/components/blocks/BlocksPage.jsx ===
 import React, { useState, useEffect } from 'react';
-import { Container, Button } from 'react-bootstrap';
+import { Container, Button, Form } from 'react-bootstrap';
 import BlocksTable from './BlocksTable';
 import BlocksModal from './BlocksModal';
 import BlockScheduleModal from './BlockScheduleModal';
+
 const API_URL = 'http://127.0.0.1:5000/api';
 
 const BlocksPage = () => {
@@ -456,23 +457,29 @@ const BlocksPage = () => {
     const [selectedBlock, setSelectedBlock] = useState(null);
     const [selectedBlockId, setSelectedBlockId] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-  
+    const [selectedTerm, setSelectedTerm] = useState('FALL');
+    const [selectedYear, setSelectedYear] = useState('2025-2026');
 
-  const fetchBlocks = async () => {
-    try {
-      const response = await fetch(`${API_URL}/blocks`);
-      const data = await response.json();
-      setBlocks(data);
-    } catch (error) {
-      console.error('Error fetching blocks:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const fetchBlocks = async () => {
+        try {
+            const response = await fetch(`${API_URL}/blocks`);
+            const data = await response.json();
+            setBlocks(data);
+        } catch (error) {
+            console.error('Error fetching blocks:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-  useEffect(() => {
-    fetchBlocks();
-  }, []);
+    useEffect(() => {
+        fetchBlocks();
+    }, []);
+
+    // Filter blocks by term and year
+    const filteredBlocks = blocks.filter(
+        block => block.term === selectedTerm && block.academic_year === selectedYear
+    );
 
   const handleAddNew = () => {
     setSelectedBlock(null);
@@ -582,40 +589,64 @@ const BlocksPage = () => {
 
   return (
     <Container className="py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1>Block Management</h1>
-        <Button variant="primary" onClick={handleAddNew}>
-          Create New Block
-        </Button>
-      </div>
+        <div className="d-flex justify-content-between align-items-center mb-4">
+            <h1>Block Management</h1>
+            <div className="d-flex gap-3">
+                <Form.Group style={{ width: '150px' }}>
+                    <Form.Select
+                        value={selectedTerm}
+                        onChange={(e) => setSelectedTerm(e.target.value)}
+                    >
+                        <option value="FALL">Fall Term</option>
+                        <option value="WINTER">Winter Term</option>
+                    </Form.Select>
+                </Form.Group>
 
-      <BlocksTable 
-        blocks={blocks}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onViewSchedule={handleViewSchedule}
-        onCalculateRating={handleCalculateRating}
-        onStatusUpdate={handleStatusUpdate}
-        isLoading={isLoading}
-      />
+                <Form.Group style={{ width: '150px' }}>
+                    <Form.Select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                    >
+                        <option value="2024-2025">2024-2025</option>
+                        <option value="2025-2026">2025-2026</option>
+                        <option value="2026-2027">2026-2027</option>
+                    </Form.Select>
+                </Form.Group>
+            </div>
+        </div>
 
-      <BlocksModal
-        show={showModal}
-        block={selectedBlock}
-        onHide={() => setShowModal(false)}
-        onSave={handleSave}
-      />
-            <BlockScheduleModal
-        show={showScheduleModal}
-        blockId={selectedBlockId}
-        onHide={() => setShowScheduleModal(false)}
-      />
+        <BlocksTable 
+            blocks={filteredBlocks}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onViewSchedule={handleViewSchedule}
+            onStatusUpdate={handleStatusUpdate}
+            isLoading={isLoading}
+            term={selectedTerm}
+            academicYear={selectedYear}
+        />
+
+        <BlocksModal
+            show={showModal}
+            block={selectedBlock}
+            onHide={() => setShowModal(false)}
+            onSave={handleSave}
+            defaultTerm={selectedTerm}
+            defaultYear={selectedYear}
+        />
+
+        <BlockScheduleModal
+            show={showScheduleModal}
+            blockId={selectedBlockId}
+            onHide={() => setShowScheduleModal(false)}
+            term={selectedTerm}
+            academicYear={selectedYear}
+        />
     </Container>
-  );
+);
 };
 
 export default BlocksPage;
-
 
 
 === frontend/app/src/components/blocks/BlocksTable.jsx ===
@@ -627,7 +658,6 @@ const BlocksTable = ({
     onEdit, 
     onDelete, 
     onViewSchedule, 
-    onCalculateRating, 
     isLoading 
   }) => {
   if (isLoading) {
@@ -735,16 +765,7 @@ const BlocksTable = ({
               >
                 View Schedule
               </Button>
-              {block.status !== 'LOCKED' && (
-                <Button
-                  variant="success"
-                  size="sm"
-                  className="ms-2"
-                  onClick={() => onCalculateRating(block.block_id)}
-                >
-                  Calculate Rating
-                </Button>
-              )}
+
             </td>
           </tr>
         ))}
@@ -836,7 +857,7 @@ export default ConflictsPage;
 
 === frontend/app/src/components/conflicts/CourseConflictModal.jsx ===
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Button, Alert, Spinner, ListGroup } from 'react-bootstrap';
+import { Modal, Form, Button, Alert, Spinner, ListGroup, Tabs, Tab } from 'react-bootstrap';
 
 const API_URL = 'http://127.0.0.1:5000/api';
 
@@ -847,6 +868,8 @@ const CourseConflictModal = ({ show, onHide }) => {
   const [conflicts, setConflicts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+  const [selectedTerm, setSelectedTerm] = useState('FALL');
+  const [selectedYear, setSelectedYear] = useState('2025-2026');
 
   useEffect(() => {
     if (show) {
@@ -855,7 +878,7 @@ const CourseConflictModal = ({ show, onHide }) => {
       setSelectedScheduleOfferings([]);
       setNewOffering('');
     }
-  }, [show]);
+  }, [show, selectedTerm, selectedYear]);
 
   const fetchOfferings = async () => {
     try {
@@ -886,7 +909,9 @@ const CourseConflictModal = ({ show, onHide }) => {
         },
         body: JSON.stringify({
           schedule_offering_ids: selectedScheduleOfferings,
-          new_offering_id: newOffering
+          new_offering_id: newOffering,
+          term: selectedTerm,
+          academic_year: selectedYear
         }),
       });
       
@@ -906,6 +931,11 @@ const CourseConflictModal = ({ show, onHide }) => {
     return days[day - 1];
   };
 
+  // Filter offerings by term and year
+  const filteredOfferings = offerings.filter(
+    offering => offering.term === selectedTerm && offering.academic_year === selectedYear
+  );
+
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
@@ -920,15 +950,50 @@ const CourseConflictModal = ({ show, onHide }) => {
           </div>
         ) : (
           <>
+            <div className="mb-3 d-flex gap-3">
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Term</Form.Label>
+                <Form.Select
+                  value={selectedTerm}
+                  onChange={(e) => {
+                    setSelectedTerm(e.target.value);
+                    setSelectedScheduleOfferings([]);
+                    setNewOffering('');
+                    setConflicts([]);
+                  }}
+                >
+                  <option value="FALL">Fall</option>
+                  <option value="WINTER">Winter</option>
+                </Form.Select>
+              </Form.Group>
+
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Select
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    setSelectedScheduleOfferings([]);
+                    setNewOffering('');
+                    setConflicts([]);
+                  }}
+                >
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
+                </Form.Select>
+              </Form.Group>
+            </div>
+
             <Form.Group className="mb-3">
-              <Form.Label>Select Existing Schedule Offerings</Form.Label>
+              <Form.Label>Select Existing Schedule Offerings ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select 
                 multiple 
                 size={6}
                 value={selectedScheduleOfferings}
                 onChange={handleScheduleOfferingsSelect}
               >
-                {offerings.map(offering => (
+                {filteredOfferings.map(offering => (
                   <option key={offering.offering_id} value={offering.offering_id}>
                     {offering.course_id} - {offering.section_type} {offering.section_code}
                     ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
@@ -941,13 +1006,13 @@ const CourseConflictModal = ({ show, onHide }) => {
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label>Select New Course Offering</Form.Label>
+              <Form.Label>Select New Course Offering ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select
                 value={newOffering}
                 onChange={(e) => setNewOffering(e.target.value)}
               >
                 <option value="">Select an offering</option>
-                {offerings.map(offering => (
+                {filteredOfferings.map(offering => (
                   <option key={offering.offering_id} value={offering.offering_id}>
                     {offering.course_id} - {offering.section_type} {offering.section_code}
                     ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
@@ -958,7 +1023,7 @@ const CourseConflictModal = ({ show, onHide }) => {
 
             {conflicts.length > 0 && (
               <Alert variant="danger">
-                <Alert.Heading>Conflicts Found</Alert.Heading>
+                <Alert.Heading>Conflicts Found ({selectedTerm} {selectedYear})</Alert.Heading>
                 <ListGroup>
                   {conflicts.map((conflict, index) => (
                     <ListGroup.Item key={index} variant="danger">
@@ -973,7 +1038,7 @@ const CourseConflictModal = ({ show, onHide }) => {
 
             {conflicts.length === 0 && selectedScheduleOfferings.length > 0 && newOffering && !isLoading && (
               <Alert variant="success">
-                No conflicts found with the selected course.
+                No conflicts found for the selected course in {selectedTerm} {selectedYear}.
               </Alert>
             )}
           </>
@@ -1023,15 +1088,21 @@ const OfferingConflictModal = ({ show, onHide }) => {
   const [conflict, setConflict] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+  const [selectedTerm, setSelectedTerm] = useState('FALL');
+  const [selectedYear, setSelectedYear] = useState('2025-2026');
 
   useEffect(() => {
     if (show) {
       fetchOfferings();
-      setConflict(null);
-      setOffering1('');
-      setOffering2('');
+      resetForm();
     }
-  }, [show]);
+  }, [show, selectedTerm, selectedYear]);
+
+  const resetForm = () => {
+    setConflict(null);
+    setOffering1('');
+    setOffering2('');
+  };
 
   const fetchOfferings = async () => {
     try {
@@ -1076,6 +1147,11 @@ const OfferingConflictModal = ({ show, onHide }) => {
     return days[day - 1];
   };
 
+  // Filter offerings by term and year
+  const filteredOfferings = offerings.filter(
+    offering => offering.term === selectedTerm && offering.academic_year === selectedYear
+  );
+
   return (
     <Modal show={show} onHide={onHide}>
       <Modal.Header closeButton>
@@ -1090,25 +1166,64 @@ const OfferingConflictModal = ({ show, onHide }) => {
           </div>
         ) : (
           <Form>
+            <div className="mb-3 d-flex gap-3">
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Term</Form.Label>
+                <Form.Select
+                  value={selectedTerm}
+                  onChange={(e) => {
+                    setSelectedTerm(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="FALL">Fall</option>
+                  <option value="WINTER">Winter</option>
+                </Form.Select>
+              </Form.Group>
+
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Select
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
+                </Form.Select>
+              </Form.Group>
+            </div>
+
             <Form.Group className="mb-3">
-              <Form.Label>First Offering</Form.Label>
+              <Form.Label>First Offering ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select
                 value={offering1}
-                onChange={(e) => setOffering1(e.target.value)}
+                onChange={(e) => {
+                  setOffering1(e.target.value);
+                  setOffering2('');
+                  setConflict(null);
+                }}
               >
                 <option value="">Select an offering</option>
-                {offerings.map(renderOfferingOption)}
+                {filteredOfferings.map(renderOfferingOption)}
               </Form.Select>
             </Form.Group>
+
             <Form.Group className="mb-3">
-              <Form.Label>Second Offering</Form.Label>
+              <Form.Label>Second Offering ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select
                 value={offering2}
-                onChange={(e) => setOffering2(e.target.value)}
+                onChange={(e) => {
+                  setOffering2(e.target.value);
+                  setConflict(null);
+                }}
                 disabled={!offering1}
               >
                 <option value="">Select an offering</option>
-                {offerings
+                {filteredOfferings
                   .filter(o => o.offering_id !== offering1)
                   .map(renderOfferingOption)}
               </Form.Select>
@@ -1117,10 +1232,14 @@ const OfferingConflictModal = ({ show, onHide }) => {
         )}
         {conflict && (
           <Alert variant={conflict.has_conflict ? 'danger' : 'success'}>
-            {conflict.has_conflict ? 
-              `Time conflict detected between ${conflict.offering1} and ${conflict.offering2}` :
-              'No time conflicts detected between these offerings'
-            }
+            {conflict.has_conflict ? (
+              <>
+                Time conflict detected in {selectedTerm} {selectedYear}:<br/>
+                {conflict.offering1.course_id} conflicts with {conflict.offering2.course_id}
+              </>
+            ) : (
+              `No time conflicts detected between these offerings in ${selectedTerm} ${selectedYear}`
+            )}
           </Alert>
         )}
       </Modal.Body>
@@ -1167,14 +1286,20 @@ const ScheduleConflictModal = ({ show, onHide }) => {
   const [conflicts, setConflicts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+  const [selectedTerm, setSelectedTerm] = useState('FALL');
+  const [selectedYear, setSelectedYear] = useState('2025-2026');
 
   useEffect(() => {
     if (show) {
       fetchOfferings();
-      setConflicts([]);
-      setSelectedOfferings([]);
+      resetForm();
     }
-  }, [show]);
+  }, [show, selectedTerm, selectedYear]);
+
+  const resetForm = () => {
+    setConflicts([]);
+    setSelectedOfferings([]);
+  };
 
   const fetchOfferings = async () => {
     try {
@@ -1193,6 +1318,7 @@ const ScheduleConflictModal = ({ show, onHide }) => {
   const handleOfferingSelect = (e) => {
     const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
     setSelectedOfferings(selectedOptions);
+    setConflicts([]); // Clear conflicts when selection changes
   };
 
   const checkConflicts = async () => {
@@ -1204,7 +1330,9 @@ const ScheduleConflictModal = ({ show, onHide }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          offering_ids: selectedOfferings
+          offering_ids: selectedOfferings,
+          term: selectedTerm,
+          academic_year: selectedYear
         }),
       });
       
@@ -1224,6 +1352,11 @@ const ScheduleConflictModal = ({ show, onHide }) => {
     return days[day - 1];
   };
 
+  // Filter offerings by term and year
+  const filteredOfferings = offerings.filter(
+    offering => offering.term === selectedTerm && offering.academic_year === selectedYear
+  );
+
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
@@ -1238,15 +1371,46 @@ const ScheduleConflictModal = ({ show, onHide }) => {
           </div>
         ) : (
           <>
+            <div className="mb-3 d-flex gap-3">
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Term</Form.Label>
+                <Form.Select
+                  value={selectedTerm}
+                  onChange={(e) => {
+                    setSelectedTerm(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="FALL">Fall</option>
+                  <option value="WINTER">Winter</option>
+                </Form.Select>
+              </Form.Group>
+
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Select
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
+                </Form.Select>
+              </Form.Group>
+            </div>
+
             <Form.Group className="mb-3">
-              <Form.Label>Select Multiple Offerings</Form.Label>
+              <Form.Label>Select Multiple Offerings ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select 
                 multiple 
                 size={6}
                 value={selectedOfferings}
                 onChange={handleOfferingSelect}
               >
-                {offerings.map(offering => (
+                {filteredOfferings.map(offering => (
                   <option key={offering.offering_id} value={offering.offering_id}>
                     {offering.course_id} - {offering.section_type} {offering.section_code}
                     ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
@@ -1261,7 +1425,7 @@ const ScheduleConflictModal = ({ show, onHide }) => {
             {conflicts.length > 0 && (
               <div className="mt-3">
                 <Alert variant="danger">
-                  <Alert.Heading>Conflicts Found</Alert.Heading>
+                  <Alert.Heading>Conflicts Found in {selectedTerm} {selectedYear}</Alert.Heading>
                   <ListGroup>
                     {conflicts.map((conflict, index) => (
                       <ListGroup.Item key={index} variant="danger">
@@ -1277,7 +1441,7 @@ const ScheduleConflictModal = ({ show, onHide }) => {
 
             {conflicts.length === 0 && selectedOfferings.length > 0 && !isLoading && (
               <Alert variant="success">
-                No conflicts found in the selected offerings.
+                No conflicts found in the selected offerings for {selectedTerm} {selectedYear}.
               </Alert>
             )}
           </>
@@ -2256,13 +2420,14 @@ const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
         <Col md={3}>
           <Form.Group>
             <Form.Label>Academic Year</Form.Label>
-            <Form.Control
-              type="text"
-              value={yearFilter}
-              onChange={(e) => setYearFilter(e.target.value)}
-              placeholder="2025-2026"
-              pattern="\d{4}-\d{4}"
-            />
+            <Form.Select 
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+            >
+                <option value="2024-2025">2024-2025</option>
+                <option value="2025-2026">2025-2026</option>
+                <option value="2026-2027">2026-2027</option>
+            </Form.Select>
           </Form.Group>
         </Col>
       </Row>
@@ -2659,48 +2824,39 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
     program_id: '',
     program_name: '',
     total_enrollment: 0,
-    blocks_20_count_fall: 0,
-    blocks_10_count_fall: 0,
-    blocks_20_count_winter: 0,
-    blocks_10_count_winter: 0,
-    academic_year: '2025-2026'  // Add default academic year
-};
+    blocks_20_count: 0,
+    blocks_10_count: 0,
+    academic_year: '2025-2026'
+  };
 
   const [formData, setFormData] = useState(initialFormData);
   const [validated, setValidated] = useState(false);
-
   useEffect(() => {
     if (program) {
-        setFormData({
-            program_id: program.program_id,
-            program_name: program.program_name,
-            total_enrollment: program.total_enrollment,
-            blocks_20_count_fall: program.blocks_20_count_fall,
-            blocks_10_count_fall: program.blocks_10_count_fall,
-            blocks_20_count_winter: program.blocks_20_count_winter,
-            blocks_10_count_winter: program.blocks_10_count_winter,
-            academic_year: program.academic_year || '2025-2026'
-        });
+      // When editing, take the Fall term counts (should be same as Winter)
+      setFormData({
+        program_id: program.program_id,
+        program_name: program.program_name,
+        total_enrollment: program.total_enrollment,
+        blocks_20_count: program.blocks_20_count_fall,
+        blocks_10_count: program.blocks_10_count_fall,
+        academic_year: program.academic_year || '2025-2026'
+      });
     } else {
-        setFormData(initialFormData);
+      setFormData(initialFormData);
     }
     setValidated(false);
-}, [program, show]);
+  }, [program, show]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const numericFields = [
-        'total_enrollment', 
-        'blocks_20_count_fall', 
-        'blocks_10_count_fall',
-        'blocks_20_count_winter', 
-        'blocks_10_count_winter'
-    ];
+    const numericFields = ['total_enrollment', 'blocks_20_count', 'blocks_10_count'];
     
     setFormData(prev => ({
-        ...prev,
-        [name]: numericFields.includes(name) ? parseInt(value) || 0 : value
+      ...prev,
+      [name]: numericFields.includes(name) ? parseInt(value) || 0 : value
     }));
+
 };
 
   const handleSubmit = (e) => {
@@ -2713,7 +2869,7 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
     setValidated(true);
   };
 
-  return (
+   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
         <Modal.Title>
@@ -2740,37 +2896,37 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
               </Form.Group>
             </Col>
             <Col md={6}>
-  <Form.Label>Academic Year</Form.Label>
-  <Form.Control
-    type="text"
-    name="academic_year"
-    value={formData.academic_year}
-    onChange={handleChange}
-    required
-    pattern="\d{4}-\d{4}"
-    placeholder="2025-2026"
-  />
-  <Form.Control.Feedback type="invalid">
-    Please provide a valid academic year (YYYY-YYYY).
-  </Form.Control.Feedback>
-  </Col>
-
-            <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Program Name</Form.Label>
+                <Form.Label>Academic Year</Form.Label>
                 <Form.Control
                   type="text"
-                  name="program_name"
-                  value={formData.program_name}
+                  name="academic_year"
+                  value={formData.academic_year}
                   onChange={handleChange}
                   required
+                  pattern="\d{4}-\d{4}"
+                  placeholder="2025-2026"
                 />
                 <Form.Control.Feedback type="invalid">
-                  Please provide a program name.
+                  Please provide a valid academic year (YYYY-YYYY).
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
           </Row>
+
+          <Form.Group className="mb-3">
+            <Form.Label>Program Name</Form.Label>
+            <Form.Control
+              type="text"
+              name="program_name"
+              value={formData.program_name}
+              onChange={handleChange}
+              required
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a program name.
+            </Form.Control.Feedback>
+          </Form.Group>
 
           <Form.Group className="mb-3">
             <Form.Label>Total Enrollment</Form.Label>
@@ -2787,51 +2943,15 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
             </Form.Control.Feedback>
           </Form.Group>
 
-          <h5 className="mb-3">Fall Term Blocks</h5>
-          <Row className="mb-4">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>20-Student Blocks (Fall)</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="blocks_20_count_fall"
-                  value={formData.blocks_20_count_fall}
-                  onChange={handleChange}
-                  required
-                  min="0"
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a valid number of blocks.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>10-Student Blocks (Fall)</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="blocks_10_count_fall"
-                  value={formData.blocks_10_count_fall}
-                  onChange={handleChange}
-                  required
-                  min="0"
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a valid number of blocks.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-          </Row>
-
-          <h5 className="mb-3">Winter Term Blocks</h5>
+          <h5 className="mb-3">Block Configuration (Applied to Both Terms)</h5>
           <Row>
             <Col md={6}>
               <Form.Group>
-                <Form.Label>20-Student Blocks (Winter)</Form.Label>
+                <Form.Label>20-Student Blocks</Form.Label>
                 <Form.Control
                   type="number"
-                  name="blocks_20_count_winter"
-                  value={formData.blocks_20_count_winter}
+                  name="blocks_20_count"
+                  value={formData.blocks_20_count}
                   onChange={handleChange}
                   required
                   min="0"
@@ -2843,11 +2963,11 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
             </Col>
             <Col md={6}>
               <Form.Group>
-                <Form.Label>10-Student Blocks (Winter)</Form.Label>
+                <Form.Label>10-Student Blocks</Form.Label>
                 <Form.Control
                   type="number"
-                  name="blocks_10_count_winter"
-                  value={formData.blocks_10_count_winter}
+                  name="blocks_10_count"
+                  value={formData.blocks_10_count}
                   onChange={handleChange}
                   required
                   min="0"
@@ -2873,7 +2993,6 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
 };
 
 export default ProgramsModal;
-
 
 
 === frontend/app/src/components/programs/ProgramsPage.jsx ===
@@ -3050,7 +3169,7 @@ import { Table, Button, Badge, Spinner } from 'react-bootstrap';
 const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements, onViewSchedules }) => {
   if (isLoading) {
     return (
-      <div className="text-center p-4">
+      <div className="text-center p-3">
         <Spinner animation="border" role="status">
           <span className="visually-hidden">Loading...</span>
         </Spinner>
@@ -3058,26 +3177,16 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
     );
   }
 
-  if (!programs.length) {
-    return <div className="text-center p-4">No programs available</div>;
-  }
-
   return (
     <Table striped bordered hover responsive>
       <thead>
         <tr>
-          <th rowSpan="2">Program ID</th>
-          <th rowSpan="2">Program Name</th>
-          <th rowSpan="2">Total Enrollment</th>
-          <th colSpan="2" className="text-center">Fall Blocks</th>
-          <th colSpan="2" className="text-center">Winter Blocks</th>
-          <th rowSpan="2">Actions</th>
-        </tr>
-        <tr>
-          <th>20-Student</th>
-          <th>10-Student</th>
-          <th>20-Student</th>
-          <th>10-Student</th>
+          <th>Program ID</th>
+          <th>Program Name</th>
+          <th>Total Enrollment</th>
+          <th>20-Student Blocks</th>
+          <th>10-Student Blocks</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -3085,31 +3194,9 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
           <tr key={program.program_id}>
             <td>{program.program_id}</td>
             <td>{program.program_name}</td>
-            <td>
-              <Badge bg="info">
-                {program.total_enrollment} students
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="primary">
-                {program.blocks_20_count_fall} blocks
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="secondary">
-                {program.blocks_10_count_fall} blocks
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="primary">
-                {program.blocks_20_count_winter} blocks
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="secondary">
-                {program.blocks_10_count_winter} blocks
-              </Badge>
-            </td>
+            <td>{program.total_enrollment}</td>
+            <td>{program.blocks_20_count}</td>
+            <td>{program.blocks_10_count}</td>
             <td>
               <Button
                 variant="primary"
@@ -3122,6 +3209,7 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
               <Button
                 variant="danger"
                 size="sm"
+                className="me-2"
                 onClick={() => onDelete(program.program_id)}
               >
                 Delete
@@ -3129,7 +3217,7 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
               <Button
                 variant="info"
                 size="sm"
-                className="ms-2"
+                className="me-2"
                 onClick={() => onViewRequirements(program.program_id)}
               >
                 Requirements
@@ -3137,10 +3225,9 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
               <Button
                 variant="success"
                 size="sm"
-                className="ms-2"
                 onClick={() => onViewSchedules(program.program_id)}
               >
-                View Schedules
+                Schedules
               </Button>
             </td>
           </tr>
@@ -3156,19 +3243,33 @@ export default ProgramsTable;
 
 === frontend/app/src/components/schedule/ScheduleEditModal.jsx ===
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Button, ListGroup, Alert, Spinner } from 'react-bootstrap';
+import { Modal, Form, Button, ListGroup, Alert, Spinner,Badge,Tabs, Tab } from 'react-bootstrap';
 
 const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
   const [blockSchedule, setBlockSchedule] = useState([]);
   const [selectedOffering, setSelectedOffering] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [blockTerm, setBlockTerm] = useState(null);
 
   useEffect(() => {
     if (show && blockId) {
       fetchBlockSchedule();
+      fetchBlockDetails();
     }
   }, [show, blockId]);
+
+  const fetchBlockDetails = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/blocks/${blockId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setBlockTerm(data.term);
+      }
+    } catch (error) {
+      setError('Error fetching block details');
+    }
+  };
 
   const fetchBlockSchedule = async () => {
     try {
@@ -3191,7 +3292,10 @@ const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ offering_id: selectedOffering }),
+        body: JSON.stringify({ 
+          offering_id: selectedOffering,
+          term: blockTerm
+        }),
       });
 
       const data = await response.json();
@@ -3225,10 +3329,20 @@ const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
     return days[day - 1];
   };
 
+  // Filter offerings by term
+  const termOfferings = offerings.filter(offering => offering.term === blockTerm);
+
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
-        <Modal.Title>Edit Block Schedule</Modal.Title>
+        <Modal.Title>
+          Edit Block Schedule
+          {blockTerm && (
+            <Badge bg={blockTerm === 'FALL' ? 'warning' : 'info'} className="ms-2">
+              {blockTerm} Term
+            </Badge>
+          )}
+        </Modal.Title>
       </Modal.Header>
       <Modal.Body>
         {isLoading ? (
@@ -3238,13 +3352,13 @@ const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
         ) : (
           <>
             <Form.Group className="mb-3">
-              <Form.Label>Add Course Offering</Form.Label>
+              <Form.Label>Add Course Offering ({blockTerm} Term)</Form.Label>
               <Form.Select
                 value={selectedOffering}
                 onChange={(e) => setSelectedOffering(e.target.value)}
               >
                 <option value="">Select an offering</option>
-                {offerings.map(offering => (
+                {termOfferings.map(offering => (
                   <option key={offering.offering_id} value={offering.offering_id}>
                     {offering.course_id} - {offering.section_type} {offering.section_code}
                     ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
@@ -3301,175 +3415,12 @@ export default ScheduleEditModal;
 
 
 
-=== frontend/app/src/components/schedule/ScheduleGenerateModal.jsx ===
-import React, { useState } from 'react';
-import { Modal, Form, Button, Alert, Spinner, ListGroup } from 'react-bootstrap';
-
-const ScheduleGenerateModal = ({ show, blocks, onHide, onGenerate }) => {
-  const [selectedBlock, setSelectedBlock] = useState('');
-  const [generatedSchedule, setGeneratedSchedule] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleGenerate = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}`, {
-        method: 'GET'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setGeneratedSchedule(data);
-      } else {
-        const errorData = await response.json();
-        setError(errorData.message || 'Failed to generate schedule');
-      }
-    } catch (error) {
-      setError('Error generating schedule');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ schedule: generatedSchedule })
-      });
-      
-      if (response.ok) {
-        await onGenerate();
-        handleClose();
-      } else {
-        const errorData = await response.json();
-        setError(errorData.message || 'Failed to save schedule');
-      }
-    } catch (error) {
-      setError('Error saving schedule');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const getDayName = (day) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[day - 1];
-  };
-
-  const handleClose = () => {
-    setSelectedBlock('');
-    setGeneratedSchedule(null);
-    setError(null);
-    onHide();
-  };
-
-  return (
-    <Modal show={show} onHide={handleClose} size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>Generate Block Schedule</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <Form.Group className="mb-3">
-          <Form.Label>Select Block</Form.Label>
-          <Form.Select
-            value={selectedBlock}
-            onChange={(e) => setSelectedBlock(e.target.value)}
-            disabled={isLoading}
-          >
-            <option value="">Choose a block...</option>
-            {blocks
-              .filter(block => block.status !== 'LOCKED')
-              .map(block => (
-                <option key={block.block_id} value={block.block_id}>
-                  Block {block.block_id} - Program {block.program_id} 
-                  (Size: {block.block_size})
-                </option>
-              ))}
-          </Form.Select>
-        </Form.Group>
-
-        {error && (
-          <Alert variant="danger" className="mt-3">
-            {error}
-          </Alert>
-        )}
-
-        {generatedSchedule && (
-          <div className="mt-4">
-            <h5>Generated Schedule Preview:</h5>
-            <ListGroup>
-              {generatedSchedule.map((offering, index) => (
-                <ListGroup.Item key={index}>
-                  {offering.course_id} - {offering.section_type} {offering.section_code}
-                  <br />
-                  <small>
-                    {getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time}
-                  </small>
-                </ListGroup.Item>
-              ))}
-            </ListGroup>
-          </div>
-        )}
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={handleClose}>
-          Cancel
-        </Button>
-        {!generatedSchedule ? (
-          <Button
-            variant="primary"
-            onClick={handleGenerate}
-            disabled={!selectedBlock || isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
-                Generating...
-              </>
-            ) : (
-              'Preview Schedule'
-            )}
-          </Button>
-        ) : (
-          <Button
-            variant="success"
-            onClick={handleSave}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
-                Saving...
-              </>
-            ) : (
-              'Save Schedule'
-            )}
-          </Button>
-        )}
-      </Modal.Footer>
-    </Modal>
-  );
-};
-
-export default ScheduleGenerateModal;
-
-
-
 === frontend/app/src/components/schedule/SchedulePage.jsx ===
 import React, { useState, useEffect } from 'react';
-import { Container, Button } from 'react-bootstrap';
+import { Container, Button, Form} from 'react-bootstrap';
 import ScheduleTable from './ScheduleTable';
 import ScheduleViewModal from './ScheduleViewModal';
 import ScheduleEditModal from './ScheduleEditModal';
-import ScheduleGenerateModal from './ScheduleGenerateModal';
 
 const API_URL = 'http://127.0.0.1:5000/api';
 
@@ -3478,6 +3429,8 @@ const SchedulePage = () => {
     const [blocks, setBlocks] = useState([]);
     const [offerings, setOfferings] = useState([]);
     const [selectedBlock, setSelectedBlock] = useState(null);
+    const [selectedTerm, setSelectedTerm] = useState('FALL');
+    const [selectedYear, setSelectedYear] = useState('2025-2026');
     const [showViewModal, setShowViewModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showGenerateModal, setShowGenerateModal] = useState(false);
@@ -3505,23 +3458,27 @@ const SchedulePage = () => {
 
     const fetchBlockSchedule = async (blockId) => {
         try {
-            const [scheduleResponse, validationResponse] = await Promise.all([
+            const [scheduleResponse, validationResponse, ratingResponse] = await Promise.all([
                 fetch(`${API_URL}/schedules/block/${blockId}`),
-                fetch(`${API_URL}/schedules/block/${blockId}/validate`)
+                fetch(`${API_URL}/schedules/block/${blockId}/validate`),
+                fetch(`${API_URL}/schedules/block/${blockId}/rate`)
             ]);
-
+    
             const offerings = await scheduleResponse.json();
             const validation = await validationResponse.json();
-
+            const rating = await ratingResponse.json();
+    
             return {
                 offerings: scheduleResponse.ok ? offerings : [],
-                validation: validationResponse.ok ? validation : null
+                validation: validationResponse.ok ? validation : null,
+                rating: ratingResponse.ok ? rating.rating : null
             };
         } catch (error) {
             console.error('Error fetching block schedule:', error);
-            return { offerings: [], validation: null };
+            return { offerings: [], validation: null, rating: null };
         }
     };
+    
 
     const fetchAllSchedules = async () => {
         setIsLoading(true);
@@ -3532,6 +3489,8 @@ const SchedulePage = () => {
                     return {
                         block_id: block.block_id,
                         program_id: block.program_id,
+                        term: block.term,
+                        academic_year: block.academic_year,
                         offerings: offerings,
                         rating: block.schedule_rating,
                         validation: validation
@@ -3549,13 +3508,13 @@ const SchedulePage = () => {
     useEffect(() => {
         fetchBlocks();
         fetchOfferings();
-    }, []);
+    }, [selectedTerm]);
 
     useEffect(() => {
         if (blocks.length > 0) {
             fetchAllSchedules();
         }
-    }, [blocks]);
+    }, [blocks, selectedTerm]);
 
     const handleViewSchedule = (blockId) => {
         setSelectedBlock(blockId);
@@ -3574,6 +3533,18 @@ const SchedulePage = () => {
             });
             
             if (response.ok) {
+                const generatedData = await response.json();
+                
+                // Update the specific block's rating in the blocks array
+                setBlocks(prevBlocks => 
+                    prevBlocks.map(block => 
+                        block.block_id === blockId 
+                            ? { ...block, schedule_rating: generatedData.schedule_rating }
+                            : block
+                    )
+                );
+                
+                // Fetch updated schedules to reflect new changes
                 await fetchAllSchedules();
             } else {
                 const error = await response.json();
@@ -3584,6 +3555,7 @@ const SchedulePage = () => {
             alert('Error generating schedule');
         }
     };
+    
 
     const handleDeleteSchedule = async (blockId) => {
         if (window.confirm('Are you sure you want to delete this schedule?')) {
@@ -3630,13 +3602,21 @@ const SchedulePage = () => {
         <Container className="py-4">
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h1>Block Schedules</h1>
-                <Button variant="primary" onClick={() => setShowGenerateModal(true)}>
-                    Generate New Schedule
-                </Button>
+                <div className="d-flex gap-3">
+                    <Form.Select 
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                        style={{ width: '150px' }}
+                    >
+                        <option value="2024-2025">2024-2025</option>
+                        <option value="2025-2026">2025-2026</option>
+                        <option value="2026-2027">2026-2027</option>
+                    </Form.Select>
+                </div>
             </div>
 
             <ScheduleTable 
-                schedules={schedules}
+                schedules={schedules.filter(s => s.academic_year === selectedYear)}
                 onView={handleViewSchedule}
                 onEdit={handleEditSchedule}
                 onValidate={handleValidateSchedule}
@@ -3648,43 +3628,40 @@ const SchedulePage = () => {
             <ScheduleViewModal
                 show={showViewModal}
                 blockId={selectedBlock}
+                term={selectedTerm}
+                academicYear={selectedYear}
                 onHide={() => setShowViewModal(false)}
             />
 
             <ScheduleEditModal
                 show={showEditModal}
                 blockId={selectedBlock}
+                term={selectedTerm}
+                academicYear={selectedYear}
                 offerings={offerings}
                 onHide={() => setShowEditModal(false)}
                 onSave={fetchAllSchedules}
             />
-
-            <ScheduleGenerateModal
-                show={showGenerateModal}
-                blocks={blocks}
-                offerings={offerings}
-                onHide={() => setShowGenerateModal(false)}
-                onGenerate={fetchAllSchedules}
-            />
         </Container>
     );
 };
-
 export default SchedulePage;
 
 
 
 === frontend/app/src/components/schedule/ScheduleTable.jsx ===
 import React from 'react';
-import { Table, Button, Badge, Spinner } from 'react-bootstrap';
+import { Table, Button, Badge, Spinner, Tabs, Tab } from 'react-bootstrap';
 
-const ScheduleTable = ({   schedules = [], 
-    onView, 
-    onEdit, 
-    onValidate, 
-    onDelete, 
-    isLoading,
-onGenerate }) => {
+const ScheduleTable = ({
+  schedules = [],
+  onView,
+  onEdit,
+  onValidate,
+  onDelete,
+  isLoading,
+  onGenerate
+}) => {
   if (isLoading) {
     return (
       <div className="text-center p-4">
@@ -3731,12 +3708,13 @@ onGenerate }) => {
     return dayNames.join(', ');
   };
 
-  return (
+  const renderScheduleTable = (termSchedules) => (
     <Table striped bordered hover responsive>
       <thead>
         <tr>
           <th>Block ID</th>
           <th>Program</th>
+          <th>Term</th>
           <th>Courses</th>
           <th>Days</th>
           <th>Rating</th>
@@ -3744,10 +3722,15 @@ onGenerate }) => {
         </tr>
       </thead>
       <tbody>
-        {schedules.map((schedule) => (
+        {termSchedules.map((schedule) => (
           <tr key={schedule.block_id}>
             <td>Block {schedule.block_id}</td>
             <td>{schedule.program_id}</td>
+            <td>
+              <Badge bg={schedule.term === 'FALL' ? 'warning' : 'info'}>
+                {schedule.term}
+              </Badge>
+            </td>
             <td>
               <Badge bg="info">
                 {getCoursesCount(schedule.offerings)} courses
@@ -3798,6 +3781,21 @@ onGenerate }) => {
         ))}
       </tbody>
     </Table>
+  );
+
+  // Split schedules by term
+  const fallSchedules = schedules.filter(s => s.term === 'FALL');
+  const winterSchedules = schedules.filter(s => s.term === 'WINTER');
+
+  return (
+    <Tabs defaultActiveKey="fall" className="mb-3">
+      <Tab eventKey="fall" title="Fall Term">
+        {renderScheduleTable(fallSchedules)}
+      </Tab>
+      <Tab eventKey="winter" title="Winter Term">
+        {renderScheduleTable(winterSchedules)}
+      </Tab>
+    </Tabs>
   );
 };
 

@@ -4,7 +4,7 @@ import { Table, Button, Badge, Spinner } from 'react-bootstrap';
 const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements, onViewSchedules }) => {
   if (isLoading) {
     return (
-      <div className="text-center p-4">
+      <div className="text-center p-3">
         <Spinner animation="border" role="status">
           <span className="visually-hidden">Loading...</span>
         </Spinner>
@@ -12,26 +12,16 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
     );
   }
 
-  if (!programs.length) {
-    return <div className="text-center p-4">No programs available</div>;
-  }
-
   return (
     <Table striped bordered hover responsive>
       <thead>
         <tr>
-          <th rowSpan="2">Program ID</th>
-          <th rowSpan="2">Program Name</th>
-          <th rowSpan="2">Total Enrollment</th>
-          <th colSpan="2" className="text-center">Fall Blocks</th>
-          <th colSpan="2" className="text-center">Winter Blocks</th>
-          <th rowSpan="2">Actions</th>
-        </tr>
-        <tr>
-          <th>20-Student</th>
-          <th>10-Student</th>
-          <th>20-Student</th>
-          <th>10-Student</th>
+          <th>Program ID</th>
+          <th>Program Name</th>
+          <th>Total Enrollment</th>
+          <th>20-Student Blocks</th>
+          <th>10-Student Blocks</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -39,31 +29,9 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
           <tr key={program.program_id}>
             <td>{program.program_id}</td>
             <td>{program.program_name}</td>
-            <td>
-              <Badge bg="info">
-                {program.total_enrollment} students
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="primary">
-                {program.blocks_20_count_fall} blocks
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="secondary">
-                {program.blocks_10_count_fall} blocks
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="primary">
-                {program.blocks_20_count_winter} blocks
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="secondary">
-                {program.blocks_10_count_winter} blocks
-              </Badge>
-            </td>
+            <td>{program.total_enrollment}</td>
+            <td>{program.blocks_20_count}</td>
+            <td>{program.blocks_10_count}</td>
             <td>
               <Button
                 variant="primary"
@@ -76,6 +44,7 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
               <Button
                 variant="danger"
                 size="sm"
+                className="me-2"
                 onClick={() => onDelete(program.program_id)}
               >
                 Delete
@@ -83,7 +52,7 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
               <Button
                 variant="info"
                 size="sm"
-                className="ms-2"
+                className="me-2"
                 onClick={() => onViewRequirements(program.program_id)}
               >
                 Requirements
@@ -91,10 +60,9 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
               <Button
                 variant="success"
                 size="sm"
-                className="ms-2"
                 onClick={() => onViewSchedules(program.program_id)}
               >
-                View Schedules
+                Schedules
               </Button>
             </td>
           </tr>

@@ -46,14 +46,20 @@ def get_block_schedule(block_id):
 @bp.route('/block/<block_id>', methods=['DELETE'], strict_slashes=False)
 def delete_block_schedule(block_id):
     try:
-        # Check if block exists
         block = Block.query.get_or_404(block_id)
         
-        # Check if block is locked
         if block.status == 'LOCKED':
             return jsonify({
                 'error': 'Cannot delete schedule of locked block'
             }), HTTPStatus.FORBIDDEN
+
+        # Get all schedules and update enrollments before deletion
+        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        for schedule in schedules:
+            offering = CourseOffering.query.get(schedule.offering_id)
+            offering.current_enrollment -= block.block_size
+            if offering.current_enrollment < offering.capacity:
+                offering.status = 'OPEN'
 
         # Delete all schedule entries for the block
         BlockSchedule.query.filter_by(block_id=block_id).delete()
@@ -169,6 +175,7 @@ def generate(block_id):
 @bp.route('/block/<block_id>/offering/<offering_id>', methods=['DELETE'], strict_slashes=False)
 def remove_offering_from_block(block_id, offering_id):
     try:
+        block = Block.query.get_or_404(block_id)
         schedule = BlockSchedule.query.filter_by(
             block_id=block_id,
             offering_id=offering_id
@@ -179,6 +186,12 @@ def remove_offering_from_block(block_id, offering_id):
                 'error': 'Not Found',
                 'message': 'Schedule entry not found'
             }), HTTPStatus.NOT_FOUND
+
+        # Update enrollment for the removed offering
+        offering = CourseOffering.query.get(offering_id)
+        offering.current_enrollment -= block.block_size
+        if offering.current_enrollment < offering.capacity:
+            offering.status = 'OPEN'
             
         db.session.delete(schedule)
         db.session.commit()
