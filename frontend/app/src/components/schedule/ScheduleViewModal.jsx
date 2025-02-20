@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Table, Badge, Spinner } from 'react-bootstrap';
+import { Modal, Spinner } from 'react-bootstrap';
+import FullCalendar from '@fullcalendar/react';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import bootstrap5Plugin from '@fullcalendar/bootstrap5';
 
 const ScheduleViewModal = ({ show, blockId, onHide }) => {
   const [schedule, setSchedule] = useState([]);
@@ -25,54 +28,38 @@ const ScheduleViewModal = ({ show, blockId, onHide }) => {
     }
   };
 
-  const getDayName = (day) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[day];
+  const getEventColor = (sectionType) => {
+    const colors = {
+      'LECTURE': '#007bff',
+      'LAB': '#28a745',
+      'TUTORIAL': '#ffc107'
+    };
+    return colors[sectionType] || '#6c757d';
   };
 
-  const renderTimeSlot = (offering) => {
-    return (
-      <div className="p-2 border rounded mb-2" key={offering.offering_id}>
-        <Badge bg="primary" className="me-2">{offering.section_type}</Badge>
-        <strong>{offering.course_id}</strong> - {offering.section_code}
-        <br />
-        <small>{offering.start_time} - {offering.end_time}</small>
-      </div>
-    );
-  };
-
-  const renderScheduleTable = () => {
-    const days = [1, 2, 3, 4, 5]; // Monday to Friday
-    const scheduleByDay = days.map(day => ({
-      day,
-      offerings: schedule.filter(offering => offering.day_of_week === day)
-    }));
-
-    return (
-      <Table bordered responsive>
-        <thead>
-          <tr>
-            {days.map(day => (
-              <th key={day} className="text-center">{getDayName(day)}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            {scheduleByDay.map(({ day, offerings }) => (
-              <td key={day} className="align-top" style={{ minWidth: '200px' }}>
-                {offerings.sort((a, b) => a.start_time.localeCompare(b.start_time))
-                  .map(offering => renderTimeSlot(offering))}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </Table>
-    );
+  const convertToCalendarEvents = () => {
+    return schedule.map(offering => {
+      const [hours, minutes] = offering.start_time.split(':');
+      const [endHours, endMinutes] = offering.end_time.split(':');
+      
+      return {
+        id: offering.offering_id,
+        title: `${offering.course_id} - ${offering.section_type}`,
+        daysOfWeek: [offering.day_of_week - 1],
+        startTime: `${hours}:${minutes}:00`,
+        endTime: `${endHours}:${endMinutes}:00`,
+        backgroundColor: getEventColor(offering.section_type),
+        extendedProps: {
+          sectionCode: offering.section_code,
+          courseId: offering.course_id,
+          sectionType: offering.section_type
+        }
+      };
+    });
   };
 
   return (
-    <Modal show={show} onHide={onHide} size="xl">
+    <Modal show={show} onHide={onHide} size="xl" dialogClassName="modal-90w">
       <Modal.Header closeButton>
         <Modal.Title>Block Schedule View</Modal.Title>
       </Modal.Header>
@@ -86,10 +73,36 @@ const ScheduleViewModal = ({ show, blockId, onHide }) => {
         ) : schedule.length === 0 ? (
           <div className="text-center p-4">No courses scheduled for this block</div>
         ) : (
-          renderScheduleTable()
+          <div style={{ height: '600px' }}>
+            <FullCalendar
+              plugins={[timeGridPlugin, bootstrap5Plugin]}
+              initialView="timeGridWeek"
+              themeSystem="bootstrap5"
+              headerToolbar={false}
+              allDaySlot={false}
+              slotMinTime="08:00:00"
+              slotMaxTime="22:00:00"
+              events={convertToCalendarEvents()}
+              eventContent={renderEventContent}
+              slotDuration="00:30:00"
+              weekends={false}
+              dayHeaderFormat={{ weekday: 'long' }}
+              height="100%"
+            />
+          </div>
         )}
       </Modal.Body>
     </Modal>
+  );
+};
+
+const renderEventContent = (eventInfo) => {
+  return (
+    <div className="p-1">
+      <div className="fw-bold">{eventInfo.event.extendedProps.courseId}</div>
+      <div className="small">{eventInfo.event.extendedProps.sectionType}</div>
+      <div className="small">{eventInfo.event.extendedProps.sectionCode}</div>
+    </div>
   );
 };
 

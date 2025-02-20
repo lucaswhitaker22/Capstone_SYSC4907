@@ -7,48 +7,93 @@ const getDayName = (day) => {
 };
 
 const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
-  const [termFilter, setTermFilter] = useState('');
-  const [yearFilter, setYearFilter] = useState('2025-2026');
+  const [filters, setFilters] = useState({
+    course_id: '',
+    section_type: '',
+    section_code: '',
+    day_of_week: '',
+    capacity: '',
+    current_enrollment: '',
+    term: '',
+    academic_year: '2025-2026',
+    status: ''
+  });
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
 
   if (!offerings) {
     return <div>No offerings available</div>;
   }
 
   const filteredOfferings = offerings.filter(offering => {
-    if (termFilter && offering.term !== termFilter) return false;
-    if (yearFilter && offering.academic_year !== yearFilter) return false;
-    return true;
+    return Object.entries(filters).every(([key, value]) => {
+      if (!value) return true;
+      if (key === 'day_of_week') {
+        return getDayName(offering[key]).toLowerCase().includes(value.toLowerCase());
+      }
+      return offering[key].toString().toLowerCase().includes(value.toLowerCase());
+    });
   });
 
   return (
     <>
       <Row className="mb-3">
-        <Col md={3}>
-          <Form.Group>
-            <Form.Label>Term</Form.Label>
-            <Form.Select
-              value={termFilter}
-              onChange={(e) => setTermFilter(e.target.value)}
-            >
-              <option value="">All Terms</option>
-              <option value="FALL">Fall</option>
-              <option value="WINTER">Winter</option>
-            </Form.Select>
-          </Form.Group>
-        </Col>
-        <Col md={3}>
-          <Form.Group>
-            <Form.Label>Academic Year</Form.Label>
-            <Form.Select 
-                value={yearFilter}
-                onChange={(e) => setYearFilter(e.target.value)}
-            >
-                <option value="2024-2025">2024-2025</option>
-                <option value="2025-2026">2025-2026</option>
-                <option value="2026-2027">2026-2027</option>
-            </Form.Select>
-          </Form.Group>
-        </Col>
+        {Object.keys(filters).map(key => (
+          <Col md={3} key={key}>
+            <Form.Group>
+              <Form.Label>{key.replace('_', ' ').toUpperCase()}</Form.Label>
+              {key === 'academic_year' ? (
+                <Form.Select
+                  value={filters[key]}
+                  onChange={(e) => handleFilterChange(key, e.target.value)}
+                >
+                  <option value="">All Years</option>
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
+                </Form.Select>
+              ) : key === 'term' ? (
+                <Form.Select
+                  value={filters[key]}
+                  onChange={(e) => handleFilterChange(key, e.target.value)}
+                >
+                  <option value="">All Terms</option>
+                  <option value="FALL">Fall</option>
+                  <option value="WINTER">Winter</option>
+                </Form.Select>
+              ) : key === 'section_type' ? (
+                <Form.Select
+                  value={filters[key]}
+                  onChange={(e) => handleFilterChange(key, e.target.value)}
+                >
+                  <option value="">All Types</option>
+                  <option value="LECTURE">Lecture</option>
+                  <option value="LAB">Lab</option>
+                  <option value="TUTORIAL">Tutorial</option>
+                </Form.Select>
+              ) : key === 'status' ? (
+                <Form.Select
+                  value={filters[key]}
+                  onChange={(e) => handleFilterChange(key, e.target.value)}
+                >
+                  <option value="">All Statuses</option>
+                  <option value="OPEN">Open</option>
+                  <option value="FULL">Full</option>
+                  <option value="CANCELLED">Cancelled</option>
+                </Form.Select>
+              ) : (
+                <Form.Control
+                  type="text"
+                  value={filters[key]}
+                  onChange={(e) => handleFilterChange(key, e.target.value)}
+                  placeholder={`Filter by ${key.replace('_', ' ')}`}
+                />
+              )}
+            </Form.Group>
+          </Col>
+        ))}
       </Row>
 
       <Table striped bordered hover responsive>
