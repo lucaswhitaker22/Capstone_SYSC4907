@@ -119,13 +119,15 @@ def update_program(program_id):
             if new_count < current_count:
                 # Delete excess blocks for both terms
                 for term in ['FALL', 'WINTER']:
+                    # Get blocks ordered by ID to ensure consistent deletion
                     blocks_to_delete = Block.query.filter_by(
                         program_id=program_id,
                         term=term,
                         block_size=20
-                    ).limit(current_count - new_count).all()
+                    ).order_by(Block.block_id.desc()).limit(current_count - new_count).all()
                     
                     for block in blocks_to_delete:
+                        # Update enrollments before deletion
                         schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
                         for schedule in schedules:
                             offering = CourseOffering.query.get(schedule.offering_id)
@@ -136,20 +138,30 @@ def update_program(program_id):
                         db.session.delete(block)
             
             elif new_count > current_count:
-                # Create additional blocks for both terms
-                for term, prefix in [('FALL', 'F'), ('WINTER', 'W')]:
-                    for i in range(current_count + 1, new_count + 1):
-                        block = Block(
-                            block_id=f"{program_id}_{prefix}_20_{i}",
-                            program_id=program_id,
-                            block_size=20,
-                            term=term,
-                            academic_year=program.blocks[0].academic_year,
-                            status="DRAFT"
-                        )
-                        db.session.add(block)
+                # Get existing block IDs to avoid conflicts
+                existing_blocks = Block.query.filter_by(
+                    program_id=program_id,
+                    block_size=20
+                ).all()
+                existing_ids = set(block.block_id for block in existing_blocks)
+                
+                # Create additional blocks
+                for i in range(current_count + 1, new_count + 1):
+                    for term, prefix in [('FALL', 'F'), ('WINTER', 'W')]:
+                        block_id = f"{program_id}_{prefix}_20_{i}"
+                        if block_id not in existing_ids:
+                            block = Block(
+                                block_id=block_id,
+                                program_id=program_id,
+                                block_size=20,
+                                term=term,
+                                academic_year=program.blocks[0].academic_year,
+                                status="DRAFT"
+                            )
+                            db.session.add(block)
             
             program.blocks_20_count = new_count
+
 
         # Handle 10-student blocks update
         if 'blocks_10_count' in data:
@@ -213,8 +225,6 @@ def update_program(program_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
-
-
 
 @bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
 def delete_program(program_id):
