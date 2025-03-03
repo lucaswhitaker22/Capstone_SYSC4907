@@ -74,7 +74,7 @@ const ScheduleTable = ({
     return dayNames.join(', ');
   };
 
-  const renderScheduleTable = (termSchedules) => (
+  return (
     <Table striped bordered hover responsive>
       <thead>
         <tr>
@@ -87,7 +87,6 @@ const ScheduleTable = ({
           </th>
           <th>Block ID</th>
           <th>Program</th>
-          <th>Term</th>
           <th>Courses</th>
           <th>Days</th>
           <th>Rating</th>
@@ -95,23 +94,17 @@ const ScheduleTable = ({
         </tr>
       </thead>
       <tbody>
-        {termSchedules.map((schedule) => (
+        {schedules.map((schedule) => (
           <tr key={schedule.block_id}>
-                        <td>
+            <td>
               <input
                 type="checkbox"
                 onChange={() => handleRowSelection(schedule.block_id)}
                 checked={selectedRows.includes(schedule.block_id)}
               />
             </td>
-
             <td>Block {schedule.block_id}</td>
             <td>{schedule.program_id}</td>
-            <td>
-              <Badge bg={schedule.term === 'FALL' ? 'warning' : 'info'}>
-                {schedule.term}
-              </Badge>
-            </td>
             <td>
               <Badge bg="info">
                 {getCoursesCount(schedule.offerings)} courses
@@ -162,21 +155,6 @@ const ScheduleTable = ({
         ))}
       </tbody>
     </Table>
-  );
-
-  // Split schedules by term
-  const fallSchedules = schedules.filter(s => s.term === 'FALL');
-  const winterSchedules = schedules.filter(s => s.term === 'WINTER');
-
-  return (
-    <Tabs defaultActiveKey="fall" className="mb-3">
-      <Tab eventKey="fall" title="Fall Term">
-        {renderScheduleTable(fallSchedules)}
-      </Tab>
-      <Tab eventKey="winter" title="Winter Term">
-        {renderScheduleTable(winterSchedules)}
-      </Tab>
-    </Tabs>
   );
 };
 

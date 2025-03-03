@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Button, Form} from 'react-bootstrap';
+import { Container, Button, Form, Tab, Tabs} from 'react-bootstrap';
 import ScheduleTable from './ScheduleTable';
 import ScheduleViewModal from './ScheduleViewModal';
 import ScheduleEditModal from './ScheduleEditModal';
@@ -21,6 +21,8 @@ const SchedulePage = () => {
     const [selectedBlocks, setSelectedBlocks] = useState([]);
     const [isBulkGenerating, setIsBulkGenerating] = useState(false);
     const [isBulkClearing, setIsBulkClearing] = useState(false);
+    const [activeTab, setActiveTab] = useState('FALL');
+
     const fetchBlocks = async () => {
         try {
             const response = await fetch(`${API_URL}/blocks`);
@@ -68,27 +70,27 @@ const SchedulePage = () => {
     const fetchAllSchedules = async () => {
         setIsLoading(true);
         try {
-            const schedulesData = await Promise.all(
-                blocks.map(async (block) => {
-                    const { offerings, validation } = await fetchBlockSchedule(block.block_id);
-                    return {
-                        block_id: block.block_id,
-                        program_id: block.program_id,
-                        term: block.term,
-                        academic_year: block.academic_year,
-                        offerings: offerings,
-                        rating: block.schedule_rating,
-                        validation: validation
-                    };
-                })
-            );
-            setSchedules(schedulesData);
+          const schedulesData = await Promise.all(
+            blocks.filter(block => block.term === 'FALL' || block.term === 'WINTER').map(async (block) => {
+              const { offerings, validation } = await fetchBlockSchedule(block.block_id);
+              return {
+                block_id: block.block_id,
+                program_id: block.program_id,
+                term: block.term,
+                academic_year: block.academic_year,
+                offerings: offerings,
+                rating: block.schedule_rating,
+                validation: validation
+              };
+            })
+          );
+          setSchedules(schedulesData);
         } catch (error) {
-            console.error('Error fetching schedules:', error);
+          console.error('Error fetching schedules:', error);
         } finally {
-            setIsLoading(false);
+          setIsLoading(false);
         }
-    };
+      };
 
     useEffect(() => {
         fetchBlocks();
@@ -230,6 +232,36 @@ const SchedulePage = () => {
                     </Form.Select>
                 </div>
             </div>
+            <Tabs
+  activeKey={activeTab}
+  onSelect={(k) => setActiveTab(k)}
+  className="mb-3"
+>
+  <Tab eventKey="FALL" title="Fall">
+    <ScheduleTable
+      schedules={schedules.filter(s => s.term === 'FALL')}
+      onView={handleViewSchedule}
+      onEdit={handleEditSchedule}
+      onValidate={handleValidateSchedule}
+      onDelete={handleDeleteSchedule}
+      isLoading={isLoading}
+      onGenerate={handleGenerateSchedule}
+      onSelectionChange={handleSelectionChange}
+    />
+  </Tab>
+  <Tab eventKey="WINTER" title="Winter">
+    <ScheduleTable
+      schedules={schedules.filter(s => s.term === 'WINTER')}
+      onView={handleViewSchedule}
+      onEdit={handleEditSchedule}
+      onValidate={handleValidateSchedule}
+      onDelete={handleDeleteSchedule}
+      isLoading={isLoading}
+      onGenerate={handleGenerateSchedule}
+      onSelectionChange={handleSelectionChange}
+    />
+  </Tab>
+</Tabs>
 
             <Button 
         onClick={handleBulkGenerate} 
@@ -257,17 +289,6 @@ const SchedulePage = () => {
           'Bulk Clear'
         )}
       </Button>
-      <ScheduleTable
-        schedules={schedules}
-        onView={handleViewSchedule}
-        onEdit={handleEditSchedule}
-        onValidate={handleValidateSchedule}
-        onDelete={handleDeleteSchedule}
-        onGenerate={handleGenerateSchedule}
-        isLoading={isLoading}
-        onSelectionChange={handleSelectionChange}
-      />
-
             <ScheduleViewModal
                 show={showViewModal}
                 blockId={selectedBlock}
