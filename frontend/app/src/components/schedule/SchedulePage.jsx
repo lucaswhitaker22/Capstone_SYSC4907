@@ -3,6 +3,7 @@ import { Container, Button, Form} from 'react-bootstrap';
 import ScheduleTable from './ScheduleTable';
 import ScheduleViewModal from './ScheduleViewModal';
 import ScheduleEditModal from './ScheduleEditModal';
+import { Bars } from 'react-loading-icons';
 
 const API_URL = 'http://127.0.0.1:5000/api';
 
@@ -17,7 +18,9 @@ const SchedulePage = () => {
     const [showEditModal, setShowEditModal] = useState(false);
     const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-
+    const [selectedBlocks, setSelectedBlocks] = useState([]);
+    const [isBulkGenerating, setIsBulkGenerating] = useState(false);
+    const [isBulkClearing, setIsBulkClearing] = useState(false);
     const fetchBlocks = async () => {
         try {
             const response = await fetch(`${API_URL}/blocks`);
@@ -108,6 +111,8 @@ const SchedulePage = () => {
         setShowEditModal(true);
     };
 
+    
+
     const handleGenerateSchedule = async (blockId) => {
         try {
             const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
@@ -147,6 +152,25 @@ const SchedulePage = () => {
                 });
                 
                 if (response.ok) {
+                    // Update the blocks array to reset the rating to 0
+                    setBlocks(prevBlocks =>
+                        prevBlocks.map(block =>
+                            block.block_id === blockId
+                                ? { ...block, schedule_rating: 0 }
+                                : block
+                        )
+                    );
+                    
+                    // Update the schedules array
+                    setSchedules(prevSchedules =>
+                        prevSchedules.map(schedule =>
+                            schedule.block_id === blockId
+                                ? { ...schedule, rating: 0, offerings: [] }
+                                : schedule
+                        )
+                    );
+                    
+                    // Fetch updated schedules to reflect new changes
                     await fetchAllSchedules();
                 } else {
                     const error = await response.json();
@@ -158,6 +182,16 @@ const SchedulePage = () => {
             }
         }
     };
+    
+    const handleSelectionChange = (selectedRows) => {
+        setSelectedBlocks(selectedRows);
+      };
+    
+      const handleBulkGenerate = async () => {
+      };
+      
+      const handleBulkClear = async () => {
+      };
 
     const handleValidateSchedule = async (blockId) => {
         try {
@@ -197,15 +231,42 @@ const SchedulePage = () => {
                 </div>
             </div>
 
-            <ScheduleTable 
-                schedules={schedules.filter(s => s.academic_year === selectedYear)}
-                onView={handleViewSchedule}
-                onEdit={handleEditSchedule}
-                onValidate={handleValidateSchedule}
-                onDelete={handleDeleteSchedule}
-                onGenerate={handleGenerateSchedule}
-                isLoading={isLoading}
-            />
+            <Button 
+        onClick={handleBulkGenerate} 
+        disabled={selectedBlocks.length === 0 || isBulkGenerating}
+      >
+        {isBulkGenerating ? (
+          <>
+            <Bars height="1em" stroke="#ffffff" style={{marginRight: '0.5em'}} />
+            Generating...
+          </>
+        ) : (
+          'Bulk Generate'
+        )}
+      </Button>
+      <Button 
+        onClick={handleBulkClear} 
+        disabled={selectedBlocks.length === 0 || isBulkClearing}
+      >
+        {isBulkClearing ? (
+          <>
+            <Bars height="1em" stroke="#ffffff" style={{marginRight: '0.5em'}} />
+            Clearing...
+          </>
+        ) : (
+          'Bulk Clear'
+        )}
+      </Button>
+      <ScheduleTable
+        schedules={schedules}
+        onView={handleViewSchedule}
+        onEdit={handleEditSchedule}
+        onValidate={handleValidateSchedule}
+        onDelete={handleDeleteSchedule}
+        onGenerate={handleGenerateSchedule}
+        isLoading={isLoading}
+        onSelectionChange={handleSelectionChange}
+      />
 
             <ScheduleViewModal
                 show={showViewModal}

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Table, Button, Badge, Spinner } from 'react-bootstrap';
 
-const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements, onViewSchedules }) => {
+const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements }) => {
   if (isLoading) {
     return (
       <div className="text-center p-3">
@@ -56,13 +56,6 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
                 onClick={() => onViewRequirements(program.program_id)}
               >
                 Requirements
-              </Button>
-              <Button
-                variant="success"
-                size="sm"
-                onClick={() => onViewSchedules(program.program_id)}
-              >
-                Schedules
               </Button>
             </td>
           </tr>

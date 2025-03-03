@@ -96,22 +96,7 @@ const handleViewRequirements = (programId) => {
     setShowRequirementsModal(true);
   };
 
-const handleViewSchedules = async (programId) => {
-  try {
-      const response = await fetch(`${API_URL}/schedules/program/${programId}/schedules`);
-      if (response.ok) {
-          const data = await response.json();
-          alert(`Found ${data.total_schedules} possible schedules for this program!`);
-          // You might want to show these in a modal instead of an alert
-      } else {
-          const error = await response.json();
-          alert(error.error || 'Error fetching schedules');
-      }
-  } catch (error) {
-      console.error('Error fetching schedules:', error);
-      alert('Error fetching schedules');
-  }
-};
+
 return (
   <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
@@ -137,7 +122,6 @@ return (
           onEdit={handleEdit}
           onDelete={handleDelete}
           onViewRequirements={handleViewRequirements}
-          onViewSchedules={handleViewSchedules}
           isLoading={isLoading}
           academicYear={currentYear}
       />

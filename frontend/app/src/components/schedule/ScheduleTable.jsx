@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Table, Button, Badge, Spinner, Tabs, Tab } from 'react-bootstrap';
 
 const ScheduleTable = ({
@@ -8,8 +8,10 @@ const ScheduleTable = ({
   onValidate,
   onDelete,
   isLoading,
-  onGenerate
+  onGenerate,
+  onSelectionChange 
 }) => {
+  const [selectedRows, setSelectedRows] = useState([]);
   if (isLoading) {
     return (
       <div className="text-center p-4">
@@ -23,10 +25,11 @@ const ScheduleTable = ({
   if (!schedules.length) {
     return <div className="text-center p-4">No schedules available</div>;
   }
+  
 
   const getRatingBadge = (rating) => {
     if (!rating) return <Badge bg="secondary">Not Rated</Badge>;
-    
+    rating = rating/2;
     let variant;
     if (rating >= 80) variant = 'success';
     else if (rating >= 60) variant = 'warning';
@@ -37,6 +40,21 @@ const ScheduleTable = ({
         {rating.toFixed(1)}%
       </Badge>
     );
+  };
+
+  const handleRowSelection = (blockId) => {
+    const newSelectedRows = selectedRows.includes(blockId)
+      ? selectedRows.filter(id => id !== blockId)
+      : [...selectedRows, blockId];
+    setSelectedRows(newSelectedRows);
+    onSelectionChange(newSelectedRows);
+  };
+
+
+  const handleSelectAll = (event) => {
+    const newSelectedRows = event.target.checked ? schedules.map(s => s.block_id) : [];
+    setSelectedRows(newSelectedRows);
+    onSelectionChange(newSelectedRows);
   };
 
   const getCoursesCount = (offerings) => {
@@ -60,6 +78,13 @@ const ScheduleTable = ({
     <Table striped bordered hover responsive>
       <thead>
         <tr>
+          <th>
+            <input
+              type="checkbox"
+              onChange={handleSelectAll}
+              checked={selectedRows.length === schedules.length}
+            />
+          </th>
           <th>Block ID</th>
           <th>Program</th>
           <th>Term</th>
@@ -72,6 +97,14 @@ const ScheduleTable = ({
       <tbody>
         {termSchedules.map((schedule) => (
           <tr key={schedule.block_id}>
+                        <td>
+              <input
+                type="checkbox"
+                onChange={() => handleRowSelection(schedule.block_id)}
+                checked={selectedRows.includes(schedule.block_id)}
+              />
+            </td>
+
             <td>Block {schedule.block_id}</td>
             <td>{schedule.program_id}</td>
             <td>

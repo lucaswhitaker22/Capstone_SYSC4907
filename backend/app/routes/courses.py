@@ -172,10 +172,14 @@ def delete_course(course_id):
     try:
         course = Course.query.get_or_404(course_id)
         
-        # Delete all associated course offerings first
-        CourseOffering.query.filter_by(course_id=course_id).delete()
-            
-        # Then delete the course
+        # Check if there are any associated offerings
+        offerings = CourseOffering.query.filter_by(course_id=course_id).all()
+        if offerings:
+            return jsonify({
+                'error': 'Cannot delete course with existing offerings'
+            }), HTTPStatus.CONFLICT
+        
+        # Delete the course
         db.session.delete(course)
         db.session.commit()
         return '', HTTPStatus.NO_CONTENT

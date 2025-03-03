@@ -379,7 +379,17 @@ def delete_block(block_id):
                 'error': 'Cannot delete locked block'
             }), HTTPStatus.FORBIDDEN
 
-        # Delete associated block schedules first
+        # Get all schedules and update enrollments before deletion
+        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        for schedule in schedules:
+            offering = CourseOffering.query.get(schedule.offering_id)
+            # Decrease enrollment by block size
+            offering.current_enrollment -= block.block_size
+            # Update offering status if no longer full
+            if offering.current_enrollment < offering.capacity:
+                offering.status = 'OPEN'
+
+        # Delete associated block schedules
         BlockSchedule.query.filter_by(block_id=block_id).delete()
         
         # Delete the block
@@ -394,6 +404,7 @@ def delete_block(block_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @bp.route('/<block_id>/rating', methods=['POST'], strict_slashes=False)
 def calculate_block_rating(block_id):
@@ -517,14 +528,20 @@ def get_block_schedule(block_id):
 @bp.route('/block/<block_id>', methods=['DELETE'], strict_slashes=False)
 def delete_block_schedule(block_id):
     try:
-        # Check if block exists
         block = Block.query.get_or_404(block_id)
         
-        # Check if block is locked
         if block.status == 'LOCKED':
             return jsonify({
                 'error': 'Cannot delete schedule of locked block'
             }), HTTPStatus.FORBIDDEN
+
+        # Get all schedules and update enrollments before deletion
+        schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        for schedule in schedules:
+            offering = CourseOffering.query.get(schedule.offering_id)
+            offering.current_enrollment -= block.block_size
+            if offering.current_enrollment < offering.capacity:
+                offering.status = 'OPEN'
 
         # Delete all schedule entries for the block
         BlockSchedule.query.filter_by(block_id=block_id).delete()
@@ -640,6 +657,7 @@ def generate(block_id):
 @bp.route('/block/<block_id>/offering/<offering_id>', methods=['DELETE'], strict_slashes=False)
 def remove_offering_from_block(block_id, offering_id):
     try:
+        block = Block.query.get_or_404(block_id)
         schedule = BlockSchedule.query.filter_by(
             block_id=block_id,
             offering_id=offering_id
@@ -650,6 +668,12 @@ def remove_offering_from_block(block_id, offering_id):
                 'error': 'Not Found',
                 'message': 'Schedule entry not found'
             }), HTTPStatus.NOT_FOUND
+
+        # Update enrollment for the removed offering
+        offering = CourseOffering.query.get(offering_id)
+        offering.current_enrollment -= block.block_size
+        if offering.current_enrollment < offering.capacity:
+            offering.status = 'OPEN'
             
         db.session.delete(schedule)
         db.session.commit()
@@ -1544,7 +1568,7 @@ def create_offerings_bulk():
 === backend/app/routes/programs.py ===
 # app/routes/programs.py
 from flask import Blueprint, jsonify, request
-from app.models import Program, Block, ProgramRequirement, BlockSchedule
+from app.models import Program, Block, ProgramRequirement, BlockSchedule,CourseOffering
 from app import db
 from http import HTTPStatus
 
@@ -1586,16 +1610,19 @@ def create_program():
         data = request.get_json()
         
         required_fields = [
-            'program_id', 'program_name', 'total_enrollment',
+            'program_id', 'program_name', 
             'blocks_20_count', 'blocks_10_count', 'academic_year'
         ]
         if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
 
+        # Calculate total enrollment based on block counts
+        total_enrollment = (data['blocks_20_count'] * 20) + (data['blocks_10_count'] * 10)
+
         program = Program(
             program_id=data['program_id'],
             program_name=data['program_name'],
-            total_enrollment=data['total_enrollment'],
+            total_enrollment=total_enrollment,  # Use calculated value
             blocks_20_count=data['blocks_20_count'],
             blocks_10_count=data['blocks_10_count']
         )
@@ -1652,14 +1679,103 @@ def update_program(program_id):
         program = Program.query.get_or_404(program_id)
         data = request.get_json()
         
+        # Handle 20-student blocks update
+        if 'blocks_20_count' in data:
+            new_count = data['blocks_20_count']
+            current_count = program.blocks_20_count
+            
+            if new_count < current_count:
+                # Delete excess blocks for both terms
+                for term in ['FALL', 'WINTER']:
+                    # Get blocks ordered by ID to ensure consistent deletion
+                    blocks_to_delete = Block.query.filter_by(
+                        program_id=program_id,
+                        term=term,
+                        block_size=20
+                    ).order_by(Block.block_id.desc()).limit(current_count - new_count).all()
+                    
+                    for block in blocks_to_delete:
+                        # Update enrollments before deletion
+                        schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+                        for schedule in schedules:
+                            offering = CourseOffering.query.get(schedule.offering_id)
+                            offering.current_enrollment -= block.block_size
+                            if offering.current_enrollment < offering.capacity:
+                                offering.status = 'OPEN'
+                        BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+                        db.session.delete(block)
+            
+            elif new_count > current_count:
+                # Get existing block IDs to avoid conflicts
+                existing_blocks = Block.query.filter_by(
+                    program_id=program_id,
+                    block_size=20
+                ).all()
+                existing_ids = set(block.block_id for block in existing_blocks)
+                
+                # Create additional blocks
+                for i in range(current_count + 1, new_count + 1):
+                    for term, prefix in [('FALL', 'F'), ('WINTER', 'W')]:
+                        block_id = f"{program_id}_{prefix}_20_{i}"
+                        if block_id not in existing_ids:
+                            block = Block(
+                                block_id=block_id,
+                                program_id=program_id,
+                                block_size=20,
+                                term=term,
+                                academic_year=program.blocks[0].academic_year,
+                                status="DRAFT"
+                            )
+                            db.session.add(block)
+            
+            program.blocks_20_count = new_count
+
+
+        # Handle 10-student blocks update
+        if 'blocks_10_count' in data:
+            new_count = data['blocks_10_count']
+            current_count = program.blocks_10_count
+            
+            if new_count < current_count:
+                # Delete excess blocks for both terms
+                for term in ['FALL', 'WINTER']:
+                    blocks_to_delete = Block.query.filter_by(
+                        program_id=program_id,
+                        term=term,
+                        block_size=10
+                    ).limit(current_count - new_count).all()
+                    
+                    for block in blocks_to_delete:
+                        schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+                        for schedule in schedules:
+                            offering = CourseOffering.query.get(schedule.offering_id)
+                            offering.current_enrollment -= block.block_size
+                            if offering.current_enrollment < offering.capacity:
+                                offering.status = 'OPEN'
+                        BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+                        db.session.delete(block)
+            
+            elif new_count > current_count:
+                # Create additional blocks for both terms
+                for term, prefix in [('FALL', 'F'), ('WINTER', 'W')]:
+                    for i in range(current_count + 1, new_count + 1):
+                        block = Block(
+                            block_id=f"{program_id}_{prefix}_10_{i}",
+                            program_id=program_id,
+                            block_size=10,
+                            term=term,
+                            academic_year=program.blocks[0].academic_year,
+                            status="DRAFT"
+                        )
+                        db.session.add(block)
+            
+            program.blocks_10_count = new_count
+
         if 'program_name' in data:
             program.program_name = data['program_name']
-        if 'total_enrollment' in data:
-            program.total_enrollment = data['total_enrollment']
-        if 'blocks_20_count' in data:
-            program.blocks_20_count = data['blocks_20_count']
-        if 'blocks_10_count' in data:
-            program.blocks_10_count = data['blocks_10_count']
+
+        # Update total enrollment based on block counts
+        program.total_enrollment = (program.blocks_20_count * 20) + (program.blocks_10_count * 10)
             
         db.session.commit()
         
@@ -1678,19 +1794,36 @@ def update_program(program_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-
 @bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
 def delete_program(program_id):
     try:
         program = Program.query.get_or_404(program_id)
         
-        # Delete associated blocks first
+        # Get all blocks for the program
+        blocks = Block.query.filter_by(program_id=program_id).all()
+        
+        # For each block, update course offering enrollments
+        for block in blocks:
+            schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+            for schedule in schedules:
+                offering = CourseOffering.query.get(schedule.offering_id)
+                # Decrease enrollment by block size
+                offering.current_enrollment -= block.block_size
+                # Update offering status if no longer full
+                if offering.current_enrollment < offering.capacity:
+                    offering.status = 'OPEN'
+        
+        # Delete all block schedules first (due to foreign key constraints)
+        for block in blocks:
+            BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+            
+        # Delete all blocks
         Block.query.filter_by(program_id=program_id).delete()
         
         # Delete program requirements
         ProgramRequirement.query.filter_by(program_id=program_id).delete()
         
-        # Delete the program
+        # Finally delete the program
         db.session.delete(program)
         db.session.commit()
         
@@ -1702,6 +1835,7 @@ def delete_program(program_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @bp.route('/<program_id>/enrollment', methods=['PATCH'], strict_slashes=False)
 def update_enrollment(program_id):
@@ -1742,6 +1876,22 @@ def update_block_counts(program_id):
             
         term_suffix = term.lower()
         term_prefix = 'F' if term == 'FALL' else 'W'
+        
+        # Get existing blocks to update enrollments
+        existing_blocks = Block.query.filter_by(
+            program_id=program_id,
+            term=term
+        ).all()
+        
+        # Update enrollments before deleting blocks
+        for block in existing_blocks:
+            schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+            for schedule in schedules:
+                offering = CourseOffering.query.get(schedule.offering_id)
+                offering.current_enrollment -= block.block_size
+                if offering.current_enrollment < offering.capacity:
+                    offering.status = 'OPEN'
+            BlockSchedule.query.filter_by(block_id=block.block_id).delete()
         
         # Update 20-student blocks
         if f'blocks_20_count_{term_suffix}' in data:
@@ -1797,6 +1947,13 @@ def update_block_counts(program_id):
                 
             setattr(program, f'blocks_10_count_{term_suffix}', new_count)
         
+        # Update total enrollment
+        total_20_students = (getattr(program, 'blocks_20_count_fall', 0) + 
+                           getattr(program, 'blocks_20_count_winter', 0)) * 20
+        total_10_students = (getattr(program, 'blocks_10_count_fall', 0) + 
+                           getattr(program, 'blocks_10_count_winter', 0)) * 10
+        program.total_enrollment = total_20_students + total_10_students
+        
         db.session.commit()
         
         return jsonify({
@@ -1804,7 +1961,8 @@ def update_block_counts(program_id):
             'blocks_20_count_fall': program.blocks_20_count_fall,
             'blocks_10_count_fall': program.blocks_10_count_fall,
             'blocks_20_count_winter': program.blocks_20_count_winter,
-            'blocks_10_count_winter': program.blocks_10_count_winter
+            'blocks_10_count_winter': program.blocks_10_count_winter,
+            'total_enrollment': program.total_enrollment
         }), HTTPStatus.OK
         
     except Exception as e:
@@ -1985,65 +2143,53 @@ import logging
 
 def generate_block_schedule(block_id):
     try:
-        # Get block and validate
         block = Block.query.get_or_404(block_id)
         if block.status == 'LOCKED':
             return jsonify({
                 'error': 'Cannot modify locked block'
             }), HTTPStatus.FORBIDDEN
 
-        # Get term-specific program requirements
         program_requirements = ProgramRequirement.query.filter_by(
-    program_id=block.program_id
-).order_by(ProgramRequirement.requirement_id).all()
+            program_id=block.program_id
+        ).order_by(ProgramRequirement.requirement_id).all()
 
         if not program_requirements:
             return jsonify({
-                'error': f'No requirements found for program in {block.term} term'
+                'error': f'No requirements found for program'
             }), HTTPStatus.NOT_FOUND
 
-        # Get required course IDs
         required_courses = [req.course_id for req in program_requirements]
 
-        # Get all existing schedules to check for duplicates (within same term/year)
+        # Get existing schedules to check for duplicates
         existing_schedules = BlockSchedule.query.join(Block).filter(
             BlockSchedule.block_id != block_id,
             Block.term == block.term,
             Block.academic_year == block.academic_year
         ).all()
 
-        # Group existing schedules by block for comparison
         existing_block_schedules = {}
         for schedule in existing_schedules:
             if schedule.block_id not in existing_block_schedules:
                 existing_block_schedules[schedule.block_id] = []
             existing_block_schedules[schedule.block_id].append(schedule.offering_id)
 
-        # Get all available offerings for required courses in the same term/year
+        # Get offerings with sufficient capacity
         available_offerings = CourseOffering.query.filter(
             CourseOffering.course_id.in_(required_courses),
             CourseOffering.term == block.term,
-            CourseOffering.academic_year == block.academic_year
+            CourseOffering.academic_year == block.academic_year,
+            CourseOffering.status != 'CANCELLED',
+            CourseOffering.capacity - CourseOffering.current_enrollment >= block.block_size
         ).all()
 
-        # Add validation for available offerings
         if not available_offerings:
             return jsonify({
-                'error': f'No course offerings found for {block.term} term, {block.academic_year}'
+                'error': f'No course offerings found with sufficient capacity for block size {block.block_size}'
             }), HTTPStatus.NOT_FOUND
 
-        # Check which required courses have offerings this term
         available_courses = set(offering.course_id for offering in available_offerings)
         courses_with_offerings = set(required_courses) & available_courses
 
-        # Log for debugging
-        current_app.logger.debug(
-            f"Required courses: {required_courses}\n"
-            f"Courses with {block.term} offerings: {courses_with_offerings}"
-        )
-
-
-        # Group offerings by course
         course_offerings = {}
         for offering in available_offerings:
             if offering.course_id not in course_offerings:
@@ -2065,15 +2211,15 @@ def generate_block_schedule(block_id):
             if current_course not in course_offerings:
                 return
 
-            # Group lectures by their section prefix
             lecture_groups = {}
             for lecture in course_offerings[current_course]['LECTURE']:
+                if lecture.capacity - lecture.current_enrollment < block.block_size:
+                    continue
                 prefix = lecture.section_code.split('-')[0]
                 if prefix not in lecture_groups:
                     lecture_groups[prefix] = []
                 lecture_groups[prefix].append(lecture)
 
-            # Try each lecture group
             for prefix, lectures in lecture_groups.items():
                 all_lectures_fit = True
                 temp_schedule = current_schedule.copy()
@@ -2087,6 +2233,8 @@ def generate_block_schedule(block_id):
                 if all_lectures_fit:
                     if course_offerings[current_course]['LAB']:
                         for lab in course_offerings[current_course]['LAB']:
+                            if lab.capacity - lab.current_enrollment < block.block_size:
+                                continue
                             if not any(has_time_conflict(lab, selected) for selected in temp_schedule):
                                 try_schedule_combination(
                                     temp_schedule + [lab],
@@ -2100,39 +2248,41 @@ def generate_block_schedule(block_id):
                             course_offerings
                         )
 
-        # Generate all valid schedules
         try_schedule_combination([], list(courses_with_offerings), course_offerings)
 
         if not valid_schedules:
             return jsonify({
-                'error': f'Could not create valid schedule for available courses in {block.term} term',
-                'available_courses': list(courses_with_offerings),
-                'total_required': len(required_courses)
+                'error': f'Could not create valid schedule with available courses having sufficient capacity'
             }), HTTPStatus.BAD_REQUEST
 
-        # Select the first valid schedule
         selected_schedule = valid_schedules[0]
 
-        # Clear existing schedule
+        # Reset enrollments for old schedule
+        old_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        for old_schedule in old_schedules:
+            old_offering = CourseOffering.query.get(old_schedule.offering_id)
+            old_offering.current_enrollment -= block.block_size
+            if old_offering.current_enrollment < old_offering.capacity:
+                old_offering.status = 'OPEN'
         BlockSchedule.query.filter_by(block_id=block_id).delete()
 
-        # Create block schedules for selected offerings
+        # Create new schedule and update enrollments
         for offering in selected_schedule:
             block_schedule = BlockSchedule(
                 block_id=block_id,
                 offering_id=offering.offering_id
             )
             db.session.add(block_schedule)
+            
+            offering.current_enrollment += block.block_size
+            if offering.current_enrollment >= offering.capacity:
+                offering.status = 'FULL'
 
-        # Calculate and set the rating
         rating_response = rate_block_schedule(block_id)
-        if isinstance(rating_response, tuple):
-            rating_data = rating_response[0].get_json()
-            rating = rating_data.get('rating', 0)  # Extract just the numerical rating
-        else:
-            rating = rating_response.get('rating', 0)
+        rating_data = rating_response[0].get_json()
+        rating = rating_data.get('rating', 0)
 
-        block.schedule_rating = rating 
+        block.schedule_rating = rating
         db.session.commit()
 
         formatted_offerings = [{
@@ -2148,7 +2298,10 @@ def generate_block_schedule(block_id):
             'start_time': o.start_time.strftime('%H:%M'),
             'end_time': o.end_time.strftime('%H:%M'),
             'term': block.term,
-            'academic_year': block.academic_year
+            'academic_year': block.academic_year,
+            'current_enrollment': o.current_enrollment,
+            'capacity': o.capacity,
+            'status': o.status
         } for o in selected_schedule]
 
         return jsonify({
@@ -2156,7 +2309,7 @@ def generate_block_schedule(block_id):
             'term': block.term,
             'academic_year': block.academic_year,
             'schedule': formatted_offerings,
-            'scheduled_courses': required_courses,
+            'scheduled_courses': list(courses_with_offerings),
             'total_valid_schedules': len(valid_schedules),
             'schedule_rating': rating
         }), HTTPStatus.CREATED
@@ -2167,6 +2320,7 @@ def generate_block_schedule(block_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 
 def rate_block_schedule(block_id):

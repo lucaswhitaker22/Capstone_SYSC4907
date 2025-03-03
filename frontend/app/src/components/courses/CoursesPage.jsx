@@ -26,17 +26,25 @@ const CoursesPage = () => {
   }, []);
 
   const handleDelete = async (courseId) => {
-    try {
-      const response = await fetch(`http://127.0.0.1:5000/api/courses/${courseId}`, {
-        method: 'DELETE'
-      });
-      if (response.ok) {
-        fetchCourses();
+    if (window.confirm(`Are you sure you want to delete course ${courseId}?`)) {
+      try {
+        const response = await fetch(`http://127.0.0.1:5000/api/courses/${courseId}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          fetchCourses();
+          alert('Course deleted successfully');
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to delete course');
+        }
+      } catch (error) {
+        setError(`Error deleting course: ${error.message}`);
+        alert(`Error deleting course: ${error.message}`);
       }
-    } catch (error) {
-      setError('Error deleting course');
     }
   };
+  
 
   const handleEdit = (course) => {
     setSelectedCourse(course);

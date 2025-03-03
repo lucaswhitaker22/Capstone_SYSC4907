@@ -2380,7 +2380,7 @@ export default OfferingsPage;
 
 === frontend/app/src/components/offerings/OfferingsTable.jsx ===
 import React, { useState } from 'react';
-import { Table, Button, Form, Row, Col } from 'react-bootstrap';
+import { Table, Button, Form, Card, Collapse, Row, Col } from 'react-bootstrap';
 
 const getDayName = (day) => {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -2388,49 +2388,148 @@ const getDayName = (day) => {
 };
 
 const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
-  const [termFilter, setTermFilter] = useState('');
-  const [yearFilter, setYearFilter] = useState('2025-2026');
+  const [filters, setFilters] = useState({
+    course_id: '',
+    section_type: '',
+    section_code: '',
+    day_of_week: '',
+    capacity: '',
+    current_enrollment: '',
+    term: '',
+    academic_year: '2025-2026',
+    status: ''
+  });
+  const [showFilters, setShowFilters] = useState(false);
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
 
   if (!offerings) {
     return <div>No offerings available</div>;
   }
 
   const filteredOfferings = offerings.filter(offering => {
-    if (termFilter && offering.term !== termFilter) return false;
-    if (yearFilter && offering.academic_year !== yearFilter) return false;
-    return true;
+    return Object.entries(filters).every(([key, value]) => {
+      if (!value) return true;
+      if (key === 'day_of_week') {
+        return offering[key] === parseInt(value);
+      }
+      return offering[key].toString().toLowerCase().includes(value.toLowerCase());
+    });
   });
 
   return (
     <>
-      <Row className="mb-3">
-        <Col md={3}>
-          <Form.Group>
-            <Form.Label>Term</Form.Label>
-            <Form.Select
-              value={termFilter}
-              onChange={(e) => setTermFilter(e.target.value)}
-            >
-              <option value="">All Terms</option>
-              <option value="FALL">Fall</option>
-              <option value="WINTER">Winter</option>
-            </Form.Select>
-          </Form.Group>
-        </Col>
-        <Col md={3}>
-          <Form.Group>
-            <Form.Label>Academic Year</Form.Label>
-            <Form.Select 
-                value={yearFilter}
-                onChange={(e) => setYearFilter(e.target.value)}
-            >
-                <option value="2024-2025">2024-2025</option>
-                <option value="2025-2026">2025-2026</option>
-                <option value="2026-2027">2026-2027</option>
-            </Form.Select>
-          </Form.Group>
-        </Col>
-      </Row>
+      <Card className="mb-3">
+        <Card.Header 
+          className="d-flex justify-content-between align-items-center" 
+          style={{ cursor: 'pointer' }}
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <span>Filters</span>
+          <span>{showFilters ? '▼' : '▶'}</span>
+        </Card.Header>
+        <Collapse in={showFilters}>
+          <div>
+            <Card.Body>
+              <Row className="g-3">
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Course ID</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={filters.course_id}
+                      onChange={(e) => handleFilterChange('course_id', e.target.value)}
+                      placeholder="Filter by course ID"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Section Type</Form.Label>
+                    <Form.Select
+                      value={filters.section_type}
+                      onChange={(e) => handleFilterChange('section_type', e.target.value)}
+                    >
+                      <option value="">All Types</option>
+                      <option value="LECTURE">Lecture</option>
+                      <option value="LAB">Lab</option>
+                      <option value="TUTORIAL">Tutorial</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Section Code</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={filters.section_code}
+                      onChange={(e) => handleFilterChange('section_code', e.target.value)}
+                      placeholder="Filter by section"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Day</Form.Label>
+                    <Form.Select
+                      value={filters.day_of_week}
+                      onChange={(e) => handleFilterChange('day_of_week', e.target.value)}
+                    >
+                      <option value="">All Days</option>
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day, index) => (
+                        <option key={day} value={index + 2}>{day}</option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Term</Form.Label>
+                    <Form.Select
+                      value={filters.term}
+                      onChange={(e) => handleFilterChange('term', e.target.value)}
+                    >
+                      <option value="">All Terms</option>
+                      <option value="FALL">Fall</option>
+                      <option value="WINTER">Winter</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Academic Year</Form.Label>
+                    <Form.Select
+                      value={filters.academic_year}
+                      onChange={(e) => handleFilterChange('academic_year', e.target.value)}
+                    >
+                      <option value="">All Years</option>
+                      <option value="2024-2025">2024-2025</option>
+                      <option value="2025-2026">2025-2026</option>
+                      <option value="2026-2027">2026-2027</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Status</Form.Label>
+                    <Form.Select
+                      value={filters.status}
+                      onChange={(e) => handleFilterChange('status', e.target.value)}
+                    >
+                      <option value="">All Statuses</option>
+                      <option value="OPEN">Open</option>
+                      <option value="FULL">Full</option>
+                      <option value="CANCELLED">Cancelled</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+            </Card.Body>
+          </div>
+        </Collapse>
+      </Card>
 
       <Table striped bordered hover responsive>
         <thead>
@@ -2823,7 +2922,6 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
   const initialFormData = {
     program_id: '',
     program_name: '',
-    total_enrollment: 0,
     blocks_20_count: 0,
     blocks_10_count: 0,
     academic_year: '2025-2026'
@@ -2837,7 +2935,6 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
       setFormData({
         program_id: program.program_id,
         program_name: program.program_name,
-        total_enrollment: program.total_enrollment,
         blocks_20_count: program.blocks_20_count_fall,
         blocks_10_count: program.blocks_10_count_fall,
         academic_year: program.academic_year || '2025-2026'
@@ -2928,20 +3025,6 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
             </Form.Control.Feedback>
           </Form.Group>
 
-          <Form.Group className="mb-3">
-            <Form.Label>Total Enrollment</Form.Label>
-            <Form.Control
-              type="number"
-              name="total_enrollment"
-              value={formData.total_enrollment}
-              onChange={handleChange}
-              required
-              min="0"
-            />
-            <Form.Control.Feedback type="invalid">
-              Please provide a valid enrollment number.
-            </Form.Control.Feedback>
-          </Form.Group>
 
           <h5 className="mb-3">Block Configuration (Applied to Both Terms)</h5>
           <Row>
@@ -3805,7 +3888,10 @@ export default ScheduleTable;
 
 === frontend/app/src/components/schedule/ScheduleViewModal.jsx ===
 import React, { useState, useEffect } from 'react';
-import { Modal, Table, Badge, Spinner } from 'react-bootstrap';
+import { Modal, Spinner } from 'react-bootstrap';
+import FullCalendar from '@fullcalendar/react';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import bootstrap5Plugin from '@fullcalendar/bootstrap5';
 
 const ScheduleViewModal = ({ show, blockId, onHide }) => {
   const [schedule, setSchedule] = useState([]);
@@ -3831,54 +3917,38 @@ const ScheduleViewModal = ({ show, blockId, onHide }) => {
     }
   };
 
-  const getDayName = (day) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[day];
+  const getEventColor = (sectionType) => {
+    const colors = {
+      'LECTURE': '#007bff',
+      'LAB': '#28a745',
+      'TUTORIAL': '#ffc107'
+    };
+    return colors[sectionType] || '#6c757d';
   };
 
-  const renderTimeSlot = (offering) => {
-    return (
-      <div className="p-2 border rounded mb-2" key={offering.offering_id}>
-        <Badge bg="primary" className="me-2">{offering.section_type}</Badge>
-        <strong>{offering.course_id}</strong> - {offering.section_code}
-        <br />
-        <small>{offering.start_time} - {offering.end_time}</small>
-      </div>
-    );
-  };
-
-  const renderScheduleTable = () => {
-    const days = [1, 2, 3, 4, 5]; // Monday to Friday
-    const scheduleByDay = days.map(day => ({
-      day,
-      offerings: schedule.filter(offering => offering.day_of_week === day)
-    }));
-
-    return (
-      <Table bordered responsive>
-        <thead>
-          <tr>
-            {days.map(day => (
-              <th key={day} className="text-center">{getDayName(day)}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            {scheduleByDay.map(({ day, offerings }) => (
-              <td key={day} className="align-top" style={{ minWidth: '200px' }}>
-                {offerings.sort((a, b) => a.start_time.localeCompare(b.start_time))
-                  .map(offering => renderTimeSlot(offering))}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </Table>
-    );
+  const convertToCalendarEvents = () => {
+    return schedule.map(offering => {
+      const [hours, minutes] = offering.start_time.split(':');
+      const [endHours, endMinutes] = offering.end_time.split(':');
+      
+      return {
+        id: offering.offering_id,
+        title: `${offering.course_id} - ${offering.section_type}`,
+        daysOfWeek: [offering.day_of_week - 1],
+        startTime: `${hours}:${minutes}:00`,
+        endTime: `${endHours}:${endMinutes}:00`,
+        backgroundColor: getEventColor(offering.section_type),
+        extendedProps: {
+          sectionCode: offering.section_code,
+          courseId: offering.course_id,
+          sectionType: offering.section_type
+        }
+      };
+    });
   };
 
   return (
-    <Modal show={show} onHide={onHide} size="xl">
+    <Modal show={show} onHide={onHide} size="xl" dialogClassName="modal-90w">
       <Modal.Header closeButton>
         <Modal.Title>Block Schedule View</Modal.Title>
       </Modal.Header>
@@ -3892,10 +3962,36 @@ const ScheduleViewModal = ({ show, blockId, onHide }) => {
         ) : schedule.length === 0 ? (
           <div className="text-center p-4">No courses scheduled for this block</div>
         ) : (
-          renderScheduleTable()
+          <div style={{ height: '600px' }}>
+            <FullCalendar
+              plugins={[timeGridPlugin, bootstrap5Plugin]}
+              initialView="timeGridWeek"
+              themeSystem="bootstrap5"
+              headerToolbar={false}
+              allDaySlot={false}
+              slotMinTime="08:00:00"
+              slotMaxTime="22:00:00"
+              events={convertToCalendarEvents()}
+              eventContent={renderEventContent}
+              slotDuration="00:30:00"
+              weekends={false}
+              dayHeaderFormat={{ weekday: 'long' }}
+              height="100%"
+            />
+          </div>
         )}
       </Modal.Body>
     </Modal>
+  );
+};
+
+const renderEventContent = (eventInfo) => {
+  return (
+    <div className="p-1">
+      <div className="fw-bold">{eventInfo.event.extendedProps.courseId}</div>
+      <div className="small">{eventInfo.event.extendedProps.sectionType}</div>
+      <div className="small">{eventInfo.event.extendedProps.sectionCode}</div>
+    </div>
   );
 };
 
