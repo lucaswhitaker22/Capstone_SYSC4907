@@ -51,7 +51,6 @@ const ScheduleTable = ({
       (filters.block_id === '' || schedule.block_id.toString().includes(filters.block_id)) &&
       (filters.program_id.length === 0 || filters.program_id.includes(schedule.program_id)) &&
       (filters.courses.length === 0 || schedule.offerings.some(o => filters.courses.includes(o.course_id))) &&
-      (filters.days === '' || getDaysString(schedule.offerings).toLowerCase().includes(filters.days.toLowerCase())) &&
       (ratingPercentage >= filters.rating.min && ratingPercentage <= filters.rating.max)
     );
   };
@@ -155,21 +154,12 @@ const ScheduleTable = ({
               </Form.Select>
             </Form.Group>
           </Col>
-          <Col md={3}>
-            <Form.Group>
-              <Form.Label>Days</Form.Label>
-              <Form.Control
-                type="text"
-                value={filters.days}
-                onChange={(e) => handleFilterChange('days', e.target.value)}
-              />
-            </Form.Group>
-          </Col>
+
         </Row>
         <Row className="mt-3">
           <Col md={6}>
             <Form.Group>
-              <Form.Label>Rating Range ()</Form.Label>
+              <Form.Label>Rating Range (Min-Max)</Form.Label>
               <div className="d-flex align-items-center">
                 <Form.Range
                   min={0}

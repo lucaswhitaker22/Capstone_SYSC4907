@@ -72,7 +72,6 @@ const SchedulePage = () => {
         }
     };
     
-
     const fetchAllSchedules = async () => {
         setIsLoading(true);
         try {
@@ -87,7 +86,7 @@ const SchedulePage = () => {
                   term: block.term,
                   academic_year: block.academic_year,
                   offerings: offerings,
-                  rating: rating || block.schedule_rating,
+                  rating: offerings.length === 0 ? 0 : (rating || block.schedule_rating),
                   validation: validation
                 };
               })
@@ -99,6 +98,7 @@ const SchedulePage = () => {
           setIsLoading(false);
         }
       };
+      
       
       useEffect(() => {
         fetchBlocks();
