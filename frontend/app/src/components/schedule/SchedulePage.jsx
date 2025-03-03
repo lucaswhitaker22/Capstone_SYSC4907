@@ -118,37 +118,41 @@ const SchedulePage = () => {
 
     const handleGenerateSchedule = async (blockId) => {
         try {
-            const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
-                method: 'POST'
-            });
+          const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
+            method: 'POST'
+          });
+          
+          if (response.ok) {
+            const generatedData = await response.json();
             
-            if (response.ok) {
-                const generatedData = await response.json();
-                
-                // Update the specific block's rating in the blocks array
-                setBlocks(prevBlocks => 
-                    prevBlocks.map(block => 
-                        block.block_id === blockId 
-                            ? { ...block, schedule_rating: generatedData.schedule_rating }
-                            : block
-                    )
-                );
-                
-                // Fetch updated schedules to reflect new changes
-                await fetchAllSchedules();
-            } else {
-                const error = await response.json();
-                alert(error.error || 'Error generating schedule');
-            }
+            // Update the specific block's rating in the blocks array
+            setBlocks(prevBlocks => 
+              prevBlocks.map(block => 
+                block.block_id === blockId 
+                  ? { ...block, schedule_rating: generatedData.schedule_rating }
+                  : block
+              )
+            );
+            
+            // Fetch updated schedules to reflect new changes
+            await fetchAllSchedules();
+          } else {
+            // If generation fails, clear the schedule and reset rating
+            await handleDeleteSchedule(blockId);
+            alert('Failed to generate schedule. The schedule has been cleared.');
+          }
         } catch (error) {
-            console.error('Error generating schedule:', error);
-            alert('Error generating schedule');
+          console.error('Error generating schedule:', error);
+          // If an error occurs, also clear the schedule and reset rating
+          await handleDeleteSchedule(blockId);
+          alert('Error generating schedule. The schedule has been cleared.');
         }
-    };
+      };
+      
     
 
     const handleDeleteSchedule = async (blockId) => {
-        if (window.confirm('Are you sure you want to delete this schedule?')) {
+    
             try {
                 const response = await fetch(`${API_URL}/schedules/block/${blockId}`, {
                     method: 'DELETE'
@@ -183,7 +187,7 @@ const SchedulePage = () => {
                 console.error('Error deleting schedule:', error);
                 alert('Error deleting schedule');
             }
-        }
+        
     };
     
     const handleSelectionChange = (selectedRows) => {
@@ -195,10 +199,110 @@ const SchedulePage = () => {
       };
     
       const handleBulkGenerate = async () => {
-      };
+        setIsBulkGenerating(true);
+        const selectedBlocks = [...selectedFallBlocks, ...selectedWinterBlocks];
+        const totalBlocks = selectedBlocks.length;
+        let successCount = 0;
+        let errorCount = 0;
+      
+        try {
+          for (const blockId of selectedBlocks) {
+            try {
+              const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
+                method: 'POST'
+              });
+              
+              if (response.ok) {
+                const generatedData = await response.json();
+                setBlocks(prevBlocks => 
+                  prevBlocks.map(block => 
+                    block.block_id === blockId 
+                      ? { ...block, schedule_rating: generatedData.schedule_rating }
+                      : block
+                  )
+                );
+                successCount++;
+              } else {
+                const error = await response.json();
+                console.error(`Error generating schedule for block ${blockId}:`, error.error);
+                errorCount++;
+                // Clear the schedule and reset rating if generation fails
+                await handleDeleteSchedule(blockId);
+              }
+            } catch (error) {
+              console.error(`Error generating schedule for block ${blockId}:`, error);
+              errorCount++;
+              // Clear the schedule and reset rating if an error occurs
+              await handleDeleteSchedule(blockId);
+            }
+          }
+      
+          // Fetch updated schedules to reflect new changes
+          await fetchAllSchedules();
+      
+          // Display results to the user
+          alert(`Bulk generation complete.\nSuccessful: ${successCount}\nFailed: ${errorCount}`);
+        } catch (error) {
+          console.error('Error in bulk generation:', error);
+          alert('An unexpected error occurred during bulk generation. Please try again.');
+        } finally {
+            setIsBulkGenerating(false);
+            setSelectedFallBlocks([]);
+            setSelectedWinterBlocks([]);
+          }
+        };
+      
+      
       
       const handleBulkClear = async () => {
+        setIsBulkClearing(true);
+        const selectedBlocks = [...selectedFallBlocks, ...selectedWinterBlocks];
+        const totalBlocks = selectedBlocks.length;
+        let successCount = 0;
+        let errorCount = 0;
+      
+        try {
+          await Promise.all(selectedBlocks.map(async (blockId) => {
+            try {
+              const response = await fetch(`${API_URL}/schedules/block/${blockId}`, {
+                method: 'DELETE'
+              });
+              
+              if (response.ok) {
+                setBlocks(prevBlocks =>
+                  prevBlocks.map(block =>
+                    block.block_id === blockId
+                      ? { ...block, schedule_rating: 0 }
+                      : block
+                  )
+                );
+                successCount++;
+              } else {
+                const error = await response.json();
+                console.error(`Error clearing schedule for block ${blockId}:`, error.error);
+                errorCount++;
+              }
+            } catch (error) {
+              console.error(`Error clearing schedule for block ${blockId}:`, error);
+              errorCount++;
+            }
+          }));
+      
+          // Fetch updated schedules to reflect new changes
+          await fetchAllSchedules();
+      
+          // Display results to the user
+          alert(`Bulk clearing complete.\nSuccessful: ${successCount}\nFailed: ${errorCount}`);
+        } catch (error) {
+          console.error('Error in bulk clearing:', error);
+          alert('An unexpected error occurred during bulk clearing. Please try again.');
+        } finally {
+          setIsBulkClearing(false);
+          setSelectedFallBlocks([]);
+          setSelectedWinterBlocks([]);
+        }
       };
+      
 
     const handleValidateSchedule = async (blockId) => {
         try {
