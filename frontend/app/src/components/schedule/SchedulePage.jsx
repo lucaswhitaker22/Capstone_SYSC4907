@@ -27,13 +27,17 @@ const SchedulePage = () => {
 
     const fetchBlocks = async () => {
         try {
-            const response = await fetch(`${API_URL}/blocks`);
-            const data = await response.json();
-            setBlocks(data);
+          const response = await fetch(`${API_URL}/blocks?academic_year=${selectedYear}`);
+          const data = await response.json();
+          setBlocks(data);
         } catch (error) {
-            console.error('Error fetching blocks:', error);
+          console.error('Error fetching blocks:', error);
         }
-    };
+      };
+      useEffect(() => {
+        fetchBlocks();
+        fetchOfferings();
+      }, [selectedTerm, selectedYear]);
 
     const fetchOfferings = async () => {
         try {
@@ -73,18 +77,20 @@ const SchedulePage = () => {
         setIsLoading(true);
         try {
           const schedulesData = await Promise.all(
-            blocks.filter(block => block.term === 'FALL' || block.term === 'WINTER').map(async (block) => {
-              const { offerings, validation } = await fetchBlockSchedule(block.block_id);
-              return {
-                block_id: block.block_id,
-                program_id: block.program_id,
-                term: block.term,
-                academic_year: block.academic_year,
-                offerings: offerings,
-                rating: block.schedule_rating,
-                validation: validation
-              };
-            })
+            blocks
+              .filter(block => (block.term === 'FALL' || block.term === 'WINTER') && block.academic_year === selectedYear)
+              .map(async (block) => {
+                const { offerings, validation, rating } = await fetchBlockSchedule(block.block_id);
+                return {
+                  block_id: block.block_id,
+                  program_id: block.program_id,
+                  term: block.term,
+                  academic_year: block.academic_year,
+                  offerings: offerings,
+                  rating: rating || block.schedule_rating,
+                  validation: validation
+                };
+              })
           );
           setSchedules(schedulesData);
         } catch (error) {
@@ -93,17 +99,18 @@ const SchedulePage = () => {
           setIsLoading(false);
         }
       };
-
-    useEffect(() => {
+      
+      useEffect(() => {
         fetchBlocks();
         fetchOfferings();
-    }, [selectedTerm]);
-
-    useEffect(() => {
+      }, [selectedYear]);
+      
+      useEffect(() => {
         if (blocks.length > 0) {
-            fetchAllSchedules();
+          fetchAllSchedules();
         }
-    }, [blocks, selectedTerm]);
+      }, [blocks, selectedYear]);
+
 
     const handleViewSchedule = (blockId) => {
         setSelectedBlock(blockId);
