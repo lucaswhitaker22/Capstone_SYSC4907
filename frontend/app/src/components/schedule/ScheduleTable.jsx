@@ -9,7 +9,8 @@ const ScheduleTable = ({
   onDelete,
   isLoading,
   onGenerate,
-  onSelectionChange 
+  onSelectionChange,
+  selectedBlocks
 }) => {
   const [selectedRows, setSelectedRows] = useState([]);
   if (isLoading) {
@@ -43,17 +44,11 @@ const ScheduleTable = ({
   };
 
   const handleRowSelection = (blockId) => {
-    const newSelectedRows = selectedRows.includes(blockId)
-      ? selectedRows.filter(id => id !== blockId)
-      : [...selectedRows, blockId];
-    setSelectedRows(newSelectedRows);
-    onSelectionChange(newSelectedRows);
+    onSelectionChange(blockId); // Just call the parent function
   };
-
 
   const handleSelectAll = (event) => {
     const newSelectedRows = event.target.checked ? schedules.map(s => s.block_id) : [];
-    setSelectedRows(newSelectedRows);
     onSelectionChange(newSelectedRows);
   };
 
@@ -96,11 +91,11 @@ const ScheduleTable = ({
       <tbody>
         {schedules.map((schedule) => (
           <tr key={schedule.block_id}>
-            <td>
+                <td>
               <input
                 type="checkbox"
                 onChange={() => handleRowSelection(schedule.block_id)}
-                checked={selectedRows.includes(schedule.block_id)}
+                checked={selectedBlocks.includes(schedule.block_id)} // Use selectedBlocks prop
               />
             </td>
             <td>Block {schedule.block_id}</td>

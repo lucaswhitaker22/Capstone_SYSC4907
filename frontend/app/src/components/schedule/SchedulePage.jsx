@@ -192,12 +192,28 @@ const SchedulePage = () => {
     
     const handleSelectionChange = (selectedRows) => {
         if (activeTab === 'FALL') {
-          setSelectedFallBlocks(selectedRows);
+          setSelectedFallBlocks(prevSelected => {
+            if (Array.isArray(selectedRows)) {
+              return selectedRows;
+            } else {
+              return prevSelected.includes(selectedRows)
+                ? prevSelected.filter(id => id !== selectedRows)
+                : [...prevSelected, selectedRows];
+            }
+          });
         } else {
-          setSelectedWinterBlocks(selectedRows);
+          setSelectedWinterBlocks(prevSelected => {
+            if (Array.isArray(selectedRows)) {
+              return selectedRows;
+            } else {
+              return prevSelected.includes(selectedRows)
+                ? prevSelected.filter(id => id !== selectedRows)
+                : [...prevSelected, selectedRows];
+            }
+          });
         }
       };
-    
+      
       const handleBulkGenerate = async () => {
         setIsBulkGenerating(true);
         const selectedBlocks = [...selectedFallBlocks, ...selectedWinterBlocks];
@@ -242,13 +258,14 @@ const SchedulePage = () => {
       
           // Display results to the user
           alert(`Bulk generation complete.\nSuccessful: ${successCount}\nFailed: ${errorCount}`);
+          setSelectedFallBlocks([]);
+          setSelectedWinterBlocks([]);
         } catch (error) {
           console.error('Error in bulk generation:', error);
           alert('An unexpected error occurred during bulk generation. Please try again.');
         } finally {
             setIsBulkGenerating(false);
-            setSelectedFallBlocks([]);
-            setSelectedWinterBlocks([]);
+
           }
         };
       
@@ -293,13 +310,13 @@ const SchedulePage = () => {
       
           // Display results to the user
           alert(`Bulk clearing complete.\nSuccessful: ${successCount}\nFailed: ${errorCount}`);
+          setSelectedFallBlocks([]);
+          setSelectedWinterBlocks([]);
         } catch (error) {
           console.error('Error in bulk clearing:', error);
           alert('An unexpected error occurred during bulk clearing. Please try again.');
         } finally {
           setIsBulkClearing(false);
-          setSelectedFallBlocks([]);
-          setSelectedWinterBlocks([]);
         }
       };
       
@@ -356,6 +373,7 @@ const SchedulePage = () => {
       isLoading={isLoading}
       onGenerate={handleGenerateSchedule}
       onSelectionChange={handleSelectionChange}
+      selectedBlocks={selectedFallBlocks} // Add this prop
     />
   </Tab>
   <Tab eventKey="WINTER" title="Winter">
@@ -368,9 +386,11 @@ const SchedulePage = () => {
       isLoading={isLoading}
       onGenerate={handleGenerateSchedule}
       onSelectionChange={handleSelectionChange}
+      selectedBlocks={selectedWinterBlocks} // Add this prop
     />
   </Tab>
 </Tabs>
+
 <div className="mt-3 d-flex align-items-center">
   <span className="me-3">Selected: {selectedFallBlocks.length + selectedWinterBlocks.length}</span>
   <Button 
