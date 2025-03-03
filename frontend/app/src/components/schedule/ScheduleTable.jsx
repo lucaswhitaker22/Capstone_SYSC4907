@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Badge, Spinner, Tabs, Tab } from 'react-bootstrap';
+import { Table, Button, Badge, Spinner, Form, Card, Collapse, Row, Col } from 'react-bootstrap';
 
 const ScheduleTable = ({
   schedules = [],
@@ -10,9 +10,19 @@ const ScheduleTable = ({
   isLoading,
   onGenerate,
   onSelectionChange,
-  selectedBlocks
+  selectedBlocks,
+  onSort
 }) => {
   const [selectedRows, setSelectedRows] = useState([]);
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [filters, setFilters] = useState({
+    block_id: '',
+    program_id: [],
+    courses: [],
+    days: '',
+    rating: { min: 0, max: 100 }
+  });
+  const [showFilters, setShowFilters] = useState(false);
   if (isLoading) {
     return (
       <div className="text-center p-4">
@@ -26,7 +36,25 @@ const ScheduleTable = ({
   if (!schedules.length) {
     return <div className="text-center p-4">No schedules available</div>;
   }
-  
+  const handleSort = () => {
+    const newSortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortOrder(newSortOrder);
+    onSort(newSortOrder);
+  };
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+  const applyFilters = (schedule) => {
+    const ratingPercentage = schedule.rating ? (schedule.rating / 2).toFixed(1) : null;
+    return (
+      (filters.block_id === '' || schedule.block_id.toString().includes(filters.block_id)) &&
+      (filters.program_id.length === 0 || filters.program_id.includes(schedule.program_id)) &&
+      (filters.courses.length === 0 || schedule.offerings.some(o => filters.courses.includes(o.course_id))) &&
+      (filters.days === '' || getDaysString(schedule.offerings).toLowerCase().includes(filters.days.toLowerCase())) &&
+      (ratingPercentage >= filters.rating.min && ratingPercentage <= filters.rating.max)
+    );
+  };
 
   const getRatingBadge = (rating) => {
     if (!rating) return <Badge bg="secondary">Not Rated</Badge>;
@@ -44,11 +72,16 @@ const ScheduleTable = ({
   };
 
   const handleRowSelection = (blockId) => {
-    onSelectionChange(blockId); // Just call the parent function
+    const newSelectedRows = selectedRows.includes(blockId)
+      ? selectedRows.filter(id => id !== blockId)
+      : [...selectedRows, blockId];
+    setSelectedRows(newSelectedRows);
+    onSelectionChange(newSelectedRows);
   };
 
   const handleSelectAll = (event) => {
     const newSelectedRows = event.target.checked ? schedules.map(s => s.block_id) : [];
+    setSelectedRows(newSelectedRows);
     onSelectionChange(newSelectedRows);
   };
 
@@ -70,27 +103,123 @@ const ScheduleTable = ({
   };
 
   return (
+    <>
+      <Button
+        onClick={() => setShowFilters(!showFilters)}
+        aria-controls="filter-collapse"
+        aria-expanded={showFilters}
+        className="mb-3"
+      >
+        {showFilters ? 'Hide Filters' : 'Show Filters'}
+      </Button>
+      <Collapse in={showFilters}>
+  <div id="filter-collapse">
+    <Card className="mb-3">
+      <Card.Body>
+        <Row>
+          <Col md={3}>
+            <Form.Group>
+              <Form.Label>Block ID</Form.Label>
+              <Form.Control
+                type="text"
+                value={filters.block_id}
+                onChange={(e) => handleFilterChange('block_id', e.target.value)}
+              />
+            </Form.Group>
+          </Col>
+          <Col md={3}>
+            <Form.Group>
+              <Form.Label>Program</Form.Label>
+              <Form.Select
+                multiple
+                value={filters.program_id}
+                onChange={(e) => handleFilterChange('program_id', Array.from(e.target.selectedOptions, option => option.value))}
+              >
+                {[...new Set(schedules.map(s => s.program_id))].map(program => (
+                  <option key={program} value={program}>{program}</option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+          </Col>
+          <Col md={3}>
+            <Form.Group>
+              <Form.Label>Courses</Form.Label>
+              <Form.Select
+                multiple
+                value={filters.courses}
+                onChange={(e) => handleFilterChange('courses', Array.from(e.target.selectedOptions, option => option.value))}
+              >
+                {[...new Set(schedules.flatMap(s => s.offerings.map(o => o.course_id)))].map(course => (
+                  <option key={course} value={course}>{course}</option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+          </Col>
+          <Col md={3}>
+            <Form.Group>
+              <Form.Label>Days</Form.Label>
+              <Form.Control
+                type="text"
+                value={filters.days}
+                onChange={(e) => handleFilterChange('days', e.target.value)}
+              />
+            </Form.Group>
+          </Col>
+        </Row>
+        <Row className="mt-3">
+          <Col md={6}>
+            <Form.Group>
+              <Form.Label>Rating Range ()</Form.Label>
+              <div className="d-flex align-items-center">
+                <Form.Range
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={filters.rating.min}
+                  onChange={(e) => handleFilterChange('rating', { ...filters.rating, min: parseInt(e.target.value) })}
+                />
+                <span className="ms-2">{filters.rating.min}</span>
+              </div>
+              <div className="d-flex align-items-center">
+                <Form.Range
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={filters.rating.max}
+                  onChange={(e) => handleFilterChange('rating', { ...filters.rating, max: parseInt(e.target.value) })}
+                />
+                <span className="ms-2">{filters.rating.max}</span>
+              </div>
+            </Form.Group>
+          </Col>
+        </Row>
+      </Card.Body>
+    </Card>
+  </div>
+</Collapse>
     <Table striped bordered hover responsive>
       <thead>
         <tr>
           <th>
-            <input
-              type="checkbox"
-              onChange={handleSelectAll}
-              checked={selectedRows.length === schedules.length}
-            />
+          <input
+  type="checkbox"
+  onChange={handleSelectAll}
+  checked={selectedRows.length === schedules.length}
+/>
           </th>
           <th>Block ID</th>
           <th>Program</th>
           <th>Courses</th>
           <th>Days</th>
-          <th>Rating</th>
+          <th onClick={handleSort} style={{ cursor: 'pointer' }}>
+            Rating {sortOrder === 'asc' ? '▲' : '▼'}
+          </th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        {schedules.map((schedule) => (
-          <tr key={schedule.block_id}>
+   {schedules.filter(applyFilters).map((schedule) => (
+    <tr key={schedule.block_id}>
                 <td>
               <input
                 type="checkbox"
@@ -150,6 +279,7 @@ const ScheduleTable = ({
         ))}
       </tbody>
     </Table>
+    </>
   );
 };
 

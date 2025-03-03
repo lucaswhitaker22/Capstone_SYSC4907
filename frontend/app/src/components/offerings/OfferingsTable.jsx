@@ -40,19 +40,19 @@ const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
 
   return (
     <>
-      <Card className="mb-3">
-        <Card.Header 
-          className="d-flex justify-content-between align-items-center" 
-          style={{ cursor: 'pointer' }}
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          <span>Filters</span>
-          <span>{showFilters ? '▼' : '▶'}</span>
-        </Card.Header>
-        <Collapse in={showFilters}>
-          <div>
+      <Button
+        onClick={() => setShowFilters(!showFilters)}
+        aria-controls="filter-collapse"
+        aria-expanded={showFilters}
+        className="mb-3"
+      >
+        {showFilters ? 'Hide Filters' : 'Show Filters'}
+      </Button>
+      <Collapse in={showFilters}>
+        <div id="filter-collapse">
+          <Card className="mb-3">
             <Card.Body>
-              <Row className="g-3">
+              <Row>
                 <Col md={3}>
                   <Form.Group>
                     <Form.Label>Course ID</Form.Label>
@@ -78,7 +78,7 @@ const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
                     </Form.Select>
                   </Form.Group>
                 </Col>
-                <Col md={3}>
+                <Col md={2}>
                   <Form.Group>
                     <Form.Label>Section Code</Form.Label>
                     <Form.Control
@@ -89,7 +89,7 @@ const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
                     />
                   </Form.Group>
                 </Col>
-                <Col md={3}>
+                <Col md={2}>
                   <Form.Group>
                     <Form.Label>Day</Form.Label>
                     <Form.Select
@@ -103,7 +103,7 @@ const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
                     </Form.Select>
                   </Form.Group>
                 </Col>
-                <Col md={3}>
+                <Col md={2}>
                   <Form.Group>
                     <Form.Label>Term</Form.Label>
                     <Form.Select
@@ -116,39 +116,11 @@ const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
                     </Form.Select>
                   </Form.Group>
                 </Col>
-                <Col md={3}>
-                  <Form.Group>
-                    <Form.Label>Academic Year</Form.Label>
-                    <Form.Select
-                      value={filters.academic_year}
-                      onChange={(e) => handleFilterChange('academic_year', e.target.value)}
-                    >
-                      <option value="">All Years</option>
-                      <option value="2024-2025">2024-2025</option>
-                      <option value="2025-2026">2025-2026</option>
-                      <option value="2026-2027">2026-2027</option>
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group>
-                    <Form.Label>Status</Form.Label>
-                    <Form.Select
-                      value={filters.status}
-                      onChange={(e) => handleFilterChange('status', e.target.value)}
-                    >
-                      <option value="">All Statuses</option>
-                      <option value="OPEN">Open</option>
-                      <option value="FULL">Full</option>
-                      <option value="CANCELLED">Cancelled</option>
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
               </Row>
             </Card.Body>
-          </div>
-        </Collapse>
-      </Card>
+          </Card>
+        </div>
+      </Collapse>
 
       <Table striped bordered hover responsive>
         <thead>

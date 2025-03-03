@@ -23,6 +23,7 @@ const SchedulePage = () => {
     const [isBulkGenerating, setIsBulkGenerating] = useState(false);
     const [isBulkClearing, setIsBulkClearing] = useState(false);
     const [activeTab, setActiveTab] = useState('FALL');
+    const [sortOrder, setSortOrder] = useState('desc');
 
     const fetchBlocks = async () => {
         try {
@@ -320,7 +321,17 @@ const SchedulePage = () => {
         }
       };
       
-
+      const handleSort = (newSortOrder) => {
+        setSortOrder(newSortOrder);
+        const sortedSchedules = [...schedules].sort((a, b) => {
+          if (newSortOrder === 'asc') {
+            return (a.rating || 0) - (b.rating || 0);
+          } else {
+            return (b.rating || 0) - (a.rating || 0);
+          }
+        });
+        setSchedules(sortedSchedules);
+      };
     const handleValidateSchedule = async (blockId) => {
         try {
             const response = await fetch(`${API_URL}/schedules/block/${blockId}/validate`);
@@ -374,6 +385,8 @@ const SchedulePage = () => {
       onGenerate={handleGenerateSchedule}
       onSelectionChange={handleSelectionChange}
       selectedBlocks={selectedFallBlocks} // Add this prop
+      onSort={handleSort}
+
     />
   </Tab>
   <Tab eventKey="WINTER" title="Winter">
@@ -387,6 +400,8 @@ const SchedulePage = () => {
       onGenerate={handleGenerateSchedule}
       onSelectionChange={handleSelectionChange}
       selectedBlocks={selectedWinterBlocks} // Add this prop
+      onSort={handleSort}
+
     />
   </Tab>
 </Tabs>
