@@ -18,7 +18,8 @@ const SchedulePage = () => {
     const [showEditModal, setShowEditModal] = useState(false);
     const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [selectedBlocks, setSelectedBlocks] = useState([]);
+    const [selectedFallBlocks, setSelectedFallBlocks] = useState([]);
+    const [selectedWinterBlocks, setSelectedWinterBlocks] = useState([]);
     const [isBulkGenerating, setIsBulkGenerating] = useState(false);
     const [isBulkClearing, setIsBulkClearing] = useState(false);
     const [activeTab, setActiveTab] = useState('FALL');
@@ -186,7 +187,11 @@ const SchedulePage = () => {
     };
     
     const handleSelectionChange = (selectedRows) => {
-        setSelectedBlocks(selectedRows);
+        if (activeTab === 'FALL') {
+          setSelectedFallBlocks(selectedRows);
+        } else {
+          setSelectedWinterBlocks(selectedRows);
+        }
       };
     
       const handleBulkGenerate = async () => {
@@ -262,33 +267,36 @@ const SchedulePage = () => {
     />
   </Tab>
 </Tabs>
-
-            <Button 
-        onClick={handleBulkGenerate} 
-        disabled={selectedBlocks.length === 0 || isBulkGenerating}
-      >
-        {isBulkGenerating ? (
-          <>
-            <Bars height="1em" stroke="#ffffff" style={{marginRight: '0.5em'}} />
-            Generating...
-          </>
-        ) : (
-          'Bulk Generate'
-        )}
-      </Button>
-      <Button 
-        onClick={handleBulkClear} 
-        disabled={selectedBlocks.length === 0 || isBulkClearing}
-      >
-        {isBulkClearing ? (
-          <>
-            <Bars height="1em" stroke="#ffffff" style={{marginRight: '0.5em'}} />
-            Clearing...
-          </>
-        ) : (
-          'Bulk Clear'
-        )}
-      </Button>
+<div className="mt-3 d-flex align-items-center">
+  <span className="me-3">Selected: {selectedFallBlocks.length + selectedWinterBlocks.length}</span>
+  <Button 
+    onClick={handleBulkGenerate} 
+    disabled={(selectedFallBlocks.length + selectedWinterBlocks.length) === 0 || isBulkGenerating}
+  >
+    {isBulkGenerating ? (
+      <>
+        <Bars height="1em" stroke="#ffffff" style={{marginRight: '0.5em'}} />
+        Generating...
+      </>
+    ) : (
+      'Bulk Generate'
+    )}
+  </Button>
+  <Button 
+    onClick={handleBulkClear} 
+    disabled={(selectedFallBlocks.length + selectedWinterBlocks.length) === 0 || isBulkClearing}
+    className="ms-2"
+  >
+    {isBulkClearing ? (
+      <>
+        <Bars height="1em" stroke="#ffffff" style={{marginRight: '0.5em'}} />
+        Clearing...
+      </>
+    ) : (
+      'Bulk Clear'
+    )}
+  </Button>
+</div>
             <ScheduleViewModal
                 show={showViewModal}
                 blockId={selectedBlock}
