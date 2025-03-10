@@ -5,7 +5,6 @@ const ScheduleTable = ({
   schedules = [],
   onView,
   onEdit,
-  onValidate,
   onDelete,
   isLoading,
   onGenerate,
@@ -337,13 +336,6 @@ const ScheduleTable = ({
               >
                 Generate
               </Button>
-                <Button
-                  variant="info"
-                  size="sm"
-                  onClick={() => onValidate(schedule.block_id)}
-                >
-                  Validate
-                </Button>
                 <Button
                   variant="danger"
                   size="sm"

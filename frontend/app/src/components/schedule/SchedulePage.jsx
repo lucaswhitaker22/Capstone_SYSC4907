@@ -438,7 +438,6 @@ const SchedulePage = () => {
       schedules={schedules.filter(s => s.term === 'FALL')}
       onView={handleViewSchedule}
       onEdit={handleEditSchedule}
-      onValidate={handleValidateSchedule}
       onDelete={handleDeleteSchedule}
       isLoading={isLoading}
       onGenerate={handleGenerateSchedule}
@@ -455,7 +454,6 @@ const SchedulePage = () => {
       schedules={schedules.filter(s => s.term === 'WINTER')}
       onView={handleViewSchedule}
       onEdit={handleEditSchedule}
-      onValidate={handleValidateSchedule}
       onDelete={handleDeleteSchedule}
       isLoading={isLoading}
       onGenerate={handleGenerateSchedule}
