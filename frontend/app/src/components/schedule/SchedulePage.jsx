@@ -3,6 +3,8 @@ import { Container, Button, Form, Tab, Tabs} from 'react-bootstrap';
 import ScheduleTable from './ScheduleTable';
 import ScheduleViewModal from './ScheduleViewModal';
 import ScheduleEditModal from './ScheduleEditModal';
+import ExportSchedule from './ExportSchedule.tsx'; // Fix the import
+
 import { Bars } from 'react-loading-icons';
 
 const API_URL = 'http://127.0.0.1:5000/api';
@@ -375,6 +377,12 @@ const SchedulePage = () => {
                         <option value="2026-2027">2026-2027</option>
                     </Form.Select>
                 </div>
+                <ExportSchedule 
+                        schedules={schedules}
+                        activeTab={activeTab}
+                        academicYear={selectedYear}
+                        isLoading={isLoading}
+                    />
             </div>
             <Tabs
   activeKey={activeTab}

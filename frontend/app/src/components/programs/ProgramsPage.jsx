@@ -3,7 +3,7 @@ import { Container, Button, Form } from 'react-bootstrap';
 import ProgramsTable from './ProgramsTable';
 import ProgramsModal from './ProgramsModal';
 import ProgramRequirementsModal from './ProgramRequirementsModal';
-import Papa from 'papaparse';
+import ExportPrograms from './ExportPrograms';
 
 const API_URL = 'http://127.0.0.1:5000/api';
 
@@ -114,7 +114,13 @@ return (
               <Button variant="primary" onClick={handleAddNew}>
                   Create New Program
               </Button>
+              
           </div>
+          <ExportPrograms 
+            programs={programs}
+            academicYear={currentYear}
+            isLoading={isLoading}
+          />
       </div>
 
       <ProgramsTable 
