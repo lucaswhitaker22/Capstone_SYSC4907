@@ -249,7 +249,7 @@ def get_block(block_id):
         'block_size': block.block_size,
         'term': block.term,
         'academic_year': block.academic_year,
-        'schedule_rating': float(block.schedule_rating) if b.schedule_rating else None,
+        'schedule_rating': float(block.schedule_rating) if block.schedule_rating else None,
         'early_starts': block.early_starts,
         'late_ends': block.late_ends,
         'long_breaks': block.long_breaks,
@@ -2143,7 +2143,16 @@ from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement
 from app.database import db
 from http import HTTPStatus
 from app.routes.conflicts import has_time_conflict
+from app.routes.utils.schedule_rating import rate_block_schedule
 import logging
+from flask import Blueprint, jsonify, request, current_app
+from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement
+from app.database import db
+from http import HTTPStatus
+from app.routes.conflicts import has_time_conflict
+from app.routes.utils.schedule_rating import rate_block_schedule
+import logging
+import random  # Added for randomization
 
 def generate_block_schedule(block_id):
     try:
@@ -2211,8 +2220,12 @@ def generate_block_schedule(block_id):
                 valid_schedules.append(current_schedule.copy())
                 return
 
-            current_course = remaining_courses[0]
+            # Randomize course selection order
+            course_idx = random.randrange(len(remaining_courses))
+            current_course = remaining_courses.pop(course_idx)
+            
             if current_course not in course_offerings:
+                remaining_courses.append(current_course)  # Put it back for next iterations
                 return
 
             lecture_groups = {}
@@ -2224,7 +2237,12 @@ def generate_block_schedule(block_id):
                     lecture_groups[prefix] = []
                 lecture_groups[prefix].append(lecture)
 
-            for prefix, lectures in lecture_groups.items():
+            # Randomize order of lecture group prefixes
+            prefix_list = list(lecture_groups.keys())
+            random.shuffle(prefix_list)
+
+            for prefix in prefix_list:
+                lectures = lecture_groups[prefix]
                 all_lectures_fit = True
                 temp_schedule = current_schedule.copy()
 
@@ -2236,30 +2254,43 @@ def generate_block_schedule(block_id):
 
                 if all_lectures_fit:
                     if course_offerings[current_course]['LAB']:
-                        for lab in course_offerings[current_course]['LAB']:
+                        # Randomize the order of labs
+                        labs = course_offerings[current_course]['LAB'].copy()
+                        random.shuffle(labs)
+                        
+                        for lab in labs:
                             if lab.capacity - lab.current_enrollment < block.block_size:
                                 continue
                             if not any(has_time_conflict(lab, selected) for selected in temp_schedule):
+                                new_remaining = remaining_courses.copy()
                                 try_schedule_combination(
                                     temp_schedule + [lab],
-                                    remaining_courses[1:],
+                                    new_remaining,
                                     course_offerings
                                 )
                     else:
+                        new_remaining = remaining_courses.copy()
                         try_schedule_combination(
                             temp_schedule,
-                            remaining_courses[1:],
+                            new_remaining,
                             course_offerings
                         )
+            
+            # Put the course back for other branches of recursion
+            remaining_courses.append(current_course)
 
-        try_schedule_combination([], list(courses_with_offerings), course_offerings)
+        # Start with randomized course order
+        course_list = list(courses_with_offerings)
+        random.shuffle(course_list)
+        try_schedule_combination([], course_list, course_offerings)
 
         if not valid_schedules:
             return jsonify({
                 'error': f'Could not create valid schedule with available courses having sufficient capacity'
             }), HTTPStatus.BAD_REQUEST
 
-        selected_schedule = valid_schedules[0]
+        # Randomly select a schedule instead of always using the first one
+        selected_schedule = random.choice(valid_schedules)
 
         # Reset enrollments for old schedule
         old_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
@@ -2326,6 +2357,11 @@ def generate_block_schedule(block_id):
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
 
+
+=== backend/app/routes/utils/schedule_rating.py ===
+from flask import jsonify, current_app
+from app.models import BlockSchedule, Block, CourseOffering
+from http import HTTPStatus
 
 def rate_block_schedule(block_id):
     try:
