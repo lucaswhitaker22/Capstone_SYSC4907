@@ -75,32 +75,32 @@ const SchedulePage = () => {
     };
     
     const fetchAllSchedules = async () => {
-        setIsLoading(true);
-        try {
-          const schedulesData = await Promise.all(
-            blocks
-              .filter(block => (block.term === 'FALL' || block.term === 'WINTER') && block.academic_year === selectedYear)
-              .map(async (block) => {
-                const { offerings, validation, rating } = await fetchBlockSchedule(block.block_id);
-                return {
-                  block_id: block.block_id,
-                  program_id: block.program_id,
-                  term: block.term,
-                  academic_year: block.academic_year,
-                  offerings: offerings,
-                  rating: offerings.length === 0 ? 0 : (rating || block.schedule_rating),
-                  validation: validation
-                };
-              })
-          );
-          setSchedules(schedulesData);
-        } catch (error) {
-          console.error('Error fetching schedules:', error);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      
+      setIsLoading(true);
+      try {
+        const schedulesData = await Promise.all(
+          blocks
+            .filter(block => (block.term === 'FALL' || block.term === 'WINTER') && block.academic_year === selectedYear)
+            .map(async (block) => {
+              const { offerings, validation, rating } = await fetchBlockSchedule(block.block_id);
+              return {
+                block_id: block.block_id,
+                program_id: block.program_id,
+                term: block.term,
+                academic_year: block.academic_year,
+                status: block.status, // Add this line to include block status
+                offerings: offerings,
+                rating: offerings.length === 0 ? 0 : (rating || block.schedule_rating),
+                validation: validation
+              };
+            })
+        );
+        setSchedules(schedulesData);
+      } catch (error) {
+        console.error('Error fetching schedules:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
       
       useEffect(() => {
         fetchBlocks();
@@ -125,40 +125,78 @@ const SchedulePage = () => {
     };
 
     
-
-    const handleGenerateSchedule = async (blockId) => {
-        try {
-          const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
-            method: 'POST'
-          });
+    const handleStatusUpdate = async (blockId, status) => {
+      try {
+        const response = await fetch(`${API_URL}/blocks/${blockId}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status }),
+        });
+        
+        if (response.ok) {
+          // Update blocks and schedules in state without requiring a full refresh
+          setBlocks(prevBlocks =>
+            prevBlocks.map(block =>
+              block.block_id === blockId ? { ...block, status: status } : block
+            )
+          );
           
-          if (response.ok) {
-            const generatedData = await response.json();
-            
-            // Update the specific block's rating in the blocks array
-            setBlocks(prevBlocks => 
-              prevBlocks.map(block => 
-                block.block_id === blockId 
-                  ? { ...block, schedule_rating: generatedData.schedule_rating }
-                  : block
-              )
-            );
-            
-            // Fetch updated schedules to reflect new changes
-            await fetchAllSchedules();
-          } else {
-            // If generation fails, clear the schedule and reset rating
-            await handleDeleteSchedule(blockId);
-            alert('Failed to generate schedule. The schedule has been cleared.');
-          }
-        } catch (error) {
-          console.error('Error generating schedule:', error);
-          // If an error occurs, also clear the schedule and reset rating
-          await handleDeleteSchedule(blockId);
-          alert('Error generating schedule. The schedule has been cleared.');
+          setSchedules(prevSchedules =>
+            prevSchedules.map(schedule =>
+              schedule.block_id === blockId ? { ...schedule, status: status } : schedule
+            )
+          );
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error updating status');
         }
-      };
+      } catch (error) {
+        console.error('Error updating status:', error);
+        alert('Error updating status');
+      }
+    };
+    const handleGenerateSchedule = async (blockId) => {
+      // Find the block to check its status
+      const block = blocks.find(b => b.block_id === blockId);
       
+      // Check if status is DRAFT
+      if (!block || block.status !== 'DRAFT') {
+        alert('Schedule can only be generated when the block is in Draft status.');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
+          method: 'POST'
+        });
+        
+        // Rest of the function remains the same
+        if (response.ok) {
+          const generatedData = await response.json();
+          // Update the specific block's rating in the blocks array
+          setBlocks(prevBlocks =>
+            prevBlocks.map(block =>
+              block.block_id === blockId
+                ? { ...block, schedule_rating: generatedData.schedule_rating }
+                : block
+            )
+          );
+          // Fetch updated schedules to reflect new changes
+          await fetchAllSchedules();
+        } else {
+          // If generation fails, clear the schedule and reset rating
+          await handleDeleteSchedule(blockId);
+          alert('Failed to generate schedule. The schedule has been cleared.');
+        }
+      } catch (error) {
+        console.error('Error generating schedule:', error);
+        // If an error occurs, also clear the schedule and reset rating
+        await handleDeleteSchedule(blockId);
+        alert('Error generating schedule. The schedule has been cleared.');
+      }
+    };
     
 
     const handleDeleteSchedule = async (blockId) => {
@@ -230,54 +268,60 @@ const SchedulePage = () => {
         const totalBlocks = selectedBlocks.length;
         let successCount = 0;
         let errorCount = 0;
+        let skippedCount = 0;
       
         try {
           for (const blockId of selectedBlocks) {
+            // Find the block to check its status
+            const block = blocks.find(b => b.block_id === blockId);
+            
+            // Skip blocks that are not in DRAFT status
+            if (!block || block.status !== 'DRAFT') {
+              console.log(`Skipping block ${blockId} - not in Draft status`);
+              skippedCount++;
+              continue;
+            }
+            
+            // Rest of the code for generating each block's schedule
             try {
               const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
                 method: 'POST'
               });
-              
               if (response.ok) {
                 const generatedData = await response.json();
-                setBlocks(prevBlocks => 
-                  prevBlocks.map(block => 
-                    block.block_id === blockId 
+                setBlocks(prevBlocks =>
+                  prevBlocks.map(block =>
+                    block.block_id === blockId
                       ? { ...block, schedule_rating: generatedData.schedule_rating }
                       : block
                   )
                 );
                 successCount++;
               } else {
-                const error = await response.json();
-                console.error(`Error generating schedule for block ${blockId}:`, error.error);
                 errorCount++;
-                // Clear the schedule and reset rating if generation fails
                 await handleDeleteSchedule(blockId);
               }
             } catch (error) {
-              console.error(`Error generating schedule for block ${blockId}:`, error);
               errorCount++;
-              // Clear the schedule and reset rating if an error occurs
               await handleDeleteSchedule(blockId);
             }
           }
-      
+          
           // Fetch updated schedules to reflect new changes
           await fetchAllSchedules();
-      
-          // Display results to the user
-          alert(`Bulk generation complete.\nSuccessful: ${successCount}\nFailed: ${errorCount}`);
+          
+          // Display results to the user, including skipped blocks
+          alert(`Bulk generation complete.\nSuccessful: ${successCount}\nFailed: ${errorCount}\nSkipped (not in Draft status): ${skippedCount}`);
+          
           setSelectedFallBlocks([]);
           setSelectedWinterBlocks([]);
         } catch (error) {
           console.error('Error in bulk generation:', error);
           alert('An unexpected error occurred during bulk generation. Please try again.');
         } finally {
-            setIsBulkGenerating(false);
-
-          }
-        };
+          setIsBulkGenerating(false);
+        }
+      };
       
       
       
@@ -401,6 +445,8 @@ const SchedulePage = () => {
       onSelectionChange={handleSelectionChange}
       selectedBlocks={selectedFallBlocks} // Add this prop
       onSort={handleSort}
+        onStatusUpdate={handleStatusUpdate} // Add this prop
+
 
     />
   </Tab>
@@ -416,6 +462,7 @@ const SchedulePage = () => {
       onSelectionChange={handleSelectionChange}
       selectedBlocks={selectedWinterBlocks} // Add this prop
       onSort={handleSort}
+      onStatusUpdate={handleStatusUpdate} // Add this prop
 
     />
   </Tab>

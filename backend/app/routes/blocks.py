@@ -45,7 +45,7 @@ def get_block(block_id):
         'block_size': block.block_size,
         'term': block.term,
         'academic_year': block.academic_year,
-        'schedule_rating': float(block.schedule_rating) if b.schedule_rating else None,
+        'schedule_rating': float(block.schedule_rating) if block.schedule_rating else None,
         'early_starts': block.early_starts,
         'late_ends': block.late_ends,
         'long_breaks': block.long_breaks,

@@ -11,6 +11,7 @@ const ScheduleTable = ({
   onGenerate,
   onSelectionChange,
   selectedBlocks,
+  onStatusUpdate,
   onSort
 }) => {
   const [selectedRows, setSelectedRows] = useState([]);
@@ -69,7 +70,62 @@ const ScheduleTable = ({
       </Badge>
     );
   };
+  const StatusDropdown = ({ blockId, currentStatus, onStatusUpdate }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    
+    const statuses = [
+      { value: 'DRAFT', label: 'Draft', variant: 'secondary' },
+      { value: 'PUBLISHED', label: 'Published', variant: 'success' },
+      { value: 'LOCKED', label: 'Locked', variant: 'warning' },
+      { value: 'ARCHIVED', label: 'Archived', variant: 'dark' }
+    ];
+    
+    const handleStatusSelect = (status) => {
+      if (status !== currentStatus) {
+        onStatusUpdate(blockId, status);
+      }
+      setIsOpen(false);
+    };
 
+    return (
+      <div className="position-relative">
+        <Badge 
+          bg={statuses.find(s => s.value === currentStatus)?.variant || 'secondary'} 
+          style={{ cursor: 'pointer' }}
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          {statuses.find(s => s.value === currentStatus)?.label || 'Draft'} ▼
+        </Badge>
+        
+        {isOpen && (
+          <div className="status-dropdown" style={{
+            position: 'absolute',
+            zIndex: 1000,
+            backgroundColor: 'white',
+            border: '1px solid #dee2e6',
+            borderRadius: '0.25rem',
+            padding: '0.5rem 0',
+            minWidth: '120px'
+          }}>
+            {statuses.map(status => (
+              <div 
+                key={status.value}
+                onClick={() => handleStatusSelect(status.value)}
+                style={{
+                  padding: '0.25rem 1rem',
+                  cursor: 'pointer',
+                  backgroundColor: status.value === currentStatus ? '#f8f9fa' : 'transparent'
+                }}
+              >
+                <Badge bg={status.variant}>{status.label}</Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+  
   const handleRowSelection = (blockId) => {
     const newSelectedRows = selectedRows.includes(blockId)
       ? selectedRows.filter(id => id !== blockId)
@@ -88,7 +144,23 @@ const ScheduleTable = ({
     if (!offerings) return 0;
     return offerings.length;
   };
-
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'DRAFT':
+        return <Badge bg="secondary">Draft</Badge>;
+      case 'PUBLISHED':
+        return <Badge bg="success">Published</Badge>;
+      case 'LOCKED':
+        return <Badge bg="warning">Locked</Badge>;
+      case 'ARCHIVED':
+        return <Badge bg="dark">Archived</Badge>;
+      default:
+        return <Badge bg="light" text="dark">Unknown</Badge>;
+    }
+  };
+  const isGenerateEnabled = (status) => {
+    return status === 'DRAFT';
+  };
   const getDaysString = (offerings) => {
     if (!offerings || !offerings.length) return 'No days scheduled';
     
@@ -201,6 +273,7 @@ const ScheduleTable = ({
           <th>Program</th>
           <th>Courses</th>
           <th>Days</th>
+          <th>Status</th>
           <th onClick={handleSort} style={{ cursor: 'pointer' }}>
             Rating {sortOrder === 'asc' ? '▲' : '▼'}
           </th>
@@ -225,6 +298,17 @@ const ScheduleTable = ({
               </Badge>
             </td>
             <td>{getDaysString(schedule.offerings)}</td>
+            <td>
+            {onStatusUpdate ? (
+                  <StatusDropdown
+                  blockId={schedule.block_id}
+                  currentStatus={schedule.status}
+                    onStatusUpdate={onStatusUpdate}
+                  />
+                ) : (
+                  getStatusBadge(schedule.status)
+                )}
+            </td>
             <td>{getRatingBadge(schedule.rating)}</td>
             <td>
               <div className="d-flex gap-2">
@@ -243,12 +327,16 @@ const ScheduleTable = ({
                   Edit
                 </Button>
                 <Button
-                  variant="success"
-                  size="sm"
-                  onClick={() => onGenerate(schedule.block_id)}
-                >
-                  Generate
-                </Button>
+                variant="primary"
+                size="sm"
+                onClick={() => onGenerate(schedule.block_id)}
+                disabled={!isGenerateEnabled(schedule.status)}
+                title={!isGenerateEnabled(schedule.status) ? 
+                  'Schedule can only be generated when in Draft status' : 
+                  'Generate schedule'}
+              >
+                Generate
+              </Button>
                 <Button
                   variant="info"
                   size="sm"

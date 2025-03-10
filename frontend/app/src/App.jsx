@@ -14,12 +14,6 @@ const HomePage = () => {
 
   const pages = [
     {
-      title: "Courses",
-      description: "Manage course information and basic details",
-      path: "/courses",
-      variant: "primary"
-    },
-    {
       title: "Course Offerings",
       description: "Handle course sections, schedules, and enrollment capacities",
       path: "/offerings",
@@ -30,12 +24,6 @@ const HomePage = () => {
       description: "Manage programs, requirements, and student allocations",
       path: "/programs",
       variant: "info"
-    },
-    {
-      title: "Blocks",
-      description: "Manage blocks and manage their schedules",
-      path: "/blocks",
-      variant: "warning"
     },
     {
       title: "Conflicts",
