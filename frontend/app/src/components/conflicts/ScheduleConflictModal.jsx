@@ -9,14 +9,20 @@ const ScheduleConflictModal = ({ show, onHide }) => {
   const [conflicts, setConflicts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+  const [selectedTerm, setSelectedTerm] = useState('FALL');
+  const [selectedYear, setSelectedYear] = useState('2025-2026');
 
   useEffect(() => {
     if (show) {
       fetchOfferings();
-      setConflicts([]);
-      setSelectedOfferings([]);
+      resetForm();
     }
-  }, [show]);
+  }, [show, selectedTerm, selectedYear]);
+
+  const resetForm = () => {
+    setConflicts([]);
+    setSelectedOfferings([]);
+  };
 
   const fetchOfferings = async () => {
     try {
@@ -35,6 +41,7 @@ const ScheduleConflictModal = ({ show, onHide }) => {
   const handleOfferingSelect = (e) => {
     const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
     setSelectedOfferings(selectedOptions);
+    setConflicts([]); // Clear conflicts when selection changes
   };
 
   const checkConflicts = async () => {
@@ -46,7 +53,9 @@ const ScheduleConflictModal = ({ show, onHide }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          offering_ids: selectedOfferings
+          offering_ids: selectedOfferings,
+          term: selectedTerm,
+          academic_year: selectedYear
         }),
       });
       
@@ -66,6 +75,11 @@ const ScheduleConflictModal = ({ show, onHide }) => {
     return days[day - 1];
   };
 
+  // Filter offerings by term and year
+  const filteredOfferings = offerings.filter(
+    offering => offering.term === selectedTerm && offering.academic_year === selectedYear
+  );
+
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
@@ -80,15 +94,46 @@ const ScheduleConflictModal = ({ show, onHide }) => {
           </div>
         ) : (
           <>
+            <div className="mb-3 d-flex gap-3">
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Term</Form.Label>
+                <Form.Select
+                  value={selectedTerm}
+                  onChange={(e) => {
+                    setSelectedTerm(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="FALL">Fall</option>
+                  <option value="WINTER">Winter</option>
+                </Form.Select>
+              </Form.Group>
+
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Select
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
+                </Form.Select>
+              </Form.Group>
+            </div>
+
             <Form.Group className="mb-3">
-              <Form.Label>Select Multiple Offerings</Form.Label>
+              <Form.Label>Select Multiple Offerings ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select 
                 multiple 
                 size={6}
                 value={selectedOfferings}
                 onChange={handleOfferingSelect}
               >
-                {offerings.map(offering => (
+                {filteredOfferings.map(offering => (
                   <option key={offering.offering_id} value={offering.offering_id}>
                     {offering.course_id} - {offering.section_type} {offering.section_code}
                     ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
@@ -103,7 +148,7 @@ const ScheduleConflictModal = ({ show, onHide }) => {
             {conflicts.length > 0 && (
               <div className="mt-3">
                 <Alert variant="danger">
-                  <Alert.Heading>Conflicts Found</Alert.Heading>
+                  <Alert.Heading>Conflicts Found in {selectedTerm} {selectedYear}</Alert.Heading>
                   <ListGroup>
                     {conflicts.map((conflict, index) => (
                       <ListGroup.Item key={index} variant="danger">
@@ -119,7 +164,7 @@ const ScheduleConflictModal = ({ show, onHide }) => {
 
             {conflicts.length === 0 && selectedOfferings.length > 0 && !isLoading && (
               <Alert variant="success">
-                No conflicts found in the selected offerings.
+                No conflicts found in the selected offerings for {selectedTerm} {selectedYear}.
               </Alert>
             )}
           </>

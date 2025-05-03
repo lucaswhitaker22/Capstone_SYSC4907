@@ -19,3 +19,4 @@ class OfferingStatus(str, Enum):
     OPEN = 'OPEN'
     FULL = 'FULL'
     CANCELLED = 'CANCELLED'
+

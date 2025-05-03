@@ -6,7 +6,6 @@ const BlocksTable = ({
     onEdit, 
     onDelete, 
     onViewSchedule, 
-    onCalculateRating, 
     isLoading 
   }) => {
   if (isLoading) {
@@ -60,9 +59,7 @@ const BlocksTable = ({
           <th>Block Size</th>
           <th>Term</th>
           <th>Academic Year</th>
-          <th>Schedule Rating</th>
-          <th>Status</th>
-          <th>Validation</th>
+          <th>Status</th>      
           <th>Actions</th>
         </tr>
       </thead>
@@ -74,19 +71,9 @@ const BlocksTable = ({
             <td>{block.block_size}</td>
             <td>{block.term}</td>
             <td>{block.academic_year}</td>
-            <td className={getRatingColor(block.schedule_rating)}>
-              {block.schedule_rating ? `${block.schedule_rating.toFixed(1)}%` : 'N/A'}
-            </td>
             <td>
               {getStatusBadge(block.status)}
               {getValidationBadge(block)}
-            </td>
-            <td>
-              {block.validation_status?.missing_requirements?.length > 0 && (
-                <div className="text-danger small">
-                  Missing courses: {block.validation_status.missing_requirements.map(r => r.course_id).join(', ')}
-                </div>
-              )}
             </td>
             <td>
               <Button
@@ -114,16 +101,7 @@ const BlocksTable = ({
               >
                 View Schedule
               </Button>
-              {block.status !== 'LOCKED' && (
-                <Button
-                  variant="success"
-                  size="sm"
-                  className="ms-2"
-                  onClick={() => onCalculateRating(block.block_id)}
-                >
-                  Calculate Rating
-                </Button>
-              )}
+
             </td>
           </tr>
         ))}

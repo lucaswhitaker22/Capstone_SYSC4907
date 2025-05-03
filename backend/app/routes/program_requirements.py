@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify, request
-from app.models import ProgramRequirement, Program, Course, BlockSchedule
+from app.models import ProgramRequirement, Program, Course, BlockSchedule, Block
 from app import db
 from http import HTTPStatus
 
@@ -68,6 +68,7 @@ def create_requirement():
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
+
 @bp.route('/<int:requirement_id>', methods=['DELETE'])
 def delete_requirement(requirement_id):
     try:
@@ -122,8 +123,13 @@ def validate_program_schedule(program_id):
         if not schedule_ids:
             return jsonify({'error': 'No schedules provided'}), HTTPStatus.BAD_REQUEST
             
-        requirements = ProgramRequirement.query.filter_by(program_id=program_id).all()
-        schedules = BlockSchedule.query.filter(BlockSchedule.schedule_id.in_(schedule_ids)).all()
+        requirements = ProgramRequirement.query.filter_by(
+            program_id=program_id
+        ).all()
+        
+        schedules = BlockSchedule.query.filter(
+            BlockSchedule.schedule_id.in_(schedule_ids)
+        ).all()
         
         missing_requirements = []
         for req in requirements:

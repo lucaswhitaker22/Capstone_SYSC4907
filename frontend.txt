@@ -10,16 +10,12 @@ import ProgramsPage from './components/programs/ProgramsPage';
 import ConflictsPage from './components/conflicts/ConflictsPage';
 import SchedulePage from './components/schedule/SchedulePage';
 import CoursesPage from './components/courses/CoursesPage';
+import HelpPage from './components/help/HelpPage';
+
 const HomePage = () => {
   const navigate = useNavigate();
 
   const pages = [
-    {
-      title: "Courses",
-      description: "Manage course information and basic details",
-      path: "/courses",
-      variant: "primary"
-    },
     {
       title: "Course Offerings",
       description: "Handle course sections, schedules, and enrollment capacities",
@@ -31,12 +27,6 @@ const HomePage = () => {
       description: "Manage programs, requirements, and student allocations",
       path: "/programs",
       variant: "info"
-    },
-    {
-      title: "Blocks",
-      description: "Manage blocks and manage their schedules",
-      path: "/blocks",
-      variant: "warning"
     },
     {
       title: "Conflicts",
@@ -91,6 +81,7 @@ const App = () => {
             <Route path="/programs" element={<ProgramsPage />} />
             <Route path="/conflicts" element={<ConflictsPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
+            <Route path="/help" element={<HelpPage />} />
             <Route path="/" element={<HomePage />} />
           </Routes>
         </Container>
@@ -443,10 +434,11 @@ export default BlocksModal;
 
 === frontend/app/src/components/blocks/BlocksPage.jsx ===
 import React, { useState, useEffect } from 'react';
-import { Container, Button } from 'react-bootstrap';
+import { Container, Button, Form } from 'react-bootstrap';
 import BlocksTable from './BlocksTable';
 import BlocksModal from './BlocksModal';
 import BlockScheduleModal from './BlockScheduleModal';
+
 const API_URL = 'http://127.0.0.1:5000/api';
 
 const BlocksPage = () => {
@@ -456,23 +448,29 @@ const BlocksPage = () => {
     const [selectedBlock, setSelectedBlock] = useState(null);
     const [selectedBlockId, setSelectedBlockId] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
-  
+    const [selectedTerm, setSelectedTerm] = useState('FALL');
+    const [selectedYear, setSelectedYear] = useState('2025-2026');
 
-  const fetchBlocks = async () => {
-    try {
-      const response = await fetch(`${API_URL}/blocks`);
-      const data = await response.json();
-      setBlocks(data);
-    } catch (error) {
-      console.error('Error fetching blocks:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    const fetchBlocks = async () => {
+        try {
+            const response = await fetch(`${API_URL}/blocks`);
+            const data = await response.json();
+            setBlocks(data);
+        } catch (error) {
+            console.error('Error fetching blocks:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-  useEffect(() => {
-    fetchBlocks();
-  }, []);
+    useEffect(() => {
+        fetchBlocks();
+    }, []);
+
+    // Filter blocks by term and year
+    const filteredBlocks = blocks.filter(
+        block => block.term === selectedTerm && block.academic_year === selectedYear
+    );
 
   const handleAddNew = () => {
     setSelectedBlock(null);
@@ -582,40 +580,64 @@ const BlocksPage = () => {
 
   return (
     <Container className="py-4">
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1>Block Management</h1>
-        <Button variant="primary" onClick={handleAddNew}>
-          Create New Block
-        </Button>
-      </div>
+        <div className="d-flex justify-content-between align-items-center mb-4">
+            <h1>Block Management</h1>
+            <div className="d-flex gap-3">
+                <Form.Group style={{ width: '150px' }}>
+                    <Form.Select
+                        value={selectedTerm}
+                        onChange={(e) => setSelectedTerm(e.target.value)}
+                    >
+                        <option value="FALL">Fall Term</option>
+                        <option value="WINTER">Winter Term</option>
+                    </Form.Select>
+                </Form.Group>
 
-      <BlocksTable 
-        blocks={blocks}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onViewSchedule={handleViewSchedule}
-        onCalculateRating={handleCalculateRating}
-        onStatusUpdate={handleStatusUpdate}
-        isLoading={isLoading}
-      />
+                <Form.Group style={{ width: '150px' }}>
+                    <Form.Select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                    >
+                        <option value="2024-2025">2024-2025</option>
+                        <option value="2025-2026">2025-2026</option>
+                        <option value="2026-2027">2026-2027</option>
+                    </Form.Select>
+                </Form.Group>
+            </div>
+        </div>
 
-      <BlocksModal
-        show={showModal}
-        block={selectedBlock}
-        onHide={() => setShowModal(false)}
-        onSave={handleSave}
-      />
-            <BlockScheduleModal
-        show={showScheduleModal}
-        blockId={selectedBlockId}
-        onHide={() => setShowScheduleModal(false)}
-      />
+        <BlocksTable 
+            blocks={filteredBlocks}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            onViewSchedule={handleViewSchedule}
+            onStatusUpdate={handleStatusUpdate}
+            isLoading={isLoading}
+            term={selectedTerm}
+            academicYear={selectedYear}
+        />
+
+        <BlocksModal
+            show={showModal}
+            block={selectedBlock}
+            onHide={() => setShowModal(false)}
+            onSave={handleSave}
+            defaultTerm={selectedTerm}
+            defaultYear={selectedYear}
+        />
+
+        <BlockScheduleModal
+            show={showScheduleModal}
+            blockId={selectedBlockId}
+            onHide={() => setShowScheduleModal(false)}
+            term={selectedTerm}
+            academicYear={selectedYear}
+        />
     </Container>
-  );
+);
 };
 
 export default BlocksPage;
-
 
 
 === frontend/app/src/components/blocks/BlocksTable.jsx ===
@@ -627,7 +649,6 @@ const BlocksTable = ({
     onEdit, 
     onDelete, 
     onViewSchedule, 
-    onCalculateRating, 
     isLoading 
   }) => {
   if (isLoading) {
@@ -681,9 +702,7 @@ const BlocksTable = ({
           <th>Block Size</th>
           <th>Term</th>
           <th>Academic Year</th>
-          <th>Schedule Rating</th>
-          <th>Status</th>
-          <th>Validation</th>
+          <th>Status</th>      
           <th>Actions</th>
         </tr>
       </thead>
@@ -695,19 +714,9 @@ const BlocksTable = ({
             <td>{block.block_size}</td>
             <td>{block.term}</td>
             <td>{block.academic_year}</td>
-            <td className={getRatingColor(block.schedule_rating)}>
-              {block.schedule_rating ? `${block.schedule_rating.toFixed(1)}%` : 'N/A'}
-            </td>
             <td>
               {getStatusBadge(block.status)}
               {getValidationBadge(block)}
-            </td>
-            <td>
-              {block.validation_status?.missing_requirements?.length > 0 && (
-                <div className="text-danger small">
-                  Missing courses: {block.validation_status.missing_requirements.map(r => r.course_id).join(', ')}
-                </div>
-              )}
             </td>
             <td>
               <Button
@@ -735,16 +744,7 @@ const BlocksTable = ({
               >
                 View Schedule
               </Button>
-              {block.status !== 'LOCKED' && (
-                <Button
-                  variant="success"
-                  size="sm"
-                  className="ms-2"
-                  onClick={() => onCalculateRating(block.block_id)}
-                >
-                  Calculate Rating
-                </Button>
-              )}
+
             </td>
           </tr>
         ))}
@@ -836,7 +836,7 @@ export default ConflictsPage;
 
 === frontend/app/src/components/conflicts/CourseConflictModal.jsx ===
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Button, Alert, Spinner, ListGroup } from 'react-bootstrap';
+import { Modal, Form, Button, Alert, Spinner, ListGroup, Tabs, Tab } from 'react-bootstrap';
 
 const API_URL = 'http://127.0.0.1:5000/api';
 
@@ -847,6 +847,8 @@ const CourseConflictModal = ({ show, onHide }) => {
   const [conflicts, setConflicts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+  const [selectedTerm, setSelectedTerm] = useState('FALL');
+  const [selectedYear, setSelectedYear] = useState('2025-2026');
 
   useEffect(() => {
     if (show) {
@@ -855,7 +857,7 @@ const CourseConflictModal = ({ show, onHide }) => {
       setSelectedScheduleOfferings([]);
       setNewOffering('');
     }
-  }, [show]);
+  }, [show, selectedTerm, selectedYear]);
 
   const fetchOfferings = async () => {
     try {
@@ -886,7 +888,9 @@ const CourseConflictModal = ({ show, onHide }) => {
         },
         body: JSON.stringify({
           schedule_offering_ids: selectedScheduleOfferings,
-          new_offering_id: newOffering
+          new_offering_id: newOffering,
+          term: selectedTerm,
+          academic_year: selectedYear
         }),
       });
       
@@ -906,6 +910,11 @@ const CourseConflictModal = ({ show, onHide }) => {
     return days[day - 1];
   };
 
+  // Filter offerings by term and year
+  const filteredOfferings = offerings.filter(
+    offering => offering.term === selectedTerm && offering.academic_year === selectedYear
+  );
+
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
@@ -920,15 +929,50 @@ const CourseConflictModal = ({ show, onHide }) => {
           </div>
         ) : (
           <>
+            <div className="mb-3 d-flex gap-3">
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Term</Form.Label>
+                <Form.Select
+                  value={selectedTerm}
+                  onChange={(e) => {
+                    setSelectedTerm(e.target.value);
+                    setSelectedScheduleOfferings([]);
+                    setNewOffering('');
+                    setConflicts([]);
+                  }}
+                >
+                  <option value="FALL">Fall</option>
+                  <option value="WINTER">Winter</option>
+                </Form.Select>
+              </Form.Group>
+
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Select
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    setSelectedScheduleOfferings([]);
+                    setNewOffering('');
+                    setConflicts([]);
+                  }}
+                >
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
+                </Form.Select>
+              </Form.Group>
+            </div>
+
             <Form.Group className="mb-3">
-              <Form.Label>Select Existing Schedule Offerings</Form.Label>
+              <Form.Label>Select Existing Schedule Offerings ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select 
                 multiple 
                 size={6}
                 value={selectedScheduleOfferings}
                 onChange={handleScheduleOfferingsSelect}
               >
-                {offerings.map(offering => (
+                {filteredOfferings.map(offering => (
                   <option key={offering.offering_id} value={offering.offering_id}>
                     {offering.course_id} - {offering.section_type} {offering.section_code}
                     ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
@@ -941,13 +985,13 @@ const CourseConflictModal = ({ show, onHide }) => {
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label>Select New Course Offering</Form.Label>
+              <Form.Label>Select New Course Offering ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select
                 value={newOffering}
                 onChange={(e) => setNewOffering(e.target.value)}
               >
                 <option value="">Select an offering</option>
-                {offerings.map(offering => (
+                {filteredOfferings.map(offering => (
                   <option key={offering.offering_id} value={offering.offering_id}>
                     {offering.course_id} - {offering.section_type} {offering.section_code}
                     ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
@@ -958,7 +1002,7 @@ const CourseConflictModal = ({ show, onHide }) => {
 
             {conflicts.length > 0 && (
               <Alert variant="danger">
-                <Alert.Heading>Conflicts Found</Alert.Heading>
+                <Alert.Heading>Conflicts Found ({selectedTerm} {selectedYear})</Alert.Heading>
                 <ListGroup>
                   {conflicts.map((conflict, index) => (
                     <ListGroup.Item key={index} variant="danger">
@@ -973,7 +1017,7 @@ const CourseConflictModal = ({ show, onHide }) => {
 
             {conflicts.length === 0 && selectedScheduleOfferings.length > 0 && newOffering && !isLoading && (
               <Alert variant="success">
-                No conflicts found with the selected course.
+                No conflicts found for the selected course in {selectedTerm} {selectedYear}.
               </Alert>
             )}
           </>
@@ -1023,15 +1067,21 @@ const OfferingConflictModal = ({ show, onHide }) => {
   const [conflict, setConflict] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+  const [selectedTerm, setSelectedTerm] = useState('FALL');
+  const [selectedYear, setSelectedYear] = useState('2025-2026');
 
   useEffect(() => {
     if (show) {
       fetchOfferings();
-      setConflict(null);
-      setOffering1('');
-      setOffering2('');
+      resetForm();
     }
-  }, [show]);
+  }, [show, selectedTerm, selectedYear]);
+
+  const resetForm = () => {
+    setConflict(null);
+    setOffering1('');
+    setOffering2('');
+  };
 
   const fetchOfferings = async () => {
     try {
@@ -1076,6 +1126,11 @@ const OfferingConflictModal = ({ show, onHide }) => {
     return days[day - 1];
   };
 
+  // Filter offerings by term and year
+  const filteredOfferings = offerings.filter(
+    offering => offering.term === selectedTerm && offering.academic_year === selectedYear
+  );
+
   return (
     <Modal show={show} onHide={onHide}>
       <Modal.Header closeButton>
@@ -1090,25 +1145,64 @@ const OfferingConflictModal = ({ show, onHide }) => {
           </div>
         ) : (
           <Form>
+            <div className="mb-3 d-flex gap-3">
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Term</Form.Label>
+                <Form.Select
+                  value={selectedTerm}
+                  onChange={(e) => {
+                    setSelectedTerm(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="FALL">Fall</option>
+                  <option value="WINTER">Winter</option>
+                </Form.Select>
+              </Form.Group>
+
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Select
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
+                </Form.Select>
+              </Form.Group>
+            </div>
+
             <Form.Group className="mb-3">
-              <Form.Label>First Offering</Form.Label>
+              <Form.Label>First Offering ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select
                 value={offering1}
-                onChange={(e) => setOffering1(e.target.value)}
+                onChange={(e) => {
+                  setOffering1(e.target.value);
+                  setOffering2('');
+                  setConflict(null);
+                }}
               >
                 <option value="">Select an offering</option>
-                {offerings.map(renderOfferingOption)}
+                {filteredOfferings.map(renderOfferingOption)}
               </Form.Select>
             </Form.Group>
+
             <Form.Group className="mb-3">
-              <Form.Label>Second Offering</Form.Label>
+              <Form.Label>Second Offering ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select
                 value={offering2}
-                onChange={(e) => setOffering2(e.target.value)}
+                onChange={(e) => {
+                  setOffering2(e.target.value);
+                  setConflict(null);
+                }}
                 disabled={!offering1}
               >
                 <option value="">Select an offering</option>
-                {offerings
+                {filteredOfferings
                   .filter(o => o.offering_id !== offering1)
                   .map(renderOfferingOption)}
               </Form.Select>
@@ -1117,10 +1211,14 @@ const OfferingConflictModal = ({ show, onHide }) => {
         )}
         {conflict && (
           <Alert variant={conflict.has_conflict ? 'danger' : 'success'}>
-            {conflict.has_conflict ? 
-              `Time conflict detected between ${conflict.offering1} and ${conflict.offering2}` :
-              'No time conflicts detected between these offerings'
-            }
+            {conflict.has_conflict ? (
+              <>
+                Time conflict detected in {selectedTerm} {selectedYear}:<br/>
+                {conflict.offering1.course_id} conflicts with {conflict.offering2.course_id}
+              </>
+            ) : (
+              `No time conflicts detected between these offerings in ${selectedTerm} ${selectedYear}`
+            )}
           </Alert>
         )}
       </Modal.Body>
@@ -1167,14 +1265,20 @@ const ScheduleConflictModal = ({ show, onHide }) => {
   const [conflicts, setConflicts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+  const [selectedTerm, setSelectedTerm] = useState('FALL');
+  const [selectedYear, setSelectedYear] = useState('2025-2026');
 
   useEffect(() => {
     if (show) {
       fetchOfferings();
-      setConflicts([]);
-      setSelectedOfferings([]);
+      resetForm();
     }
-  }, [show]);
+  }, [show, selectedTerm, selectedYear]);
+
+  const resetForm = () => {
+    setConflicts([]);
+    setSelectedOfferings([]);
+  };
 
   const fetchOfferings = async () => {
     try {
@@ -1193,6 +1297,7 @@ const ScheduleConflictModal = ({ show, onHide }) => {
   const handleOfferingSelect = (e) => {
     const selectedOptions = Array.from(e.target.selectedOptions, option => option.value);
     setSelectedOfferings(selectedOptions);
+    setConflicts([]); // Clear conflicts when selection changes
   };
 
   const checkConflicts = async () => {
@@ -1204,7 +1309,9 @@ const ScheduleConflictModal = ({ show, onHide }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          offering_ids: selectedOfferings
+          offering_ids: selectedOfferings,
+          term: selectedTerm,
+          academic_year: selectedYear
         }),
       });
       
@@ -1224,6 +1331,11 @@ const ScheduleConflictModal = ({ show, onHide }) => {
     return days[day - 1];
   };
 
+  // Filter offerings by term and year
+  const filteredOfferings = offerings.filter(
+    offering => offering.term === selectedTerm && offering.academic_year === selectedYear
+  );
+
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
@@ -1238,15 +1350,46 @@ const ScheduleConflictModal = ({ show, onHide }) => {
           </div>
         ) : (
           <>
+            <div className="mb-3 d-flex gap-3">
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Term</Form.Label>
+                <Form.Select
+                  value={selectedTerm}
+                  onChange={(e) => {
+                    setSelectedTerm(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="FALL">Fall</option>
+                  <option value="WINTER">Winter</option>
+                </Form.Select>
+              </Form.Group>
+
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Select
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
+                </Form.Select>
+              </Form.Group>
+            </div>
+
             <Form.Group className="mb-3">
-              <Form.Label>Select Multiple Offerings</Form.Label>
+              <Form.Label>Select Multiple Offerings ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select 
                 multiple 
                 size={6}
                 value={selectedOfferings}
                 onChange={handleOfferingSelect}
               >
-                {offerings.map(offering => (
+                {filteredOfferings.map(offering => (
                   <option key={offering.offering_id} value={offering.offering_id}>
                     {offering.course_id} - {offering.section_type} {offering.section_code}
                     ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
@@ -1261,7 +1404,7 @@ const ScheduleConflictModal = ({ show, onHide }) => {
             {conflicts.length > 0 && (
               <div className="mt-3">
                 <Alert variant="danger">
-                  <Alert.Heading>Conflicts Found</Alert.Heading>
+                  <Alert.Heading>Conflicts Found in {selectedTerm} {selectedYear}</Alert.Heading>
                   <ListGroup>
                     {conflicts.map((conflict, index) => (
                       <ListGroup.Item key={index} variant="danger">
@@ -1277,7 +1420,7 @@ const ScheduleConflictModal = ({ show, onHide }) => {
 
             {conflicts.length === 0 && selectedOfferings.length > 0 && !isLoading && (
               <Alert variant="success">
-                No conflicts found in the selected offerings.
+                No conflicts found in the selected offerings for {selectedTerm} {selectedYear}.
               </Alert>
             )}
           </>
@@ -1322,9 +1465,13 @@ import { Modal, Table, Form, Row, Col } from 'react-bootstrap';
 const CourseOfferingsModal = ({ show, onHide, courseId }) => {
     const [offerings, setOfferings] = useState([]);
     const [filteredOfferings, setFilteredOfferings] = useState([]);
+    const [availableYears, setAvailableYears] = useState([]);
+
     const [filters, setFilters] = useState({
         sectionType: '',
-        sectionCode: ''
+        sectionCode: '',
+        term: '',
+        academic_year: ''
     });
     
     useEffect(() => {
@@ -1336,6 +1483,13 @@ const CourseOfferingsModal = ({ show, onHide, courseId }) => {
     useEffect(() => {
         filterOfferings();
     }, [offerings, filters]);
+    useEffect(() => {
+        // Extract unique academic years from offerings
+        if (offerings.length > 0) {
+            const years = [...new Set(offerings.map(o => o.academic_year))];
+            setAvailableYears(years.sort());
+        }
+    }, [offerings]);
     
     const fetchOfferings = async () => {
         try {
@@ -1363,6 +1517,18 @@ const CourseOfferingsModal = ({ show, onHide, courseId }) => {
                 offering.section_code.toLowerCase().includes(filters.sectionCode.toLowerCase())
             );
         }
+
+        if (filters.term) {
+            filtered = filtered.filter(offering => 
+                offering.term === filters.term
+            );
+        }
+
+        if (filters.academic_year) {
+            filtered = filtered.filter(offering => 
+                offering.academic_year === filters.academic_year
+            );
+        }
         
         setFilteredOfferings(filtered);
     };
@@ -1382,18 +1548,32 @@ const CourseOfferingsModal = ({ show, onHide, courseId }) => {
             </Modal.Header>
             <Modal.Body>
                 <Row className="mb-3">
-                    <Col md={6}>
+                <Col md={4}>
                         <Form.Group>
-                            <Form.Label>Section Type</Form.Label>
+                            <Form.Label>Term</Form.Label>
                             <Form.Select
-                                name="sectionType"
-                                value={filters.sectionType}
+                                name="term"
+                                value={filters.term}
                                 onChange={handleFilterChange}
                             >
-                                <option value="">All Types</option>
-                                <option value="LECTURE">Lecture</option>
-                                <option value="LAB">Lab</option>
-                                <option value="TUTORIAL">Tutorial</option>
+                                <option value="">All Terms</option>
+                                <option value="FALL">Fall</option>
+                                <option value="WINTER">Winter</option>
+                            </Form.Select>
+                        </Form.Group>
+                    </Col>
+                    <Col md={4}>
+                        <Form.Group>
+                            <Form.Label>Academic Year</Form.Label>
+                            <Form.Select
+                                name="academic_year"
+                                value={filters.academic_year}
+                                onChange={handleFilterChange}
+                            >
+                                <option value="">All Years</option>
+                                {availableYears.map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
                             </Form.Select>
                         </Form.Group>
                     </Col>
@@ -1418,6 +1598,8 @@ const CourseOfferingsModal = ({ show, onHide, courseId }) => {
                             <th>Type</th>
                             <th>Day</th>
                             <th>Time</th>
+                            <th>Term</th>
+                            <th>Academic Year</th>
                             <th>Capacity</th>
                             <th>Status</th>
                         </tr>
@@ -1429,8 +1611,11 @@ const CourseOfferingsModal = ({ show, onHide, courseId }) => {
                                 <td>{offering.section_type}</td>
                                 <td>{offering.day_of_week}</td>
                                 <td>{`${offering.start_time} - ${offering.end_time}`}</td>
+                                <td>{offering.term}</td>
+                                <td>{offering.academic_year}</td>
                                 <td>{`${offering.current_enrollment}/${offering.capacity}`}</td>
                                 <td>{offering.status}</td>
+
                             </tr>
                         ))}
                     </tbody>
@@ -1586,7 +1771,6 @@ export default CourseModal;
 import React, { useState, useEffect } from 'react';
 import { Container, Table, Button, Badge } from 'react-bootstrap';
 import CourseModal from './CoursesModal';
-import CourseUploadModal from './CourseUploadModal';
 import Papa from 'papaparse';
 import CourseOfferingsModal from './CourseOfferingModal';
 
@@ -1595,7 +1779,6 @@ const CoursesPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [error, setError] = useState(null);
-  const [showUploadModal, setShowUploadModal] = useState(false);
   const [showOfferingsModal, setShowOfferingsModal] = useState(false);
   const [selectedCourseId, setSelectedCourseId] = useState(null);
   const fetchCourses = async () => {
@@ -1612,36 +1795,26 @@ const CoursesPage = () => {
     fetchCourses();
   }, []);
 
-    const handleExportCSV = () => {
-      const csvData = courses.map(course => ({
-          course_id: course.course_id,
-          course_name: course.course_name,
-          credits: course.credits
-      }));
-      
-      const csv = Papa.unparse(csvData);
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `courses-${new Date().toISOString().split('T')[0]}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-  }
-
   const handleDelete = async (courseId) => {
-    try {
-      const response = await fetch(`http://127.0.0.1:5000/api/courses/${courseId}`, {
-        method: 'DELETE'
-      });
-      if (response.ok) {
-        fetchCourses();
+    if (window.confirm(`Are you sure you want to delete course ${courseId}?`)) {
+      try {
+        const response = await fetch(`http://127.0.0.1:5000/api/courses/${courseId}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          fetchCourses();
+          alert('Course deleted successfully');
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to delete course');
+        }
+      } catch (error) {
+        setError(`Error deleting course: ${error.message}`);
+        alert(`Error deleting course: ${error.message}`);
       }
-    } catch (error) {
-      setError('Error deleting course');
     }
   };
+  
 
   const handleEdit = (course) => {
     setSelectedCourse(course);
@@ -1652,12 +1825,6 @@ const CoursesPage = () => {
     <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1>Courses</h1>
-       {/*  <Button variant="outline-primary" className="me-2" onClick={() => setShowUploadModal(true)}>
-      Upload CSV
-    </Button>
-    <Button variant="success" className="me-2" onClick={handleExportCSV}>
-            Export CSV
-        </Button> */}
         <Button variant="primary" onClick={() => setShowModal(true)}>
           Add Course
         </Button>
@@ -1723,11 +1890,6 @@ const CoursesPage = () => {
         onSave={fetchCourses}
       />
 
-    <CourseUploadModal
-    show={showUploadModal}
-    onHide={() => setShowUploadModal(false)}
-    onSave={fetchCourses}
-    />
 
 
 <CourseOfferingsModal
@@ -1743,120 +1905,301 @@ export default CoursesPage;
 
 
 
-=== frontend/app/src/components/courses/CourseUploadModal.jsx ===
-import React, { useState } from 'react';
-import { Modal, Button, Table, Alert } from 'react-bootstrap';
-import Papa from 'papaparse';
+=== frontend/app/src/components/help/HelpPage.jsx ===
+import React from 'react';
+import { Container, Accordion, Card, Alert, Table } from 'react-bootstrap';
 
-const CourseUploadModal = ({ show, onHide, onSave }) => {
-  const [parsedData, setParsedData] = useState([]);
-  const [error, setError] = useState(null);
 
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          if (results.errors.length > 0) {
-            setError('Error parsing CSV file');
-            return;
-          }
-          setParsedData(results.data);
-          setError(null);
-        }
-      });
-    }
-  };
-
-  const handleSave = async () => {
-    try {
-      const response = await fetch('http://127.0.0.1:5000/api/courses/bulk', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ courses: parsedData })
-      });
-
-      if (response.ok) {
-        onSave();
-        onHide();
-      } else {
-        const error = await response.json();
-        setError(error.message || 'Error uploading courses');
-      }
-    } catch (error) {
-      setError('Error uploading courses');
-    }
-  };
-
+const HelpPage = () => {
   return (
-    <Modal show={show} onHide={onHide} size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>Upload Courses CSV</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <div className="mb-3">
-          <input
-            type="file"
-            accept=".csv"
-            onChange={handleFileUpload}
-            className="form-control"
-          />
-        </div>
+    <Container className="py-4">
+      <h1 className="mb-4">Help & Documentation</h1>
+      
+      <Alert variant="info" className="mb-4">
+        <Alert.Heading>Course Management System</Alert.Heading>
+        <p>
+          This system helps manage course information, schedules, and program data for academic planning.
+          If you need additional assistance, please contact the system administrator.
+        </p>
+      </Alert>
+      
+      <Accordion defaultActiveKey="0" className="mb-4">
+      <Accordion.Item eventKey="7">
+  <Accordion.Header>Schedule Generation Guide</Accordion.Header>
+  <Accordion.Body>
+    <h5>Complete Workflow for Schedule Generation</h5>
+    <p>Follow these steps to set up and generate schedules for your academic blocks:</p>
+    
+    <div className="border-start border-4 border-primary ps-3 mb-4">
+      <h6 className="fw-bold">Step 1: Upload Course Offerings</h6>
+      <ol>
+        <li>Navigate to the <strong>Course Offerings</strong> page</li>
+        <li>Click the <strong>Upload CSV</strong> button</li>
+        <li>Prepare a CSV file with the following columns:
+          <ul>
+            <li>course_id - The course identifier</li>
+            <li>section_type - LECTURE, LAB, or TUTORIAL</li>
+            <li>section_code - Section identifier (A, B, C, etc.)</li>
+            <li>day_of_week - Day of the week (1-5, where 1=Monday)</li>
+            <li>start_time - Start time in HH:MM format</li>
+            <li>end_time - End time in HH:MM format</li>
+            <li>capacity - Maximum enrollment</li>
+            <li>term - FALL or WINTER</li>
+            <li>academic_year - In YYYY-YYYY format (e.g., 2025-2026)</li>
+            <li>status - OPEN, FULL, or CANCELLED</li>
+          </ul>
+        </li>
+        <li>Select your CSV file and click <strong>Save Offerings</strong></li>
+        <li>Verify that your offerings appear in the table</li>
+      </ol>
+    </div>
+    
+    <div className="border-start border-4 border-success ps-3 mb-4">
+      <h6 className="fw-bold">Step 2: Create Programs and Requirements</h6>
+      <ol>
+        <li>Navigate to the <strong>Programs</strong> page</li>
+        <li>Click <strong>Create New Program</strong> and fill in:
+          <ul>
+            <li>Program ID - Unique identifier</li>
+            <li>Program Name - Descriptive name</li>
+            <li>Academic Year - The year this program applies to</li>
+            <li>Block Configuration - Number of 10-student and 20-student blocks (blocks will be automatically generated)</li>
+          </ul>
+        </li>
+        <li>Click <strong>Save</strong> to create the program</li>
+        <li>For the newly created program, click the <strong>Requirements</strong> button</li>
+        <li>Add each required course for the program:
+          <ul>
+            <li>Select a course from the dropdown menu</li>
+            <li>Click <strong>Add Requirement</strong></li>
+            <li>Repeat for all required courses</li>
+          </ul>
+        </li>
+      </ol>
+    </div>
+    
+    <div className="border-start border-4 border-danger ps-3 mb-4">
+      <h6 className="fw-bold">Step 3: Generate Schedules</h6>
+      <ol>
+        <li>Navigate to the <strong>Schedule</strong> page</li>
+        <li>Select the appropriate Academic Year</li>
+        <li>Choose either the Fall or Winter tab</li>
+        <li>For individual block schedule generation:
+          <ul>
+            <li>Find the block you want to generate a schedule for</li>
+            <li>Click the <strong>Generate</strong> button for that block</li>
+            <li>Wait for the system to create an optimized schedule</li>
+            <li>The schedule rating will appear (higher is better)</li>
+          </ul>
+        </li>
+        <li>For bulk schedule generation:
+          <ul>
+            <li>Check the boxes next to multiple blocks</li>
+            <li>Click the <strong>Bulk Generate</strong> button at the bottom</li>
+            <li>Wait for all schedules to be generated</li>
+          </ul>
+        </li>
+        <li>To view a generated schedule, click the <strong>View</strong> button</li>
+        <li>To manually edit a schedule, click the <strong>Edit</strong> button</li>
+      </ol>
+    </div>
+    
+    <div className="border-start border-4 border-info ps-3 mb-4">
+  <h6 className="fw-bold">Step 5: Validate and Finalize Schedules</h6>
+  <ol>
+    <li>For each generated schedule, click the <strong>Validate</strong> button</li>
+    <li>The system will check if all program requirements are met</li>
+    <li>If validation fails, you'll see which courses are missing</li>
+    <li>Edit the schedule manually to add missing requirements:
+      <ul>
+        <li>Click <strong>Edit</strong> on the block</li>
+        <li>Add the missing course offerings</li>
+        <li>Validate again until all requirements are met</li>
+      </ul>
+    </li>
+    <li>Once satisfied with all schedules, you can:
+      <ul>
+        <li>View the complete schedule for any block</li>
+        <li>Export schedules for distribution</li>
+      </ul>
+    </li>
+  </ol>
+</div>
 
-        {error && (
-          <Alert variant="danger" className="mb-3">
-            {error}
-          </Alert>
-        )}
+<div className="alert alert-secondary">
+  <h6 className="fw-bold">Tips for Successful Schedule Generation</h6>
+  <ul>
+    <li>Ensure all required courses have offerings in the correct term</li>
+    <li>Check for time conflicts using the Conflicts page before generating</li>
+    <li>Higher schedule ratings (80+) indicate better schedules with fewer gaps</li>
+    <li>If generation fails, try adding offerings manually or adjust course offerings</li>
+    <li>For complex programs, generate schedules for smaller blocks first</li>
+    <li>Use bulk generation for multiple blocks of the same program to ensure consistency</li>
+    <li>Always validate schedules after generation to ensure all requirements are met</li>
+    <li>Consider time of day when scheduling - avoid early morning or late evening classes when possible</li>
+    <li>Balance the schedule across the week rather than concentrating classes on specific days</li>
+    <li>If a schedule has a low rating, try clearing it and regenerating several times</li>
+    <li>Export your final schedules as CSV files for backup before publishing</li>
+    <li>Lock blocks once schedules are finalized to prevent accidental changes</li>
+    <li>For best results, ensure you have at least 2-3 offering options for each required course</li>
+    <li>When manually editing schedules, check for conflicts after each addition</li>
+  </ul>
+</div>
 
-        {parsedData.length > 0 && (
-          <Table striped bordered hover>
-            <thead>
-              <tr>
-                <th>Course ID</th>
-                <th>Course Name</th>
-                <th>Credits</th>
-              </tr>
-            </thead>
-            <tbody>
-              {parsedData.map((course, index) => (
-                <tr key={index}>
-                  <td>{course.course_id}</td>
-                  <td>{course.course_name}</td>
-                  <td>{course.credits}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onHide}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          onClick={handleSave}
-          disabled={parsedData.length === 0}
-        >
-          Save Courses
-        </Button>
-      </Modal.Footer>
-    </Modal>
+  </Accordion.Body>
+</Accordion.Item>
+        <Accordion.Item eventKey="0">
+          <Accordion.Header>Getting Started</Accordion.Header>
+          <Accordion.Body>
+            <p>The Course Management System helps you manage various aspects of academic planning:</p>
+            <ul>
+              <li><strong>Courses</strong> - Manage course information and basic details</li>
+              <li><strong>Course Offerings</strong> - Handle course sections, schedules, and enrollment capacities</li>
+              <li><strong>Programs</strong> - Manage programs, requirements, and student allocations</li>
+              <li><strong>Blocks</strong> - Manage blocks and their schedules</li>
+              <li><strong>Conflicts</strong> - Detect conflicts between courses/schedules</li>
+              <li><strong>Schedule</strong> - View and manage block schedules</li>
+            </ul>
+          </Accordion.Body>
+        </Accordion.Item>
+        
+        <Accordion.Item eventKey="1">
+          <Accordion.Header>Courses</Accordion.Header>
+          <Accordion.Body>
+            <h5>Course Management</h5>
+            <p>The Courses section allows you to:</p>
+            <ul>
+              <li>View all courses in the system</li>
+              <li>Add new courses with course ID, name, and credits</li>
+              <li>Edit existing course details</li>
+              <li>Delete courses from the system</li>
+              <li>View course offerings for each course</li>
+            </ul>
+          </Accordion.Body>
+        </Accordion.Item>
+        
+        <Accordion.Item eventKey="2">
+          <Accordion.Header>Course Offerings</Accordion.Header>
+          <Accordion.Body>
+            <h5>Managing Course Offerings</h5>
+            <p>Course offerings represent specific sections of courses for a term:</p>
+            <ul>
+              <li>Create offerings for lectures, labs, and tutorials</li>
+              <li>Set schedule details (day, time)</li>
+              <li>Set capacity and enrollment information</li>
+              <li>Specify term and academic year</li>
+              <li>Import/export offerings via CSV</li>
+            </ul>
+          </Accordion.Body>
+        </Accordion.Item>
+        
+        <Accordion.Item eventKey="3">
+          <Accordion.Header>Programs</Accordion.Header>
+          <Accordion.Body>
+            <h5>Program Management</h5>
+            <p>The Programs section allows you to:</p>
+            <ul>
+              <li>Create and manage academic programs</li>
+              <li>Set enrollment numbers</li>
+              <li>Configure block distribution</li>
+              <li>Define program requirements</li>
+            </ul>
+          </Accordion.Body>
+        </Accordion.Item>
+        
+        <Accordion.Item eventKey="4">
+          <Accordion.Header>Blocks</Accordion.Header>
+          <Accordion.Body>
+            <h5>Block Management</h5>
+            <p>Blocks organize students and course schedules:</p>
+            <ul>
+              <li>Create blocks for specific programs</li>
+              <li>Configure block size (10 or 20 students)</li>
+              <li>Assign term and academic year</li>
+              <li>View and manage block schedules</li>
+            </ul>
+          </Accordion.Body>
+        </Accordion.Item>
+        
+        <Accordion.Item eventKey="5">
+          <Accordion.Header>Conflicts</Accordion.Header>
+          <Accordion.Body>
+            <h5>Conflict Detection</h5>
+            <p>The system provides three types of conflict checks:</p>
+            <ul>
+              <li><strong>Offering Conflicts</strong> - Check time conflicts between two specific offerings</li>
+              <li><strong>Schedule Conflicts</strong> - Check conflicts in a set of offerings</li>
+              <li><strong>Course Conflicts</strong> - Check if a new course conflicts with existing schedule</li>
+            </ul>
+          </Accordion.Body>
+        </Accordion.Item>
+        
+        <Accordion.Item eventKey="6">
+          <Accordion.Header>Schedule</Accordion.Header>
+          <Accordion.Body>
+            <h5>Block Scheduling</h5>
+            <p>The Schedule section allows you to:</p>
+            <ul>
+              <li>View block schedules for Fall and Winter terms</li>
+              <li>Manually edit block schedules</li>
+              <li>Generate optimized schedules automatically</li>
+              <li>Validate schedules against program requirements</li>
+              <li>Perform bulk operations on multiple blocks</li>
+            </ul>
+          </Accordion.Body>
+        </Accordion.Item>
+      </Accordion>
+      
+      <Card className="mb-4">
+        <Card.Header as="h5">Frequently Asked Questions</Card.Header>
+        <Card.Body>
+          <Accordion>
+            <Accordion.Item eventKey="0">
+              <Accordion.Header>How do I create a new course?</Accordion.Header>
+              <Accordion.Body>
+                Navigate to the Courses page and click the "Add Course" button. Fill in the required information and click Save.
+              </Accordion.Body>
+            </Accordion.Item>
+            
+            <Accordion.Item eventKey="1">
+              <Accordion.Header>How do I generate a schedule for a block?</Accordion.Header>
+              <Accordion.Body>
+                Go to the Schedule page, find the block you want to generate a schedule for, and click the "Generate" button.
+              </Accordion.Body>
+            </Accordion.Item>
+            
+            <Accordion.Item eventKey="2">
+              <Accordion.Header>What does the validation check do?</Accordion.Header>
+              <Accordion.Body>
+                The validation check ensures that a block's schedule includes all the required courses for the associated program.
+              </Accordion.Body>
+            </Accordion.Item>
+          </Accordion>
+        </Card.Body>
+      </Card>
+      
+      <Card className="mb-4">
+        <Card.Header as="h5">Contact Support</Card.Header>
+        <Card.Body>
+          <p>If you need additional help or have questions about the system, please contact:</p>
+          <ul>
+            <li><strong>System Administrator:</strong> Lucas Whitaker</li>
+            <li><strong>Email:</strong> support@carleton.ca</li>
+          </ul>
+        </Card.Body>
+      </Card>
+    </Container>
   );
 };
 
-export default CourseUploadModal;
+export default HelpPage;
 
 
 
 === frontend/app/src/components/offerings/OfferingModal.jsx ===
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
+import { Modal, Form, Button, Row, Col, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { InfoCircle } from 'react-bootstrap-icons';
 
 const OfferingModal = ({ show, offering, onHide, onSave }) => {
   const initialFormData = {
@@ -1931,105 +2274,119 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
     setValidated(true);
   };
 
+  // Helper function to create tooltips
+  const renderTooltip = (text) => (
+    <OverlayTrigger
+      placement="right"
+      overlay={<Tooltip>{text}</Tooltip>}
+    >
+      <InfoCircle className="ms-2" />
+    </OverlayTrigger>
+  );
+
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
-        <Modal.Title>
-          {offering ? 'Edit Course Offering' : 'Add Course Offering'}
-        </Modal.Title>
+        <Modal.Title>{offering ? 'Edit Course Offering' : 'Add Course Offering'}</Modal.Title>
       </Modal.Header>
-      <Form noValidate validated={validated} onSubmit={handleSubmit}>
-        <Modal.Body>
-          <Row>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Course</Form.Label>
-                <Form.Select
-                  name="course_id"
-                  value={formData.course_id}
-                  onChange={handleChange}
-                  required
-                  disabled={offering}
-                >
-                  <option value="">Select a course...</option>
-                  {courses.map(course => (
-                    <option key={course.course_id} value={course.course_id}>
-                      {course.course_id} - {course.course_name}
-                    </option>
-                  ))}
-                </Form.Select>
-                <Form.Control.Feedback type="invalid">
-                  Please select a course.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Section Type</Form.Label>
-                <Form.Select
-                  name="section_type"
-                  value={formData.section_type}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="LECTURE">Lecture</option>
-                  <option value="LAB">Lab</option>
-                  <option value="TUTORIAL">Tutorial</option>
-                </Form.Select>
-              </Form.Group>
-            </Col>
-          </Row>
-          <Row>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Section Code</Form.Label>
-                <Form.Select
-                  name="section_code"
-                  value={formData.section_code}
-                  onChange={handleChange}
-                  required
-                  disabled={!formData.course_id}
-                >
-                  <option value="">Select a section code...</option>
-                  {['A', 'B', 'C', 'D', 'E', 'F'].map(code => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </Form.Select>
-                <Form.Control.Feedback type="invalid">
-                  Please select a section code.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Day</Form.Label>
-                <Form.Select
-                  name="day_of_week"
-                  value={formData.day_of_week}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="1">Monday</option>
-                  <option value="2">Tuesday</option>
-                  <option value="3">Wednesday</option>
-                  <option value="4">Thursday</option>
-                  <option value="5">Friday</option>
-                </Form.Select>
-              </Form.Group>
-            </Col>
-          </Row>
+      <Modal.Body>
+        <Form noValidate validated={validated} onSubmit={handleSubmit}>
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Course
+              {renderTooltip("Select the course for which you're creating an offering")}
+            </Form.Label>
+            <Form.Select 
+              name="course_id" 
+              value={formData.course_id} 
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select a course...</option>
+              {courses.map(course => (
+                <option key={course.course_id} value={course.course_id}>
+                  {course.course_id} - {course.course_name}
+                </option>
+              ))}
+            </Form.Select>
+            <Form.Control.Feedback type="invalid">
+              Please select a course.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Section Type
+              {renderTooltip("Specify whether this is a lecture, lab, or tutorial component")}
+            </Form.Label>
+            <Form.Select 
+              name="section_type" 
+              value={formData.section_type} 
+              onChange={handleChange}
+              required
+            >
+              <option value="LECTURE">Lecture</option>
+              <option value="LAB">Lab</option>
+              <option value="TUTORIAL">Tutorial</option>
+            </Form.Select>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Section Code
+              {renderTooltip("A unique letter (A-F) to identify different sections of the same course")}
+            </Form.Label>
+            <Form.Select 
+              name="section_code" 
+              value={formData.section_code} 
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select a section code...</option>
+              {['A', 'B', 'C', 'D', 'E', 'F'].map(code => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </Form.Select>
+            <Form.Control.Feedback type="invalid">
+              Please select a section code.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Day
+              {renderTooltip("The day of the week when this section meets")}
+            </Form.Label>
+            <Form.Select 
+              name="day_of_week" 
+              value={formData.day_of_week} 
+              onChange={handleChange}
+              required
+            >
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+            </Form.Select>
+          </Form.Group>
 
           <Row>
-            <Col md={6}>
+            <Col>
               <Form.Group className="mb-3">
-                <Form.Label>Start Time (HH:MM)</Form.Label>
+                <Form.Label>
+                  Start Time (HH:MM)
+                  {renderTooltip("Enter the start time in 24-hour format (e.g., 14:30 for 2:30 PM)")}
+                </Form.Label>
                 <Form.Control
-                  type="time"
+                  type="text"
                   name="start_time"
                   value={formData.start_time}
                   onChange={handleChange}
+                  placeholder="HH:MM"
+                  pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
                   required
                 />
                 <Form.Control.Feedback type="invalid">
@@ -2037,14 +2394,19 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
-            <Col md={6}>
+            <Col>
               <Form.Group className="mb-3">
-                <Form.Label>End Time (HH:MM)</Form.Label>
+                <Form.Label>
+                  End Time (HH:MM)
+                  {renderTooltip("Enter the end time in 24-hour format (e.g., 16:00 for 4:00 PM)")}
+                </Form.Label>
                 <Form.Control
-                  type="time"
+                  type="text"
                   name="end_time"
                   value={formData.end_time}
                   onChange={handleChange}
+                  placeholder="HH:MM"
+                  pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
                   required
                 />
                 <Form.Control.Feedback type="invalid">
@@ -2054,84 +2416,92 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
             </Col>
           </Row>
 
-          <Row>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Capacity</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="capacity"
-                  value={formData.capacity}
-                  onChange={handleChange}
-                  required
-                  min="1"
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a valid capacity.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Term</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="term"
-                  value={formData.term}
-                  onChange={handleChange}
-                  required
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a term.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Academic Year</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="academic_year"
-                  value={formData.academic_year}
-                  onChange={handleChange}
-                  required
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide an academic year.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-          </Row>
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Capacity
+              {renderTooltip("Maximum number of students that can enroll in this section")}
+            </Form.Label>
+            <Form.Control
+              type="number"
+              name="capacity"
+              value={formData.capacity}
+              onChange={handleChange}
+              min="1"
+              required
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a valid capacity.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Term
+              {renderTooltip("The academic term when this course is offered")}
+            </Form.Label>
+            <Form.Select 
+              name="term" 
+              value={formData.term} 
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select a term</option>
+              <option value="Fall">Fall</option>
+              <option value="Winter">Winter</option>
+            </Form.Select>
+            <Form.Control.Feedback type="invalid">
+              Please select a term.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Academic Year
+              {renderTooltip("Enter in YYYY-YYYY format (e.g., 2025-2026)")}
+            </Form.Label>
+            <Form.Control
+              type="text"
+              name="academic_year"
+              value={formData.academic_year}
+              onChange={handleChange}
+              placeholder="YYYY-YYYY"
+              pattern="^\d{4}-\d{4}$"
+              required
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a valid academic year (YYYY-YYYY).
+            </Form.Control.Feedback>
+          </Form.Group>
 
           {offering && (
-            <Row>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Status</Form.Label>
-                  <Form.Select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleChange}
-                    required
-                  >
-                    <option value="OPEN">Open</option>
-                    <option value="FULL">Full</option>
-                    <option value="CANCELLED">Cancelled</option>
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-            </Row>
+            <Form.Group className="mb-3">
+              <Form.Label>
+                Status
+                {renderTooltip("Current enrollment status of this section")}
+              </Form.Label>
+              <Form.Select 
+                name="status" 
+                value={formData.status} 
+                onChange={handleChange}
+                required
+              >
+                <option value="OPEN">Open</option>
+                <option value="FULL">Full</option>
+                <option value="CANCELLED">Cancelled</option>
+              </Form.Select>
+            </Form.Group>
           )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={onHide}>
-            Cancel
-          </Button>
-          <Button variant="primary" type="submit">
-            Save
-          </Button>
-        </Modal.Footer>
-      </Form>
+
+          <div className="d-flex justify-content-end gap-2">
+            <Button variant="secondary" onClick={onHide}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit">
+              Save
+            </Button>
+          </div>
+        </Form>
+      </Modal.Body>
     </Modal>
   );
 };
@@ -2158,7 +2528,12 @@ const OfferingsPage = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const fetchOfferings = async () => {
     try {
-      const response = await fetch(`${API_URL}/offerings/`);
+      // Add default term and year to the request
+      const params = new URLSearchParams({
+        term: '',  // Default term
+        academic_year: ''  // Default year
+      });
+      const response = await fetch(`${API_URL}/offerings?${params}`);
       const data = await response.json();
       setOfferings(data);
     } catch (error) {
@@ -2166,7 +2541,7 @@ const OfferingsPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+};
 
   useEffect(() => {
     fetchOfferings();
@@ -2305,8 +2680,8 @@ export default OfferingsPage;
 
 
 === frontend/app/src/components/offerings/OfferingsTable.jsx ===
-import React from 'react';
-import { Table, Button } from 'react-bootstrap';
+import React, { useState } from 'react';
+import { Table, Button, Form, Card, Collapse, Row, Col } from 'react-bootstrap';
 
 const getDayName = (day) => {
   const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -2314,59 +2689,172 @@ const getDayName = (day) => {
 };
 
 const OfferingsTable = ({ offerings = [], onEdit, onDelete }) => {
+  const [filters, setFilters] = useState({
+    course_id: '',
+    section_type: '',
+    section_code: '',
+    day_of_week: '',
+    capacity: '',
+    current_enrollment: '',
+    term: '',
+    academic_year: '2025-2026',
+    status: ''
+  });
+  const [showFilters, setShowFilters] = useState(false);
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
   if (!offerings) {
     return <div>No offerings available</div>;
   }
 
+  const filteredOfferings = offerings.filter(offering => {
+    return Object.entries(filters).every(([key, value]) => {
+      if (!value) return true;
+      if (key === 'day_of_week') {
+        return offering[key] === parseInt(value);
+      }
+      return offering[key].toString().toLowerCase().includes(value.toLowerCase());
+    });
+  });
+
   return (
-    <Table striped bordered hover responsive>
-      <thead>
-        <tr>
-          <th>Course ID</th>
-          <th>Section Type</th>
-          <th>Section Code</th>
-          <th>Day</th>
-          <th>Time</th>
-          <th>Capacity</th>
-          <th>Enrollment</th>
-          <th>Term</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {offerings.map((offering) => (
-          <tr key={offering.offering_id}>
-            <td>{offering.course_id}</td>
-            <td>{offering.section_type}</td>
-            <td>{offering.section_code}</td>
-            <td>{getDayName(offering.day_of_week)}</td>
-            <td>{`${offering.start_time}-${offering.end_time}`}</td>
-            <td>{offering.capacity}</td>
-            <td>{offering.current_enrollment}</td>
-            <td>{`${offering.term} ${offering.academic_year}`}</td>
-            <td>{offering.status}</td>
-            <td>
-              <Button
-                variant="primary"
-                size="sm"
-                className="me-2"
-                onClick={() => onEdit(offering)}
-              >
-                Edit
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => onDelete(offering.offering_id)}
-              >
-                Delete
-              </Button>
-            </td>
+    <>
+      <Button
+        onClick={() => setShowFilters(!showFilters)}
+        aria-controls="filter-collapse"
+        aria-expanded={showFilters}
+        className="mb-3"
+      >
+        {showFilters ? 'Hide Filters' : 'Show Filters'}
+      </Button>
+      <Collapse in={showFilters}>
+        <div id="filter-collapse">
+          <Card className="mb-3">
+            <Card.Body>
+              <Row>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Course ID</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={filters.course_id}
+                      onChange={(e) => handleFilterChange('course_id', e.target.value)}
+                      placeholder="Filter by course ID"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label>Section Type</Form.Label>
+                    <Form.Select
+                      value={filters.section_type}
+                      onChange={(e) => handleFilterChange('section_type', e.target.value)}
+                    >
+                      <option value="">All Types</option>
+                      <option value="LECTURE">Lecture</option>
+                      <option value="LAB">Lab</option>
+                      <option value="TUTORIAL">Tutorial</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label>Section Code</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={filters.section_code}
+                      onChange={(e) => handleFilterChange('section_code', e.target.value)}
+                      placeholder="Filter by section"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label>Day</Form.Label>
+                    <Form.Select
+                      value={filters.day_of_week}
+                      onChange={(e) => handleFilterChange('day_of_week', e.target.value)}
+                    >
+                      <option value="">All Days</option>
+                      {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'].map((day, index) => (
+                        <option key={day} value={index + 2}>{day}</option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label>Term</Form.Label>
+                    <Form.Select
+                      value={filters.term}
+                      onChange={(e) => handleFilterChange('term', e.target.value)}
+                    >
+                      <option value="">All Terms</option>
+                      <option value="FALL">Fall</option>
+                      <option value="WINTER">Winter</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+            </Card.Body>
+          </Card>
+        </div>
+      </Collapse>
+
+      <Table striped bordered hover responsive>
+        <thead>
+          <tr>
+            <th>Course ID</th>
+            <th>Section Type</th>
+            <th>Section Code</th>
+            <th>Day</th>
+            <th>Time</th>
+            <th>Capacity</th>
+            <th>Enrollment</th>
+            <th>Term</th>
+            <th>Academic Year</th>
+            <th>Status</th>
+            <th>Actions</th>
           </tr>
-        ))}
-      </tbody>
-    </Table>
+        </thead>
+        <tbody>
+          {filteredOfferings.map((offering) => (
+            <tr key={offering.offering_id}>
+              <td>{offering.course_id}</td>
+              <td>{offering.section_type}</td>
+              <td>{offering.section_code}</td>
+              <td>{getDayName(offering.day_of_week)}</td>
+              <td>{`${offering.start_time}-${offering.end_time}`}</td>
+              <td>{offering.capacity}</td>
+              <td>{offering.current_enrollment}</td>
+              <td>{offering.term}</td>
+              <td>{offering.academic_year}</td>
+              <td>{offering.status}</td>
+              <td>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="me-2"
+                  onClick={() => onEdit(offering)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => onDelete(offering.offering_id)}
+                >
+                  Delete
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </>
   );
 };
 
@@ -2394,14 +2882,39 @@ const OfferingUploadModal = ({ show, onHide, onSave }) => {
             setError('Error parsing CSV file');
             return;
           }
+
+          // Validate and format the data
+          const validData = results.data.filter(row => {
+            // Validate term
+            if (!row.term || !['FALL', 'WINTER'].includes(row.term.toUpperCase())) {
+              setError(`Invalid term "${row.term}" found. Must be FALL or WINTER`);
+              return false;
+            }
+
+            // Validate academic year format
+            if (!row.academic_year || !/^\d{4}-\d{4}$/.test(row.academic_year)) {
+              setError(`Invalid academic year format "${row.academic_year}". Must be YYYY-YYYY`);
+              return false;
+            }
+
+            return true;
+          });
+
+          if (validData.length === 0) {
+            return;
+          }
+
           // Convert string values to appropriate types
-          const formattedData = results.data.map(row => ({
+          const formattedData = validData.map(row => ({
             ...row,
             offering_id: parseInt(row.offering_id),
             day_of_week: parseInt(row.day_of_week),
             capacity: parseInt(row.capacity),
-            current_enrollment: parseInt(row.current_enrollment)
+            current_enrollment: parseInt(row.current_enrollment),
+            term: row.term.toUpperCase(),
+            academic_year: row.academic_year || '2025-2026'
           }));
+
           setParsedData(formattedData);
           setError(null);
         }
@@ -2449,6 +2962,9 @@ const OfferingUploadModal = ({ show, onHide, onSave }) => {
             onChange={handleFileUpload}
             className="form-control"
           />
+          <small className="text-muted">
+            Note: Term must be FALL or WINTER, Academic Year format: YYYY-YYYY
+          </small>
         </div>
 
         {error && (
@@ -2512,6 +3028,124 @@ export default OfferingUploadModal;
 
 
 
+=== frontend/app/src/components/programs/ExportPrograms.jsx ===
+// frontend/app/src/components/programs/ExportPrograms.jsx
+import React, { useState } from 'react';
+import { Button, Spinner } from 'react-bootstrap';
+import Papa from 'papaparse';
+
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const ExportPrograms = ({ programs, academicYear, isLoading }) => {
+  const [isExporting, setIsExporting] = useState(false);
+
+  const fetchRequirementsForProgram = async (programId) => {
+    try {
+      const response = await fetch(`${API_URL}/requirements/program/${programId}`);
+      if (response.ok) {
+        return await response.json();
+      }
+      return [];
+    } catch (error) {
+      console.error(`Error fetching requirements for program ${programId}:`, error);
+      return [];
+    }
+  };
+
+  const exportToCSV = async () => {
+    if (programs.length === 0) {
+      alert('No programs to export');
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      // First, create the basic program data
+      const programData = programs.map(program => ({
+        program_id: program.program_id,
+        program_name: program.program_name,
+        total_enrollment: program.total_enrollment || 0,
+        blocks_20_count_fall: program.blocks_20_count_fall || 0,
+        blocks_10_count_fall: program.blocks_10_count_fall || 0,
+        blocks_20_count_winter: program.blocks_20_count_winter || 0,
+        blocks_10_count_winter: program.blocks_10_count_winter || 0,
+        academic_year: program.academic_year,
+        requirements: [] // Will be filled with requirements data
+      }));
+
+      // Fetch requirements for each program
+      for (let i = 0; i < programData.length; i++) {
+        const requirements = await fetchRequirementsForProgram(programData[i].program_id);
+        programData[i].requirements = requirements.map(req => req.course_id).join(', ');
+      }
+
+      // Convert to CSV using Papa Parse
+      const csv = Papa.unparse({
+        fields: [
+          'Program ID', 
+          'Program Name', 
+          'Total Enrollment', 
+          '20-Student Blocks (Fall)', 
+          '10-Student Blocks (Fall)',
+          '20-Student Blocks (Winter)',
+          '10-Student Blocks (Winter)',
+          'Academic Year',
+          'Required Courses'
+        ],
+        data: programData.map(program => [
+          program.program_id,
+          program.program_name,
+          program.total_enrollment,
+          program.blocks_20_count_fall,
+          program.blocks_10_count_fall,
+          program.blocks_20_count_winter,
+          program.blocks_10_count_winter,
+          program.academic_year,
+          program.requirements
+        ])
+      });
+      
+      // Create a download link and trigger the download
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `programs_with_requirements_${academicYear}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error exporting programs with requirements:', error);
+      alert('Error exporting programs. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <Button 
+      variant="success" 
+      onClick={exportToCSV}
+      disabled={isLoading || isExporting}
+    >
+      {isExporting ? (
+        <>
+          <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" className="me-2" />
+          Exporting...
+        </>
+      ) : (
+        'Export CSV'
+      )}
+    </Button>
+  );
+};
+
+export default ExportPrograms;
+
+
+
 === frontend/app/src/components/programs/ProgramRequirementsModal.jsx ===
 import React, { useEffect, useState } from 'react';
 import { Modal, Form, Button, Table, Row, Col } from 'react-bootstrap';
@@ -2538,6 +3172,32 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
         }
     };
 
+    const handleAddRequirement = async (e) => {
+        e.preventDefault();
+        try {
+            const response = await fetch('http://127.0.0.1:5000/api/requirements', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    program_id: programId,
+                    course_id: newRequirement.course_id
+                }),
+            });
+    
+            if (response.ok) {
+                await fetchRequirements();
+                setNewRequirement({ course_id: '' });
+            } else {
+                const error = await response.json();
+                alert(error.error || 'Error adding requirement');
+            }
+        } catch (error) {
+            console.error('Error adding requirement:', error);
+        }
+    };
+
     const fetchCourses = async () => {
         try {
             const response = await fetch('http://127.0.0.1:5000/api/courses');
@@ -2557,40 +3217,12 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
         }
     }, [show, programId]);
 
-    const handleAddRequirement = async (e) => {
-        e.preventDefault();
-        try {
-            const response = await fetch('http://127.0.0.1:5000/api/requirements', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    program_id: programId,
-                    ...newRequirement,
-                }),
-            });
-
-            if (response.ok) {
-                await fetchRequirements();
-                setNewRequirement({ course_id: '' });
-            } else {
-                const error = await response.json();
-                alert(error.error || 'Error adding requirement');
-            }
-        } catch (error) {
-            console.error('Error adding requirement:', error);
-        }
-    };
-
     const handleDeleteRequirement = async (requirementId) => {
         if (window.confirm('Are you sure you want to delete this requirement?')) {
             try {
                 const response = await fetch(
                     `http://127.0.0.1:5000/api/requirements/${requirementId}`,
-                    {
-                        method: 'DELETE'
-                    }
+                    { method: 'DELETE' }
                 );
                 if (response.ok) {
                     await fetchRequirements();
@@ -2619,35 +3251,29 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
             </Modal.Header>
             <Modal.Body>
                 <Form onSubmit={handleAddRequirement} className="mb-4">
-                    <Row>
-                        <Col md={9}>
-                            <Form.Group className="mb-3">
-                                <Form.Label>Course</Form.Label>
-                                <Form.Select
-                                    value={newRequirement.course_id}
-                                    onChange={(e) => setNewRequirement({
-                                        course_id: e.target.value
-                                    })}
-                                    required
-                                >
-                                    <option value="">Select a course...</option>
-                                    {courses.map(course => (
-                                        <option key={course.course_id} value={course.course_id}>
-                                            {course.course_id} - {course.course_name}
-                                        </option>
-                                    ))}
-                                </Form.Select>
-                            </Form.Group>
-                        </Col>
-                        <Col md={3} className="d-flex align-items-end">
-                            <Button type="submit" variant="primary" className="mb-3 w-100">
-                                Add Requirement
-                            </Button>
-                        </Col>
-                    </Row>
+                    <Form.Group className="mb-3">
+                        <Form.Label>Course</Form.Label>
+                        <Form.Select
+                            value={newRequirement.course_id}
+                            onChange={(e) => setNewRequirement({
+                                course_id: e.target.value
+                            })}
+                            required
+                        >
+                            <option value="">Select a course...</option>
+                            {courses.map(course => (
+                                <option key={course.course_id} value={course.course_id}>
+                                    {course.course_id} - {course.course_name}
+                                </option>
+                            ))}
+                        </Form.Select>
+                    </Form.Group>
+                    <Button type="submit" variant="primary" className="w-100">
+                        Add Requirement
+                    </Button>
                 </Form>
 
-                <Table striped bordered hover>
+                <Table striped bordered hover className="mt-4">
                     <thead>
                         <tr>
                             <th>Course ID</th>
@@ -2663,7 +3289,6 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
                                         variant="danger"
                                         size="sm"
                                         onClick={() => handleDeleteRequirement(req.requirement_id)}
-                                        className="me-2"
                                     >
                                         Delete
                                     </Button>
@@ -2673,11 +3298,6 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
                     </tbody>
                 </Table>
             </Modal.Body>
-            <Modal.Footer>
-                <Button variant="secondary" onClick={onHide}>
-                    Close
-                </Button>
-            </Modal.Footer>
         </Modal>
     );
 };
@@ -2685,22 +3305,35 @@ const ProgramRequirementsModal = ({ show, programId, onHide }) => {
 export default ProgramRequirementsModal;
 
 
-
 === frontend/app/src/components/programs/ProgramsModal.jsx ===
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
+import { Modal, Form, Button, Row, Col, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { InfoCircle } from 'react-bootstrap-icons';
 
-const ProgramsModal = ({ show, program, onHide, onSave }) => {
+const ProgramsModal = ({ show, program, onHide, onSave, academicYear }) => {
   const initialFormData = {
     program_id: '',
     program_name: '',
     total_enrollment: 0,
-    blocks_20_count: 0,
-    blocks_10_count: 0
+    blocks_20_count_fall: 0,
+    blocks_10_count_fall: 0,
+    blocks_20_count_winter: 0,
+    blocks_10_count_winter: 0,
+    academic_year: academicYear || '2025-2026'
   };
 
   const [formData, setFormData] = useState(initialFormData);
   const [validated, setValidated] = useState(false);
+
+  // Helper function to create tooltips
+  const renderTooltip = (text) => (
+    <OverlayTrigger
+      placement="right"
+      overlay={<Tooltip>{text}</Tooltip>}
+    >
+      <InfoCircle className="ms-2" />
+    </OverlayTrigger>
+  );
 
   useEffect(() => {
     if (program) {
@@ -2708,18 +3341,27 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
         program_id: program.program_id,
         program_name: program.program_name,
         total_enrollment: program.total_enrollment,
-        blocks_20_count: program.blocks_20_count,
-        blocks_10_count: program.blocks_10_count
+        blocks_20_count_fall: program.blocks_20_count_fall,
+        blocks_10_count_fall: program.blocks_10_count_fall,
+        blocks_20_count_winter: program.blocks_20_count_winter,
+        blocks_10_count_winter: program.blocks_10_count_winter,
+        academic_year: program.academic_year || academicYear || '2025-2026'
       });
     } else {
       setFormData(initialFormData);
     }
     setValidated(false);
-  }, [program, show]);
+  }, [program, show, academicYear]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    const numericFields = ['total_enrollment', 'blocks_20_count', 'blocks_10_count'];
+    const numericFields = [
+      'total_enrollment', 
+      'blocks_20_count_fall', 
+      'blocks_10_count_fall',
+      'blocks_20_count_winter', 
+      'blocks_10_count_winter'
+    ];
     
     setFormData(prev => ({
       ...prev,
@@ -2742,6 +3384,7 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
       <Modal.Header closeButton>
         <Modal.Title>
           {program ? 'Edit Program' : 'Create New Program'}
+          {renderTooltip(program ? "Modify an existing academic program" : "Create a new academic program in the system")}
         </Modal.Title>
       </Modal.Header>
       <Form noValidate validated={validated} onSubmit={handleSubmit}>
@@ -2749,7 +3392,10 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
           <Row>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Program ID</Form.Label>
+                <Form.Label>
+                  Program ID
+                  {renderTooltip("Unique identifier for the program (cannot be changed after creation)")}
+                </Form.Label>
                 <Form.Control
                   type="text"
                   name="program_id"
@@ -2765,7 +3411,33 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
             </Col>
             <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Program Name</Form.Label>
+                <Form.Label>
+                  Academic Year
+                  {renderTooltip("The academic year this program configuration applies to (format: YYYY-YYYY)")}
+                </Form.Label>
+                <Form.Control
+                  type="text"
+                  name="academic_year"
+                  value={formData.academic_year}
+                  onChange={handleChange}
+                  required
+                  pattern="\d{4}-\d{4}"
+                  placeholder="2025-2026"
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid academic year (YYYY-YYYY).
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>
+                  Program Name
+                  {renderTooltip("Full name of the academic program")}
+                </Form.Label>
                 <Form.Control
                   type="text"
                   name="program_name"
@@ -2778,12 +3450,12 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
-          </Row>
-
-          <Row>
-            <Col md={4}>
+            <Col md={6}>
               <Form.Group className="mb-3">
-                <Form.Label>Total Enrollment</Form.Label>
+                <Form.Label>
+                  Total Enrollment
+                  {renderTooltip("Expected number of students in this program")}
+                </Form.Label>
                 <Form.Control
                   type="number"
                   name="total_enrollment"
@@ -2797,35 +3469,93 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>20-Student Blocks</Form.Label>
+          </Row>
+
+          <h5 className="mb-3">
+            Fall Term Blocks
+            {renderTooltip("Teaching blocks allocated for the Fall term")}
+          </h5>
+          <Row className="mb-4">
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>
+                  20-Student Blocks (Fall)
+                  {renderTooltip("Number of teaching blocks that can accommodate 20 students each in Fall term")}
+                </Form.Label>
                 <Form.Control
                   type="number"
-                  name="blocks_20_count"
-                  value={formData.blocks_20_count}
+                  name="blocks_20_count_fall"
+                  value={formData.blocks_20_count_fall}
                   onChange={handleChange}
                   required
                   min="0"
                 />
                 <Form.Control.Feedback type="invalid">
-                  Please provide a valid number of 20-student blocks.
+                  Please provide a valid number of blocks.
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>10-Student Blocks</Form.Label>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>
+                  10-Student Blocks (Fall)
+                  {renderTooltip("Number of teaching blocks that can accommodate 10 students each in Fall term")}
+                </Form.Label>
                 <Form.Control
                   type="number"
-                  name="blocks_10_count"
-                  value={formData.blocks_10_count}
+                  name="blocks_10_count_fall"
+                  value={formData.blocks_10_count_fall}
                   onChange={handleChange}
                   required
                   min="0"
                 />
                 <Form.Control.Feedback type="invalid">
-                  Please provide a valid number of 10-student blocks.
+                  Please provide a valid number of blocks.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <h5 className="mb-3">
+            Winter Term Blocks
+            {renderTooltip("Teaching blocks allocated for the Winter term")}
+          </h5>
+          <Row>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>
+                  20-Student Blocks (Winter)
+                  {renderTooltip("Number of teaching blocks that can accommodate 20 students each in Winter term")}
+                </Form.Label>
+                <Form.Control
+                  type="number"
+                  name="blocks_20_count_winter"
+                  value={formData.blocks_20_count_winter}
+                  onChange={handleChange}
+                  required
+                  min="0"
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid number of blocks.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>
+                  10-Student Blocks (Winter)
+                  {renderTooltip("Number of teaching blocks that can accommodate 10 students each in Winter term")}
+                </Form.Label>
+                <Form.Control
+                  type="number"
+                  name="blocks_10_count_winter"
+                  value={formData.blocks_10_count_winter}
+                  onChange={handleChange}
+                  required
+                  min="0"
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a valid number of blocks.
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
@@ -2837,6 +3567,7 @@ const ProgramsModal = ({ show, program, onHide, onSave }) => {
           </Button>
           <Button variant="primary" type="submit">
             Save
+            {renderTooltip("Save the program configuration")}
           </Button>
         </Modal.Footer>
       </Form>
@@ -2850,39 +3581,42 @@ export default ProgramsModal;
 
 === frontend/app/src/components/programs/ProgramsPage.jsx ===
 import React, { useState, useEffect } from 'react';
-import { Container, Button } from 'react-bootstrap';
+import { Container, Button, Form } from 'react-bootstrap';
 import ProgramsTable from './ProgramsTable';
 import ProgramsModal from './ProgramsModal';
 import ProgramRequirementsModal from './ProgramRequirementsModal';
-import ProgramUploadModal from './ProgramUploadModal';
-import Papa from 'papaparse';
+import ExportPrograms from './ExportPrograms';
 
 const API_URL = 'http://127.0.0.1:5000/api';
 
 const ProgramsPage = () => {
-    const [programs, setPrograms] = useState([]);
-    const [showModal, setShowModal] = useState(false);
-    const [showRequirementsModal, setShowRequirementsModal] = useState(false);
-    const [selectedProgram, setSelectedProgram] = useState(null);
-    const [selectedProgramId, setSelectedProgramId] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [showUploadModal, setShowUploadModal] = useState(false);
+  const [programs, setPrograms] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [showRequirementsModal, setShowRequirementsModal] = useState(false);
+  const [selectedProgram, setSelectedProgram] = useState(null);
+  const [selectedProgramId, setSelectedProgramId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentYear, setCurrentYear] = useState('2025-2026');
 
   const fetchPrograms = async () => {
-    try {
-      const response = await fetch(`${API_URL}/programs/`);
-      const data = await response.json();
-      setPrograms(data);
-    } catch (error) {
-      console.error('Error fetching programs:', error);
-    } finally {
-      setIsLoading(false);
-    }
+      try {
+          const params = new URLSearchParams({
+              academic_year: currentYear
+          });
+          const response = await fetch(`${API_URL}/programs/?${params}`);
+          const data = await response.json();
+          setPrograms(data);
+      } catch (error) {
+          console.error('Error fetching programs:', error);
+      } finally {
+          setIsLoading(false);
+      }
   };
 
   useEffect(() => {
-    fetchPrograms();
-  }, []);
+      fetchPrograms();
+  }, [currentYear]);
+
 
   const handleAddNew = () => {
     setSelectedProgram(null);
@@ -2944,84 +3678,58 @@ const handleViewRequirements = (programId) => {
     setShowRequirementsModal(true);
   };
 
-// Add export function
-const handleExportCSV = () => {
-  const csv = Papa.unparse(programs.map(program => ({
-      program_id: program.program_id,
-      program_name: program.program_name,
-      total_enrollment: program.total_enrollment,
-      blocks_20_count: program.blocks_20_count,
-      blocks_10_count: program.blocks_10_count
-  })));
-  
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.href = url;
-  link.setAttribute('download', 'programs.csv');
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-const handleViewSchedules = async (programId) => {
-  try {
-      const response = await fetch(`${API_URL}/schedules/program/${programId}/schedules`);
-      if (response.ok) {
-          const data = await response.json();
-          alert(`Found ${data.total_schedules} possible schedules for this program!`);
-          // You might want to show these in a modal instead of an alert
-      } else {
-          const error = await response.json();
-          alert(error.error || 'Error fetching schedules');
-      }
-  } catch (error) {
-      console.error('Error fetching schedules:', error);
-      alert('Error fetching schedules');
-  }
-};
-  return (
-    <Container className="py-4">
+
+return (
+  <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1>Program Management</h1>
-        {/* <Button variant="secondary" className="me-2" onClick={() => setShowUploadModal(true)}>
-            Upload CSV
-        </Button>
-        <Button variant="success" className="me-2" onClick={handleExportCSV}>
-            Export CSV
-        </Button> */}
-        <Button variant="primary" onClick={handleAddNew}>
-          Create New Program
-        </Button>
+          <h1>Program Management</h1>
+          <div>
+              <Form.Control
+                  type="text"
+                  className="me-2 d-inline-block"
+                  style={{width: 'auto'}}
+                  value={currentYear}
+                  onChange={(e) => setCurrentYear(e.target.value)}
+                  pattern="\d{4}-\d{4}"
+                  placeholder="2025-2026"
+              />
+              <Button variant="primary" onClick={handleAddNew}>
+                  Create New Program
+              </Button>
+              
+          </div>
+          <ExportPrograms 
+            programs={programs}
+            academicYear={currentYear}
+            isLoading={isLoading}
+          />
       </div>
 
       <ProgramsTable 
-                programs={programs}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onViewRequirements={handleViewRequirements}
-                onViewSchedules={handleViewSchedules}
-                isLoading={isLoading}
-            />
+          programs={programs}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onViewRequirements={handleViewRequirements}
+          isLoading={isLoading}
+          academicYear={currentYear}
+      />
 
       <ProgramsModal
-        show={showModal}
-        program={selectedProgram}
-        onHide={() => setShowModal(false)}
-        onSave={handleSave}
+          show={showModal}
+          program={selectedProgram}
+          onHide={() => setShowModal(false)}
+          onSave={handleSave}
+          academicYear={currentYear}
       />
 
-        <ProgramRequirementsModal
-        show={showRequirementsModal}
-        programId={selectedProgramId}
-        onHide={() => setShowRequirementsModal(false)}
+      <ProgramRequirementsModal
+          show={showRequirementsModal}
+          programId={selectedProgramId}
+          onHide={() => setShowRequirementsModal(false)}
+          academicYear={currentYear}
       />
-      <ProgramUploadModal
-    show={showUploadModal}
-    onHide={() => setShowUploadModal(false)}
-    onSave={fetchPrograms}
-/>
-    </Container>
-  );
+  </Container>
+);
 };
 
 export default ProgramsPage;
@@ -3032,19 +3740,15 @@ export default ProgramsPage;
 import React from 'react';
 import { Table, Button, Badge, Spinner } from 'react-bootstrap';
 
-const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements,onViewSchedules  }) => {
+const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements }) => {
   if (isLoading) {
     return (
-      <div className="text-center p-4">
+      <div className="text-center p-3">
         <Spinner animation="border" role="status">
           <span className="visually-hidden">Loading...</span>
         </Spinner>
       </div>
     );
-  }
-
-  if (!programs.length) {
-    return <div className="text-center p-4">No programs available</div>;
   }
 
   return (
@@ -3064,21 +3768,9 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
           <tr key={program.program_id}>
             <td>{program.program_id}</td>
             <td>{program.program_name}</td>
-            <td>
-              <Badge bg="info">
-                {program.total_enrollment} students
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="primary">
-                {program.blocks_20_count} blocks
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="secondary">
-                {program.blocks_10_count} blocks
-              </Badge>
-            </td>
+            <td>{program.total_enrollment}</td>
+            <td>{program.blocks_20_count}</td>
+            <td>{program.blocks_10_count}</td>
             <td>
               <Button
                 variant="primary"
@@ -3091,6 +3783,7 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
               <Button
                 variant="danger"
                 size="sm"
+                className="me-2"
                 onClick={() => onDelete(program.program_id)}
               >
                 Delete
@@ -3098,18 +3791,10 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
               <Button
                 variant="info"
                 size="sm"
-                className="ms-2"
+                className="me-2"
                 onClick={() => onViewRequirements(program.program_id)}
               >
                 Requirements
-              </Button>
-              <Button
-                variant="success"
-                size="sm"
-                className="ms-2"
-                onClick={() => onViewSchedules(program.program_id)}
-              >
-                View Schedules
               </Button>
             </td>
           </tr>
@@ -3123,134 +3808,46 @@ export default ProgramsTable;
 
 
 
-=== frontend/app/src/components/programs/ProgramUploadModal.jsx ===
-// ProgramUploadModal.jsx
-import React, { useState } from 'react';
-import { Modal, Button, Table, Alert } from 'react-bootstrap';
-import Papa from 'papaparse';
-
-const ProgramUploadModal = ({ show, onHide, onSave }) => {
-    const [parsedData, setParsedData] = useState([]);
-    const [error, setError] = useState(null);
-
-    const handleFileUpload = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            Papa.parse(file, {
-                header: true,
-                skipEmptyLines: true,
-                complete: (results) => {
-                    if (results.errors.length > 0) {
-                        setError('Error parsing CSV file');
-                        return;
-                    }
-                    const validData = results.data.map(item => ({
-                        ...item,
-                        total_enrollment: parseInt(item.total_enrollment),
-                        blocks_20_count: parseInt(item.blocks_20_count),
-                        blocks_10_count: parseInt(item.blocks_10_count)
-                    }));
-                    setParsedData(validData);
-                    setError(null);
-                }
-            });
-        }
-    };
-
-    const handleSave = async () => {
-        try {
-            const response = await fetch('http://127.0.0.1:5000/api/programs/bulk', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ programs: parsedData })
-            });
-            if (response.ok) {
-                onSave();
-                onHide();
-            } else {
-                const error = await response.json();
-                setError(error.message || 'Error uploading programs');
-            }
-        } catch (error) {
-            setError('Error uploading programs');
-        }
-    };
-
-    return (
-        <Modal show={show} onHide={onHide} size="lg">
-            <Modal.Header closeButton>
-                <Modal.Title>Upload Programs CSV</Modal.Title>
-            </Modal.Header>
-            <Modal.Body>
-                <input
-                    type="file"
-                    accept=".csv"
-                    onChange={handleFileUpload}
-                    className="mb-3"
-                />
-                {error && (
-                    <Alert variant="danger">{error}</Alert>
-                )}
-                {parsedData.length > 0 && (
-                    <Table striped bordered hover>
-                        <thead>
-                            <tr>
-                                <th>Program ID</th>
-                                <th>Program Name</th>
-                                <th>Total Enrollment</th>
-                                <th>20-Student Blocks</th>
-                                <th>10-Student Blocks</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {parsedData.map((program, index) => (
-                                <tr key={index}>
-                                    <td>{program.program_id}</td>
-                                    <td>{program.program_name}</td>
-                                    <td>{program.total_enrollment}</td>
-                                    <td>{program.blocks_20_count}</td>
-                                    <td>{program.blocks_10_count}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </Table>
-                )}
-            </Modal.Body>
-            <Modal.Footer>
-                <Button variant="secondary" onClick={onHide}>Cancel</Button>
-                <Button 
-                    variant="primary" 
-                    onClick={handleSave}
-                    disabled={parsedData.length === 0}
-                >
-                    Save Programs
-                </Button>
-            </Modal.Footer>
-        </Modal>
-    );
-};
-
-export default ProgramUploadModal;
-
-
-
 === frontend/app/src/components/schedule/ScheduleEditModal.jsx ===
 import React, { useState, useEffect } from 'react';
-import { Modal, Form, Button, ListGroup, Alert, Spinner } from 'react-bootstrap';
+import { Modal, Form, Button, ListGroup, Alert, Spinner, Badge, Tabs, Tab, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { InfoCircle } from 'react-bootstrap-icons';
 
 const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
   const [blockSchedule, setBlockSchedule] = useState([]);
   const [selectedOffering, setSelectedOffering] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [blockTerm, setBlockTerm] = useState(null);
+
+  // Helper function to create tooltips
+  const renderTooltip = (text) => (
+    <OverlayTrigger
+      placement="right"
+      overlay={<Tooltip>{text}</Tooltip>}
+    >
+      <InfoCircle className="ms-2" />
+    </OverlayTrigger>
+  );
 
   useEffect(() => {
     if (show && blockId) {
       fetchBlockSchedule();
+      fetchBlockDetails();
     }
   }, [show, blockId]);
+
+  const fetchBlockDetails = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/blocks/${blockId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setBlockTerm(data.term);
+      }
+    } catch (error) {
+      setError('Error fetching block details');
+    }
+  };
 
   const fetchBlockSchedule = async () => {
     try {
@@ -3273,7 +3870,10 @@ const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ offering_id: selectedOffering }),
+        body: JSON.stringify({
+          offering_id: selectedOffering,
+          term: blockTerm
+        }),
       });
 
       const data = await response.json();
@@ -3307,12 +3907,25 @@ const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
     return days[day - 1];
   };
 
+  // Filter offerings by term
+  const termOfferings = offerings.filter(offering => offering.term === blockTerm);
+
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
-        <Modal.Title>Edit Block Schedule</Modal.Title>
+        <Modal.Title>
+          Edit Block Schedule
+          {renderTooltip("Manually assign or remove courses from this teaching block")}
+        </Modal.Title>
       </Modal.Header>
       <Modal.Body>
+        {blockTerm && (
+          <h5 className="mb-3">
+            {blockTerm} Term
+            {renderTooltip(`Courses for the ${blockTerm} academic term`)}
+          </h5>
+        )}
+        
         {isLoading ? (
           <div className="text-center p-4">
             <Spinner animation="border" />
@@ -3320,13 +3933,16 @@ const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
         ) : (
           <>
             <Form.Group className="mb-3">
-              <Form.Label>Add Course Offering</Form.Label>
+              <Form.Label>
+                Add Course Offering ({blockTerm} Term)
+                {renderTooltip("Select a course to add to this block's schedule")}
+              </Form.Label>
               <Form.Select
                 value={selectedOffering}
                 onChange={(e) => setSelectedOffering(e.target.value)}
               >
                 <option value="">Select an offering</option>
-                {offerings.map(offering => (
+                {termOfferings.map(offering => (
                   <option key={offering.offering_id} value={offering.offering_id}>
                     {offering.course_id} - {offering.section_type} {offering.section_code}
                     ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
@@ -3342,38 +3958,53 @@ const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
               className="mb-3"
             >
               Add to Schedule
+              {renderTooltip("Assign the selected course to this block")}
             </Button>
 
             {error && <Alert variant="danger">{error}</Alert>}
 
+            <h5 className="mt-4 mb-3">
+              Current Schedule
+              {renderTooltip("Courses currently assigned to this block")}
+            </h5>
+
             <ListGroup>
-              {blockSchedule.map(offering => (
-                <ListGroup.Item
-                  key={offering.offering_id}
-                  className="d-flex justify-content-between align-items-center"
-                >
-                  <div>
-                    {offering.course_id} - {offering.section_type} {offering.section_code}
-                    <br />
-                    <small>
-                      {getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time}
-                    </small>
-                  </div>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => handleRemoveOffering(offering.offering_id)}
+              {blockSchedule.length === 0 ? (
+                <Alert variant="info">No courses assigned to this block yet</Alert>
+              ) : (
+                blockSchedule.map(offering => (
+                  <ListGroup.Item
+                    key={offering.offering_id}
+                    className="d-flex justify-content-between align-items-center"
                   >
-                    Remove
-                  </Button>
-                </ListGroup.Item>
-              ))}
+                    <div>
+                      <Badge bg="primary" className="me-2">{offering.section_type}</Badge>
+                      {offering.course_id} - {offering.section_code}
+                      <br />
+                      <small>
+                        {getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time}
+                      </small>
+                    </div>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleRemoveOffering(offering.offering_id)}
+                    >
+                      Remove
+                      {renderTooltip("Remove this course from the block's schedule")}
+                    </Button>
+                  </ListGroup.Item>
+                ))
+              )}
             </ListGroup>
           </>
         )}
       </Modal.Body>
       <Modal.Footer>
-        <Button variant="secondary" onClick={onHide}>Close</Button>
+        <Button variant="secondary" onClick={onHide}>
+          Close
+          {renderTooltip("Close this dialog and return to the schedule list")}
+        </Button>
       </Modal.Footer>
     </Modal>
   );
@@ -3383,175 +4014,15 @@ export default ScheduleEditModal;
 
 
 
-=== frontend/app/src/components/schedule/ScheduleGenerateModal.jsx ===
-import React, { useState } from 'react';
-import { Modal, Form, Button, Alert, Spinner, ListGroup } from 'react-bootstrap';
-
-const ScheduleGenerateModal = ({ show, blocks, onHide, onGenerate }) => {
-  const [selectedBlock, setSelectedBlock] = useState('');
-  const [generatedSchedule, setGeneratedSchedule] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleGenerate = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}`, {
-        method: 'GET'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setGeneratedSchedule(data);
-      } else {
-        const errorData = await response.json();
-        setError(errorData.message || 'Failed to generate schedule');
-      }
-    } catch (error) {
-      setError('Error generating schedule');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSave = async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ schedule: generatedSchedule })
-      });
-      
-      if (response.ok) {
-        await onGenerate();
-        handleClose();
-      } else {
-        const errorData = await response.json();
-        setError(errorData.message || 'Failed to save schedule');
-      }
-    } catch (error) {
-      setError('Error saving schedule');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const getDayName = (day) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[day - 1];
-  };
-
-  const handleClose = () => {
-    setSelectedBlock('');
-    setGeneratedSchedule(null);
-    setError(null);
-    onHide();
-  };
-
-  return (
-    <Modal show={show} onHide={handleClose} size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>Generate Block Schedule</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        <Form.Group className="mb-3">
-          <Form.Label>Select Block</Form.Label>
-          <Form.Select
-            value={selectedBlock}
-            onChange={(e) => setSelectedBlock(e.target.value)}
-            disabled={isLoading}
-          >
-            <option value="">Choose a block...</option>
-            {blocks
-              .filter(block => block.status !== 'LOCKED')
-              .map(block => (
-                <option key={block.block_id} value={block.block_id}>
-                  Block {block.block_id} - Program {block.program_id} 
-                  (Size: {block.block_size})
-                </option>
-              ))}
-          </Form.Select>
-        </Form.Group>
-
-        {error && (
-          <Alert variant="danger" className="mt-3">
-            {error}
-          </Alert>
-        )}
-
-        {generatedSchedule && (
-          <div className="mt-4">
-            <h5>Generated Schedule Preview:</h5>
-            <ListGroup>
-              {generatedSchedule.map((offering, index) => (
-                <ListGroup.Item key={index}>
-                  {offering.course_id} - {offering.section_type} {offering.section_code}
-                  <br />
-                  <small>
-                    {getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time}
-                  </small>
-                </ListGroup.Item>
-              ))}
-            </ListGroup>
-          </div>
-        )}
-      </Modal.Body>
-      <Modal.Footer>
-        <Button variant="secondary" onClick={handleClose}>
-          Cancel
-        </Button>
-        {!generatedSchedule ? (
-          <Button
-            variant="primary"
-            onClick={handleGenerate}
-            disabled={!selectedBlock || isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
-                Generating...
-              </>
-            ) : (
-              'Preview Schedule'
-            )}
-          </Button>
-        ) : (
-          <Button
-            variant="success"
-            onClick={handleSave}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
-                Saving...
-              </>
-            ) : (
-              'Save Schedule'
-            )}
-          </Button>
-        )}
-      </Modal.Footer>
-    </Modal>
-  );
-};
-
-export default ScheduleGenerateModal;
-
-
-
 === frontend/app/src/components/schedule/SchedulePage.jsx ===
 import React, { useState, useEffect } from 'react';
-import { Container, Button } from 'react-bootstrap';
+import { Container, Button, Form, Tab, Tabs} from 'react-bootstrap';
 import ScheduleTable from './ScheduleTable';
 import ScheduleViewModal from './ScheduleViewModal';
 import ScheduleEditModal from './ScheduleEditModal';
-import ScheduleGenerateModal from './ScheduleGenerateModal';
+import ExportSchedule from './ExportSchedule.tsx'; // Fix the import
+
+import { Bars } from 'react-loading-icons';
 
 const API_URL = 'http://127.0.0.1:5000/api';
 
@@ -3560,20 +4031,32 @@ const SchedulePage = () => {
     const [blocks, setBlocks] = useState([]);
     const [offerings, setOfferings] = useState([]);
     const [selectedBlock, setSelectedBlock] = useState(null);
+    const [selectedTerm, setSelectedTerm] = useState('FALL');
+    const [selectedYear, setSelectedYear] = useState('2025-2026');
     const [showViewModal, setShowViewModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [selectedFallBlocks, setSelectedFallBlocks] = useState([]);
+    const [selectedWinterBlocks, setSelectedWinterBlocks] = useState([]);
+    const [isBulkGenerating, setIsBulkGenerating] = useState(false);
+    const [isBulkClearing, setIsBulkClearing] = useState(false);
+    const [activeTab, setActiveTab] = useState('FALL');
+    const [sortOrder, setSortOrder] = useState('desc');
 
     const fetchBlocks = async () => {
         try {
-            const response = await fetch(`${API_URL}/blocks`);
-            const data = await response.json();
-            setBlocks(data);
+          const response = await fetch(`${API_URL}/blocks?academic_year=${selectedYear}`);
+          const data = await response.json();
+          setBlocks(data);
         } catch (error) {
-            console.error('Error fetching blocks:', error);
+          console.error('Error fetching blocks:', error);
         }
-    };
+      };
+      useEffect(() => {
+        fetchBlocks();
+        fetchOfferings();
+      }, [selectedTerm, selectedYear]);
 
     const fetchOfferings = async () => {
         try {
@@ -3587,57 +4070,66 @@ const SchedulePage = () => {
 
     const fetchBlockSchedule = async (blockId) => {
         try {
-            const [scheduleResponse, validationResponse] = await Promise.all([
+            const [scheduleResponse, validationResponse, ratingResponse] = await Promise.all([
                 fetch(`${API_URL}/schedules/block/${blockId}`),
-                fetch(`${API_URL}/schedules/block/${blockId}/validate`)
+                fetch(`${API_URL}/schedules/block/${blockId}/validate`),
+                fetch(`${API_URL}/schedules/block/${blockId}/rate`)
             ]);
-
+    
             const offerings = await scheduleResponse.json();
             const validation = await validationResponse.json();
-
+            const rating = await ratingResponse.json();
+    
             return {
                 offerings: scheduleResponse.ok ? offerings : [],
-                validation: validationResponse.ok ? validation : null
+                validation: validationResponse.ok ? validation : null,
+                rating: ratingResponse.ok ? rating.rating : null
             };
         } catch (error) {
             console.error('Error fetching block schedule:', error);
-            return { offerings: [], validation: null };
+            return { offerings: [], validation: null, rating: null };
         }
     };
-
+    
     const fetchAllSchedules = async () => {
-        setIsLoading(true);
-        try {
-            const schedulesData = await Promise.all(
-                blocks.map(async (block) => {
-                    const { offerings, validation } = await fetchBlockSchedule(block.block_id);
-                    return {
-                        block_id: block.block_id,
-                        program_id: block.program_id,
-                        offerings: offerings,
-                        rating: block.schedule_rating,
-                        validation: validation
-                    };
-                })
-            );
-            setSchedules(schedulesData);
-        } catch (error) {
-            console.error('Error fetching schedules:', error);
-        } finally {
-            setIsLoading(false);
-        }
+      setIsLoading(true);
+      try {
+        const schedulesData = await Promise.all(
+          blocks
+            .filter(block => (block.term === 'FALL' || block.term === 'WINTER') && block.academic_year === selectedYear)
+            .map(async (block) => {
+              const { offerings, validation, rating } = await fetchBlockSchedule(block.block_id);
+              return {
+                block_id: block.block_id,
+                program_id: block.program_id,
+                term: block.term,
+                academic_year: block.academic_year,
+                status: block.status, // Add this line to include block status
+                offerings: offerings,
+                rating: offerings.length === 0 ? 0 : (rating || block.schedule_rating),
+                validation: validation
+              };
+            })
+        );
+        setSchedules(schedulesData);
+      } catch (error) {
+        console.error('Error fetching schedules:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
-
-    useEffect(() => {
+      
+      useEffect(() => {
         fetchBlocks();
         fetchOfferings();
-    }, []);
-
-    useEffect(() => {
+      }, [selectedYear]);
+      
+      useEffect(() => {
         if (blocks.length > 0) {
-            fetchAllSchedules();
+          fetchAllSchedules();
         }
-    }, [blocks]);
+      }, [blocks, selectedYear]);
+
 
     const handleViewSchedule = (blockId) => {
         setSelectedBlock(blockId);
@@ -3649,32 +4141,108 @@ const SchedulePage = () => {
         setShowEditModal(true);
     };
 
-    const handleGenerateSchedule = async (blockId) => {
-        try {
-            const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
-                method: 'POST'
-            });
-            
-            if (response.ok) {
-                await fetchAllSchedules();
-            } else {
-                const error = await response.json();
-                alert(error.error || 'Error generating schedule');
-            }
-        } catch (error) {
-            console.error('Error generating schedule:', error);
-            alert('Error generating schedule');
+    
+    const handleStatusUpdate = async (blockId, status) => {
+      try {
+        const response = await fetch(`${API_URL}/blocks/${blockId}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status }),
+        });
+        
+        if (response.ok) {
+          // Update blocks and schedules in state without requiring a full refresh
+          setBlocks(prevBlocks =>
+            prevBlocks.map(block =>
+              block.block_id === blockId ? { ...block, status: status } : block
+            )
+          );
+          
+          setSchedules(prevSchedules =>
+            prevSchedules.map(schedule =>
+              schedule.block_id === blockId ? { ...schedule, status: status } : schedule
+            )
+          );
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error updating status');
         }
+      } catch (error) {
+        console.error('Error updating status:', error);
+        alert('Error updating status');
+      }
     };
+    const handleGenerateSchedule = async (blockId) => {
+      // Find the block to check its status
+      const block = blocks.find(b => b.block_id === blockId);
+      
+      // Check if status is DRAFT
+      if (!block || block.status !== 'DRAFT') {
+        alert('Schedule can only be generated when the block is in Draft status.');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
+          method: 'POST'
+        });
+        
+        // Rest of the function remains the same
+        if (response.ok) {
+          const generatedData = await response.json();
+          // Update the specific block's rating in the blocks array
+          setBlocks(prevBlocks =>
+            prevBlocks.map(block =>
+              block.block_id === blockId
+                ? { ...block, schedule_rating: generatedData.schedule_rating }
+                : block
+            )
+          );
+          // Fetch updated schedules to reflect new changes
+          await fetchAllSchedules();
+        } else {
+          // If generation fails, clear the schedule and reset rating
+          await handleDeleteSchedule(blockId);
+          alert('Failed to generate schedule. The schedule has been cleared.');
+        }
+      } catch (error) {
+        console.error('Error generating schedule:', error);
+        // If an error occurs, also clear the schedule and reset rating
+        await handleDeleteSchedule(blockId);
+        alert('Error generating schedule. The schedule has been cleared.');
+      }
+    };
+    
 
     const handleDeleteSchedule = async (blockId) => {
-        if (window.confirm('Are you sure you want to delete this schedule?')) {
+    
             try {
                 const response = await fetch(`${API_URL}/schedules/block/${blockId}`, {
                     method: 'DELETE'
                 });
                 
                 if (response.ok) {
+                    // Update the blocks array to reset the rating to 0
+                    setBlocks(prevBlocks =>
+                        prevBlocks.map(block =>
+                            block.block_id === blockId
+                                ? { ...block, schedule_rating: 0 }
+                                : block
+                        )
+                    );
+                    
+                    // Update the schedules array
+                    setSchedules(prevSchedules =>
+                        prevSchedules.map(schedule =>
+                            schedule.block_id === blockId
+                                ? { ...schedule, rating: 0, offerings: [] }
+                                : schedule
+                        )
+                    );
+                    
+                    // Fetch updated schedules to reflect new changes
                     await fetchAllSchedules();
                 } else {
                     const error = await response.json();
@@ -3684,9 +4252,156 @@ const SchedulePage = () => {
                 console.error('Error deleting schedule:', error);
                 alert('Error deleting schedule');
             }
-        }
+        
     };
-
+    
+    const handleSelectionChange = (selectedRows) => {
+        if (activeTab === 'FALL') {
+          setSelectedFallBlocks(prevSelected => {
+            if (Array.isArray(selectedRows)) {
+              return selectedRows;
+            } else {
+              return prevSelected.includes(selectedRows)
+                ? prevSelected.filter(id => id !== selectedRows)
+                : [...prevSelected, selectedRows];
+            }
+          });
+        } else {
+          setSelectedWinterBlocks(prevSelected => {
+            if (Array.isArray(selectedRows)) {
+              return selectedRows;
+            } else {
+              return prevSelected.includes(selectedRows)
+                ? prevSelected.filter(id => id !== selectedRows)
+                : [...prevSelected, selectedRows];
+            }
+          });
+        }
+      };
+      
+      const handleBulkGenerate = async () => {
+        setIsBulkGenerating(true);
+        const selectedBlocks = [...selectedFallBlocks, ...selectedWinterBlocks];
+        const totalBlocks = selectedBlocks.length;
+        let successCount = 0;
+        let errorCount = 0;
+        let skippedCount = 0;
+      
+        try {
+          for (const blockId of selectedBlocks) {
+            // Find the block to check its status
+            const block = blocks.find(b => b.block_id === blockId);
+            
+            // Skip blocks that are not in DRAFT status
+            if (!block || block.status !== 'DRAFT') {
+              console.log(`Skipping block ${blockId} - not in Draft status`);
+              skippedCount++;
+              continue;
+            }
+            
+            // Rest of the code for generating each block's schedule
+            try {
+              const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
+                method: 'POST'
+              });
+              if (response.ok) {
+                const generatedData = await response.json();
+                setBlocks(prevBlocks =>
+                  prevBlocks.map(block =>
+                    block.block_id === blockId
+                      ? { ...block, schedule_rating: generatedData.schedule_rating }
+                      : block
+                  )
+                );
+                successCount++;
+              } else {
+                errorCount++;
+                await handleDeleteSchedule(blockId);
+              }
+            } catch (error) {
+              errorCount++;
+              await handleDeleteSchedule(blockId);
+            }
+          }
+          
+          // Fetch updated schedules to reflect new changes
+          await fetchAllSchedules();
+          
+          // Display results to the user, including skipped blocks
+          alert(`Bulk generation complete.\nSuccessful: ${successCount}\nFailed: ${errorCount}\nSkipped (not in Draft status): ${skippedCount}`);
+          
+          setSelectedFallBlocks([]);
+          setSelectedWinterBlocks([]);
+        } catch (error) {
+          console.error('Error in bulk generation:', error);
+          alert('An unexpected error occurred during bulk generation. Please try again.');
+        } finally {
+          setIsBulkGenerating(false);
+        }
+      };
+      
+      
+      
+      const handleBulkClear = async () => {
+        setIsBulkClearing(true);
+        const selectedBlocks = [...selectedFallBlocks, ...selectedWinterBlocks];
+        const totalBlocks = selectedBlocks.length;
+        let successCount = 0;
+        let errorCount = 0;
+      
+        try {
+          await Promise.all(selectedBlocks.map(async (blockId) => {
+            try {
+              const response = await fetch(`${API_URL}/schedules/block/${blockId}`, {
+                method: 'DELETE'
+              });
+              
+              if (response.ok) {
+                setBlocks(prevBlocks =>
+                  prevBlocks.map(block =>
+                    block.block_id === blockId
+                      ? { ...block, schedule_rating: 0 }
+                      : block
+                  )
+                );
+                successCount++;
+              } else {
+                const error = await response.json();
+                console.error(`Error clearing schedule for block ${blockId}:`, error.error);
+                errorCount++;
+              }
+            } catch (error) {
+              console.error(`Error clearing schedule for block ${blockId}:`, error);
+              errorCount++;
+            }
+          }));
+      
+          // Fetch updated schedules to reflect new changes
+          await fetchAllSchedules();
+      
+          // Display results to the user
+          alert(`Bulk clearing complete.\nSuccessful: ${successCount}\nFailed: ${errorCount}`);
+          setSelectedFallBlocks([]);
+          setSelectedWinterBlocks([]);
+        } catch (error) {
+          console.error('Error in bulk clearing:', error);
+          alert('An unexpected error occurred during bulk clearing. Please try again.');
+        } finally {
+          setIsBulkClearing(false);
+        }
+      };
+      
+      const handleSort = (newSortOrder) => {
+        setSortOrder(newSortOrder);
+        const sortedSchedules = [...schedules].sort((a, b) => {
+          if (newSortOrder === 'asc') {
+            return (a.rating || 0) - (b.rating || 0);
+          } else {
+            return (b.rating || 0) - (a.rating || 0);
+          }
+        });
+        setSchedules(sortedSchedules);
+      };
     const handleValidateSchedule = async (blockId) => {
         try {
             const response = await fetch(`${API_URL}/schedules/block/${blockId}/validate`);
@@ -3712,61 +4427,142 @@ const SchedulePage = () => {
         <Container className="py-4">
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h1>Block Schedules</h1>
-                <Button variant="primary" onClick={() => setShowGenerateModal(true)}>
-                    Generate New Schedule
-                </Button>
+                <div className="d-flex gap-3">
+                    <Form.Select 
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                        style={{ width: '150px' }}
+                    >
+                        <option value="2024-2025">2024-2025</option>
+                        <option value="2025-2026">2025-2026</option>
+                        <option value="2026-2027">2026-2027</option>
+                    </Form.Select>
+                </div>
+                <ExportSchedule 
+                        schedules={schedules}
+                        activeTab={activeTab}
+                        academicYear={selectedYear}
+                        isLoading={isLoading}
+                    />
             </div>
+            <Tabs
+  activeKey={activeTab}
+  onSelect={(k) => setActiveTab(k)}
+  className="mb-3"
+>
+  <Tab eventKey="FALL" title="Fall">
+    <ScheduleTable
+      schedules={schedules.filter(s => s.term === 'FALL')}
+      onView={handleViewSchedule}
+      onEdit={handleEditSchedule}
+      onDelete={handleDeleteSchedule}
+      isLoading={isLoading}
+      onGenerate={handleGenerateSchedule}
+      onSelectionChange={handleSelectionChange}
+      selectedBlocks={selectedFallBlocks} // Add this prop
+      onSort={handleSort}
+        onStatusUpdate={handleStatusUpdate} // Add this prop
 
-            <ScheduleTable 
-                schedules={schedules}
-                onView={handleViewSchedule}
-                onEdit={handleEditSchedule}
-                onValidate={handleValidateSchedule}
-                onDelete={handleDeleteSchedule}
-                onGenerate={handleGenerateSchedule}
-                isLoading={isLoading}
-            />
 
+    />
+  </Tab>
+  <Tab eventKey="WINTER" title="Winter">
+    <ScheduleTable
+      schedules={schedules.filter(s => s.term === 'WINTER')}
+      onView={handleViewSchedule}
+      onEdit={handleEditSchedule}
+      onDelete={handleDeleteSchedule}
+      isLoading={isLoading}
+      onGenerate={handleGenerateSchedule}
+      onSelectionChange={handleSelectionChange}
+      selectedBlocks={selectedWinterBlocks} // Add this prop
+      onSort={handleSort}
+      onStatusUpdate={handleStatusUpdate} // Add this prop
+
+    />
+  </Tab>
+</Tabs>
+
+<div className="mt-3 d-flex align-items-center">
+  <span className="me-3">Selected: {selectedFallBlocks.length + selectedWinterBlocks.length}</span>
+  <Button 
+    onClick={handleBulkGenerate} 
+    disabled={(selectedFallBlocks.length + selectedWinterBlocks.length) === 0 || isBulkGenerating}
+  >
+    {isBulkGenerating ? (
+      <>
+        <Bars height="1em" stroke="#ffffff" style={{marginRight: '0.5em'}} />
+        Generating...
+      </>
+    ) : (
+      'Bulk Generate'
+    )}
+  </Button>
+  <Button 
+    onClick={handleBulkClear} 
+    disabled={(selectedFallBlocks.length + selectedWinterBlocks.length) === 0 || isBulkClearing}
+    className="ms-2"
+  >
+    {isBulkClearing ? (
+      <>
+        <Bars height="1em" stroke="#ffffff" style={{marginRight: '0.5em'}} />
+        Clearing...
+      </>
+    ) : (
+      'Bulk Clear'
+    )}
+  </Button>
+</div>
             <ScheduleViewModal
                 show={showViewModal}
                 blockId={selectedBlock}
+                term={selectedTerm}
+                academicYear={selectedYear}
                 onHide={() => setShowViewModal(false)}
             />
 
             <ScheduleEditModal
                 show={showEditModal}
                 blockId={selectedBlock}
+                term={selectedTerm}
+                academicYear={selectedYear}
                 offerings={offerings}
                 onHide={() => setShowEditModal(false)}
                 onSave={fetchAllSchedules}
             />
-
-            <ScheduleGenerateModal
-                show={showGenerateModal}
-                blocks={blocks}
-                offerings={offerings}
-                onHide={() => setShowGenerateModal(false)}
-                onGenerate={fetchAllSchedules}
-            />
         </Container>
     );
 };
-
 export default SchedulePage;
 
 
 
 === frontend/app/src/components/schedule/ScheduleTable.jsx ===
-import React from 'react';
-import { Table, Button, Badge, Spinner } from 'react-bootstrap';
+import React, { useState, useEffect } from 'react';
+import { Table, Button, Badge, Spinner, Form, Card, Collapse, Row, Col } from 'react-bootstrap';
 
-const ScheduleTable = ({   schedules = [], 
-    onView, 
-    onEdit, 
-    onValidate, 
-    onDelete, 
-    isLoading,
-onGenerate }) => {
+const ScheduleTable = ({
+  schedules = [],
+  onView,
+  onEdit,
+  onDelete,
+  isLoading,
+  onGenerate,
+  onSelectionChange,
+  selectedBlocks,
+  onStatusUpdate,
+  onSort
+}) => {
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [filters, setFilters] = useState({
+    block_id: '',
+    program_id: [],
+    courses: [],
+    days: '',
+    rating: { min: 0, max: 100 }
+  });
+  const [showFilters, setShowFilters] = useState(false);
   if (isLoading) {
     return (
       <div className="text-center p-4">
@@ -3780,10 +4576,28 @@ onGenerate }) => {
   if (!schedules.length) {
     return <div className="text-center p-4">No schedules available</div>;
   }
+  const handleSort = () => {
+    const newSortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    setSortOrder(newSortOrder);
+    onSort(newSortOrder);
+  };
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+  const applyFilters = (schedule) => {
+    const ratingPercentage = schedule.rating ? (schedule.rating / 2).toFixed(1) : null;
+    return (
+      (filters.block_id === '' || schedule.block_id.toString().includes(filters.block_id)) &&
+      (filters.program_id.length === 0 || filters.program_id.includes(schedule.program_id)) &&
+      (filters.courses.length === 0 || schedule.offerings.some(o => filters.courses.includes(o.course_id))) &&
+      (ratingPercentage >= filters.rating.min && ratingPercentage <= filters.rating.max)
+    );
+  };
 
   const getRatingBadge = (rating) => {
     if (!rating) return <Badge bg="secondary">Not Rated</Badge>;
-    
+    rating = rating/2;
     let variant;
     if (rating >= 80) variant = 'success';
     else if (rating >= 60) variant = 'warning';
@@ -3795,12 +4609,97 @@ onGenerate }) => {
       </Badge>
     );
   };
+  const StatusDropdown = ({ blockId, currentStatus, onStatusUpdate }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    
+    const statuses = [
+      { value: 'DRAFT', label: 'Draft', variant: 'secondary' },
+      { value: 'PUBLISHED', label: 'Published', variant: 'success' },
+      { value: 'LOCKED', label: 'Locked', variant: 'warning' },
+      { value: 'ARCHIVED', label: 'Archived', variant: 'dark' }
+    ];
+    
+    const handleStatusSelect = (status) => {
+      if (status !== currentStatus) {
+        onStatusUpdate(blockId, status);
+      }
+      setIsOpen(false);
+    };
+
+    return (
+      <div className="position-relative">
+        <Badge 
+          bg={statuses.find(s => s.value === currentStatus)?.variant || 'secondary'} 
+          style={{ cursor: 'pointer' }}
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          {statuses.find(s => s.value === currentStatus)?.label || 'Draft'} ▼
+        </Badge>
+        
+        {isOpen && (
+          <div className="status-dropdown" style={{
+            position: 'absolute',
+            zIndex: 1000,
+            backgroundColor: 'white',
+            border: '1px solid #dee2e6',
+            borderRadius: '0.25rem',
+            padding: '0.5rem 0',
+            minWidth: '120px'
+          }}>
+            {statuses.map(status => (
+              <div 
+                key={status.value}
+                onClick={() => handleStatusSelect(status.value)}
+                style={{
+                  padding: '0.25rem 1rem',
+                  cursor: 'pointer',
+                  backgroundColor: status.value === currentStatus ? '#f8f9fa' : 'transparent'
+                }}
+              >
+                <Badge bg={status.variant}>{status.label}</Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+  
+  const handleRowSelection = (blockId) => {
+    const newSelectedRows = selectedRows.includes(blockId)
+      ? selectedRows.filter(id => id !== blockId)
+      : [...selectedRows, blockId];
+    setSelectedRows(newSelectedRows);
+    onSelectionChange(newSelectedRows);
+  };
+
+  const handleSelectAll = (event) => {
+    const newSelectedRows = event.target.checked ? schedules.map(s => s.block_id) : [];
+    setSelectedRows(newSelectedRows);
+    onSelectionChange(newSelectedRows);
+  };
 
   const getCoursesCount = (offerings) => {
     if (!offerings) return 0;
     return offerings.length;
   };
-
+  const getStatusBadge = (status) => {
+    switch (status) {
+      case 'DRAFT':
+        return <Badge bg="secondary">Draft</Badge>;
+      case 'PUBLISHED':
+        return <Badge bg="success">Published</Badge>;
+      case 'LOCKED':
+        return <Badge bg="warning">Locked</Badge>;
+      case 'ARCHIVED':
+        return <Badge bg="dark">Archived</Badge>;
+      default:
+        return <Badge bg="light" text="dark">Unknown</Badge>;
+    }
+  };
+  const isGenerateEnabled = (status) => {
+    return status === 'DRAFT';
+  };
   const getDaysString = (offerings) => {
     if (!offerings || !offerings.length) return 'No days scheduled';
     
@@ -3814,20 +4713,122 @@ onGenerate }) => {
   };
 
   return (
+    <>
+      <Button
+        onClick={() => setShowFilters(!showFilters)}
+        aria-controls="filter-collapse"
+        aria-expanded={showFilters}
+        className="mb-3"
+      >
+        {showFilters ? 'Hide Filters' : 'Show Filters'}
+      </Button>
+      <Collapse in={showFilters}>
+  <div id="filter-collapse">
+    <Card className="mb-3">
+      <Card.Body>
+        <Row>
+          <Col md={3}>
+            <Form.Group>
+              <Form.Label>Block ID</Form.Label>
+              <Form.Control
+                type="text"
+                value={filters.block_id}
+                onChange={(e) => handleFilterChange('block_id', e.target.value)}
+              />
+            </Form.Group>
+          </Col>
+          <Col md={3}>
+            <Form.Group>
+              <Form.Label>Program</Form.Label>
+              <Form.Select
+                multiple
+                value={filters.program_id}
+                onChange={(e) => handleFilterChange('program_id', Array.from(e.target.selectedOptions, option => option.value))}
+              >
+                {[...new Set(schedules.map(s => s.program_id))].map(program => (
+                  <option key={program} value={program}>{program}</option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+          </Col>
+          <Col md={3}>
+            <Form.Group>
+              <Form.Label>Courses</Form.Label>
+              <Form.Select
+                multiple
+                value={filters.courses}
+                onChange={(e) => handleFilterChange('courses', Array.from(e.target.selectedOptions, option => option.value))}
+              >
+                {[...new Set(schedules.flatMap(s => s.offerings.map(o => o.course_id)))].map(course => (
+                  <option key={course} value={course}>{course}</option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+          </Col>
+
+        </Row>
+        <Row className="mt-3">
+          <Col md={6}>
+            <Form.Group>
+              <Form.Label>Rating Range (Min-Max)</Form.Label>
+              <div className="d-flex align-items-center">
+                <Form.Range
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={filters.rating.min}
+                  onChange={(e) => handleFilterChange('rating', { ...filters.rating, min: parseInt(e.target.value) })}
+                />
+                <span className="ms-2">{filters.rating.min}</span>
+              </div>
+              <div className="d-flex align-items-center">
+                <Form.Range
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={filters.rating.max}
+                  onChange={(e) => handleFilterChange('rating', { ...filters.rating, max: parseInt(e.target.value) })}
+                />
+                <span className="ms-2">{filters.rating.max}</span>
+              </div>
+            </Form.Group>
+          </Col>
+        </Row>
+      </Card.Body>
+    </Card>
+  </div>
+</Collapse>
     <Table striped bordered hover responsive>
       <thead>
         <tr>
+          <th>
+          <input
+  type="checkbox"
+  onChange={handleSelectAll}
+  checked={selectedRows.length === schedules.length}
+/>
+          </th>
           <th>Block ID</th>
           <th>Program</th>
           <th>Courses</th>
           <th>Days</th>
-          <th>Rating</th>
+          <th>Status</th>
+          <th onClick={handleSort} style={{ cursor: 'pointer' }}>
+            Rating {sortOrder === 'asc' ? '▲' : '▼'}
+          </th>
           <th>Actions</th>
         </tr>
       </thead>
       <tbody>
-        {schedules.map((schedule) => (
-          <tr key={schedule.block_id}>
+   {schedules.filter(applyFilters).map((schedule) => (
+    <tr key={schedule.block_id}>
+                <td>
+              <input
+                type="checkbox"
+                onChange={() => handleRowSelection(schedule.block_id)}
+                checked={selectedBlocks.includes(schedule.block_id)} // Use selectedBlocks prop
+              />
+            </td>
             <td>Block {schedule.block_id}</td>
             <td>{schedule.program_id}</td>
             <td>
@@ -3836,6 +4837,17 @@ onGenerate }) => {
               </Badge>
             </td>
             <td>{getDaysString(schedule.offerings)}</td>
+            <td>
+            {onStatusUpdate ? (
+                  <StatusDropdown
+                  blockId={schedule.block_id}
+                  currentStatus={schedule.status}
+                    onStatusUpdate={onStatusUpdate}
+                  />
+                ) : (
+                  getStatusBadge(schedule.status)
+                )}
+            </td>
             <td>{getRatingBadge(schedule.rating)}</td>
             <td>
               <div className="d-flex gap-2">
@@ -3854,19 +4866,16 @@ onGenerate }) => {
                   Edit
                 </Button>
                 <Button
-                  variant="success"
-                  size="sm"
-                  onClick={() => onGenerate(schedule.block_id)}
-                >
-                  Generate
-                </Button>
-                <Button
-                  variant="info"
-                  size="sm"
-                  onClick={() => onValidate(schedule.block_id)}
-                >
-                  Validate
-                </Button>
+                variant="primary"
+                size="sm"
+                onClick={() => onGenerate(schedule.block_id)}
+                disabled={!isGenerateEnabled(schedule.status)}
+                title={!isGenerateEnabled(schedule.status) ? 
+                  'Schedule can only be generated when in Draft status' : 
+                  'Generate schedule'}
+              >
+                Generate
+              </Button>
                 <Button
                   variant="danger"
                   size="sm"
@@ -3880,20 +4889,25 @@ onGenerate }) => {
         ))}
       </tbody>
     </Table>
+    </>
   );
 };
 
 export default ScheduleTable;
 
 
-
 === frontend/app/src/components/schedule/ScheduleViewModal.jsx ===
-import React, { useState, useEffect } from 'react';
-import { Modal, Table, Badge, Spinner } from 'react-bootstrap';
+import React, { useState, useEffect, useRef } from 'react';
+import { Modal, Spinner, Button, ButtonGroup, Dropdown } from 'react-bootstrap';
+import FullCalendar from '@fullcalendar/react';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import bootstrap5Plugin from '@fullcalendar/bootstrap5';
+import html2canvas from 'html2canvas';
 
 const ScheduleViewModal = ({ show, blockId, onHide }) => {
   const [schedule, setSchedule] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const calendarRef = useRef(null);
 
   useEffect(() => {
     if (show && blockId) {
@@ -3914,77 +4928,143 @@ const ScheduleViewModal = ({ show, blockId, onHide }) => {
       setIsLoading(false);
     }
   };
+// Export as PNG
+const handleExportPNG = async () => {
+  if (!calendarRef.current) return;
+  
+  const calendarEl = calendarRef.current.elRef.current;
+  
+  try {
+    calendarEl.classList.add('export-view');
+    
+    const canvas = await html2canvas(calendarEl, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      allowTaint: true
+    });
+    
+    calendarEl.classList.remove('export-view');
+    
+    const image = canvas.toDataURL('image/png');
+    const link = document.createElement('a');
+    link.href = image;
+    link.download = `schedule-block-${blockId}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (error) {
+    console.error('Error generating PNG:', error);
+    alert('Failed to export schedule as PNG');
+  }
+};
 
+// Export as CSV
+const handleExportCSV = () => {
+  if (!schedule.length) return;
+  
+  // CSV header
+  let csvContent = 'Course ID,Section Type,Section Code,Day,Start Time,End Time\n';
+  
+  // Fixed getDayName function to correctly map the day values
   const getDayName = (day) => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[day];
+    // Using the correct day mapping (days are stored as 1-7 where 1=Monday)
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return days[(day - 1) % 7]; // Using modulo to handle out-of-bounds values
   };
+  
+  // Add data rows
+  schedule.forEach(offering => {
+    csvContent += `${offering.course_id},${offering.section_type},${offering.section_code},`;
+    csvContent += `${getDayName(offering.day_of_week)},${offering.start_time},${offering.end_time}\n`;
+  });
+  
+  // Create and trigger download
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `schedule-block-${blockId}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
 
-  const renderTimeSlot = (offering) => {
-    return (
-      <div className="p-2 border rounded mb-2" key={offering.offering_id}>
-        <Badge bg="primary" className="me-2">{offering.section_type}</Badge>
-        <strong>{offering.course_id}</strong> - {offering.section_code}
-        <br />
-        <small>{offering.start_time} - {offering.end_time}</small>
-      </div>
-    );
+const getEventColor = (sectionType) => {
+  const colors = {
+    'LECTURE': '#007bff',
+    'LAB': '#28a745',
+    'TUTORIAL': '#ffc107'
   };
+  return colors[sectionType] || '#6c757d';
+};
 
-  const renderScheduleTable = () => {
-    const days = [1, 2, 3, 4, 5]; // Monday to Friday
-    const scheduleByDay = days.map(day => ({
-      day,
-      offerings: schedule.filter(offering => offering.day_of_week === day)
-    }));
+const convertToCalendarEvents = () => {
+  return schedule.map(offering => {
+    const [hours, minutes] = offering.start_time.split(':');
+    const [endHours, endMinutes] = offering.end_time.split(':');
+    return {
+      id: offering.offering_id,
+      title: `${offering.course_id} - ${offering.section_type}`,
+      daysOfWeek: [(offering.day_of_week % 7)], // Adjust if needed based on your day values
+      startTime: `${hours}:${minutes}:00`,
+      endTime: `${endHours}:${endMinutes}:00`,
+      backgroundColor: getEventColor(offering.section_type),
+      extendedProps: {
+        sectionCode: offering.section_code,
+        courseId: offering.course_id,
+        sectionType: offering.section_type
+      }
+    };
+  });
+};
 
-    return (
-      <Table bordered responsive>
-        <thead>
-          <tr>
-            {days.map(day => (
-              <th key={day} className="text-center">{getDayName(day)}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            {scheduleByDay.map(({ day, offerings }) => (
-              <td key={day} className="align-top" style={{ minWidth: '200px' }}>
-                {offerings.sort((a, b) => a.start_time.localeCompare(b.start_time))
-                  .map(offering => renderTimeSlot(offering))}
-              </td>
-            ))}
-          </tr>
-        </tbody>
-      </Table>
-    );
-  };
-
-  return (
-    <Modal show={show} onHide={onHide} size="xl">
-      <Modal.Header closeButton>
-        <Modal.Title>Block Schedule View</Modal.Title>
-      </Modal.Header>
-      <Modal.Body>
-        {isLoading ? (
-          <div className="text-center p-4">
-            <Spinner animation="border" role="status">
-              <span className="visually-hidden">Loading schedule...</span>
-            </Spinner>
+return (
+  <Modal show={show} onHide={onHide} size="xl">
+    <Modal.Header closeButton>
+      <Modal.Title>Block Schedule View</Modal.Title>
+    </Modal.Header>
+    <Modal.Body>
+      {isLoading ? (
+        <div className="text-center p-4">
+          <Spinner animation="border" role="status">
+            <span className="visually-hidden">Loading schedule...</span>
+          </Spinner>
+        </div>
+      ) : schedule.length === 0 ? (
+        <div className="text-center p-4">No courses scheduled for this block</div>
+      ) : (
+        <div>
+          <div id="calendar-container">
+            <FullCalendar
+              ref={calendarRef}
+              plugins={[timeGridPlugin, bootstrap5Plugin]}
+              initialView="timeGridWeek"
+              headerToolbar={false}
+              allDaySlot={false}
+              slotMinTime="08:00:00"
+              slotMaxTime="22:00:00"
+              weekends={true} // Changed to true to include Saturday and Sunday
+              events={convertToCalendarEvents()}
+              height="auto"
+              themeSystem="bootstrap5"
+            />
           </div>
-        ) : schedule.length === 0 ? (
-          <div className="text-center p-4">No courses scheduled for this block</div>
-        ) : (
-          renderScheduleTable()
-        )}
-      </Modal.Body>
-    </Modal>
-  );
+          <div className="mt-3 d-flex justify-content-end">
+            <ButtonGroup>
+              <Button variant="primary" onClick={handleExportPNG}>Export as PNG</Button>
+              <Button variant="secondary" onClick={handleExportCSV}>Export as CSV</Button>
+            </ButtonGroup>
+          </div>
+        </div>
+      )}
+    </Modal.Body>
+  </Modal>
+);
 };
 
 export default ScheduleViewModal;
-
 
 
 === frontend/app/src/components/shared/Navigation.jsx ===
@@ -4003,8 +5083,6 @@ const Navigation = () => {
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="me-auto">
             <Nav.Link as={Link} to="/offerings">Course Offerings</Nav.Link>
-            <Nav.Link as={Link} to="/courses">Courses</Nav.Link>
-            <Nav.Link as={Link} to="/blocks">Blocks</Nav.Link>
             <Nav.Link as={Link} to="/programs">Programs</Nav.Link>
             <Nav.Link as={Link} to="/conflicts">Conflict Checker</Nav.Link>
             <Nav.Link as={Link} to="/schedule">Schedules</Nav.Link>

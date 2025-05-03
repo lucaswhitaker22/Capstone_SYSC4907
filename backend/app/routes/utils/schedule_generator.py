@@ -3,48 +3,66 @@ from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement
 from app.database import db
 from http import HTTPStatus
 from app.routes.conflicts import has_time_conflict
+from app.routes.utils.schedule_rating import rate_block_schedule
 import logging
+from flask import Blueprint, jsonify, request, current_app
+from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement
+from app.database import db
+from http import HTTPStatus
+from app.routes.conflicts import has_time_conflict
+from app.routes.utils.schedule_rating import rate_block_schedule
+import logging
+import random  # Added for randomization
 
 def generate_block_schedule(block_id):
     try:
-        # Get block and validate
         block = Block.query.get_or_404(block_id)
         if block.status == 'LOCKED':
             return jsonify({
                 'error': 'Cannot modify locked block'
             }), HTTPStatus.FORBIDDEN
 
-        # Get program requirements
         program_requirements = ProgramRequirement.query.filter_by(
             program_id=block.program_id
         ).order_by(ProgramRequirement.requirement_id).all()
 
         if not program_requirements:
             return jsonify({
-                'error': 'No requirements found for program'
+                'error': f'No requirements found for program'
             }), HTTPStatus.NOT_FOUND
 
-        # Get required course IDs
         required_courses = [req.course_id for req in program_requirements]
 
-        # Get all existing schedules to check for duplicates
-        existing_schedules = BlockSchedule.query.filter(
-            BlockSchedule.block_id != block_id
+        # Get existing schedules to check for duplicates
+        existing_schedules = BlockSchedule.query.join(Block).filter(
+            BlockSchedule.block_id != block_id,
+            Block.term == block.term,
+            Block.academic_year == block.academic_year
         ).all()
 
-        # Group existing schedules by block for comparison
         existing_block_schedules = {}
         for schedule in existing_schedules:
             if schedule.block_id not in existing_block_schedules:
                 existing_block_schedules[schedule.block_id] = []
             existing_block_schedules[schedule.block_id].append(schedule.offering_id)
 
-        # Get all available offerings for required courses
+        # Get offerings with sufficient capacity
         available_offerings = CourseOffering.query.filter(
-            CourseOffering.course_id.in_(required_courses)
+            CourseOffering.course_id.in_(required_courses),
+            CourseOffering.term == block.term,
+            CourseOffering.academic_year == block.academic_year,
+            CourseOffering.status != 'CANCELLED',
+            CourseOffering.capacity - CourseOffering.current_enrollment >= block.block_size
         ).all()
 
-        # Group offerings by course
+        if not available_offerings:
+            return jsonify({
+                'error': f'No course offerings found with sufficient capacity for block size {block.block_size}'
+            }), HTTPStatus.NOT_FOUND
+
+        available_courses = set(offering.course_id for offering in available_offerings)
+        courses_with_offerings = set(required_courses) & available_courses
+
         course_offerings = {}
         for offering in available_offerings:
             if offering.course_id not in course_offerings:
@@ -55,7 +73,6 @@ def generate_block_schedule(block_id):
 
         def try_schedule_combination(current_schedule, remaining_courses, course_offerings):
             if not remaining_courses:
-                # Check if this schedule is identical to any existing block schedule
                 current_offering_ids = set(o.offering_id for o in current_schedule)
                 for block_schedule in existing_block_schedules.values():
                     if set(block_schedule) == current_offering_ids:
@@ -63,24 +80,32 @@ def generate_block_schedule(block_id):
                 valid_schedules.append(current_schedule.copy())
                 return
 
-            current_course = remaining_courses[0]
+            # Randomize course selection order
+            course_idx = random.randrange(len(remaining_courses))
+            current_course = remaining_courses.pop(course_idx)
+            
             if current_course not in course_offerings:
+                remaining_courses.append(current_course)  # Put it back for next iterations
                 return
 
-            # Group lectures by their section prefix
             lecture_groups = {}
             for lecture in course_offerings[current_course]['LECTURE']:
+                if lecture.capacity - lecture.current_enrollment < block.block_size:
+                    continue
                 prefix = lecture.section_code.split('-')[0]
                 if prefix not in lecture_groups:
                     lecture_groups[prefix] = []
                 lecture_groups[prefix].append(lecture)
 
-            # Try each lecture group
-            for prefix, lectures in lecture_groups.items():
+            # Randomize order of lecture group prefixes
+            prefix_list = list(lecture_groups.keys())
+            random.shuffle(prefix_list)
+
+            for prefix in prefix_list:
+                lectures = lecture_groups[prefix]
                 all_lectures_fit = True
                 temp_schedule = current_schedule.copy()
 
-                # Add all lectures from this section group
                 for lecture in lectures:
                     if any(has_time_conflict(lecture, selected) for selected in temp_schedule):
                         all_lectures_fit = False
@@ -89,57 +114,72 @@ def generate_block_schedule(block_id):
 
                 if all_lectures_fit:
                     if course_offerings[current_course]['LAB']:
-                        # Try each lab with this lecture group
-                        for lab in course_offerings[current_course]['LAB']:
+                        # Randomize the order of labs
+                        labs = course_offerings[current_course]['LAB'].copy()
+                        random.shuffle(labs)
+                        
+                        for lab in labs:
+                            if lab.capacity - lab.current_enrollment < block.block_size:
+                                continue
                             if not any(has_time_conflict(lab, selected) for selected in temp_schedule):
+                                new_remaining = remaining_courses.copy()
                                 try_schedule_combination(
                                     temp_schedule + [lab],
-                                    remaining_courses[1:],
+                                    new_remaining,
                                     course_offerings
                                 )
                     else:
-                        # No lab required, continue with next course
+                        new_remaining = remaining_courses.copy()
                         try_schedule_combination(
                             temp_schedule,
-                            remaining_courses[1:],
+                            new_remaining,
                             course_offerings
                         )
+            
+            # Put the course back for other branches of recursion
+            remaining_courses.append(current_course)
 
-        # Generate all valid schedules
-        try_schedule_combination([], required_courses, course_offerings)
+        # Start with randomized course order
+        course_list = list(courses_with_offerings)
+        random.shuffle(course_list)
+        try_schedule_combination([], course_list, course_offerings)
 
         if not valid_schedules:
             return jsonify({
-                'error': 'No valid schedule found that satisfies all requirements'
+                'error': f'Could not create valid schedule with available courses having sufficient capacity'
             }), HTTPStatus.BAD_REQUEST
 
-        # Select the first valid schedule (you could implement a selection strategy here)
-        selected_schedule = valid_schedules[0]
+        # Randomly select a schedule instead of always using the first one
+        selected_schedule = random.choice(valid_schedules)
 
-        # Clear existing schedule
+        # Reset enrollments for old schedule
+        old_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        for old_schedule in old_schedules:
+            old_offering = CourseOffering.query.get(old_schedule.offering_id)
+            old_offering.current_enrollment -= block.block_size
+            if old_offering.current_enrollment < old_offering.capacity:
+                old_offering.status = 'OPEN'
         BlockSchedule.query.filter_by(block_id=block_id).delete()
 
-        # Create block schedules for selected offerings
+        # Create new schedule and update enrollments
         for offering in selected_schedule:
             block_schedule = BlockSchedule(
                 block_id=block_id,
                 offering_id=offering.offering_id
             )
             db.session.add(block_schedule)
+            
+            offering.current_enrollment += block.block_size
+            if offering.current_enrollment >= offering.capacity:
+                offering.status = 'FULL'
 
-        # Calculate and set the rating
         rating_response = rate_block_schedule(block_id)
-        if isinstance(rating_response, tuple):
-            rating = rating_response[0].get_json()  # Extract the rating value from jsonify response
-        else:
-            rating = rating_response
+        rating_data = rating_response[0].get_json()
+        rating = rating_data.get('rating', 0)
 
-        # Update block with new rating
         block.schedule_rating = rating
         db.session.commit()
 
-
-        # Format response
         formatted_offerings = [{
             'offering_id': o.offering_id,
             'course_id': o.course_id,
@@ -151,12 +191,20 @@ def generate_block_schedule(block_id):
             'section_code': o.section_code,
             'day_of_week': o.day_of_week,
             'start_time': o.start_time.strftime('%H:%M'),
-            'end_time': o.end_time.strftime('%H:%M')
+            'end_time': o.end_time.strftime('%H:%M'),
+            'term': block.term,
+            'academic_year': block.academic_year,
+            'current_enrollment': o.current_enrollment,
+            'capacity': o.capacity,
+            'status': o.status
         } for o in selected_schedule]
 
         return jsonify({
+            'block_id': block_id,
+            'term': block.term,
+            'academic_year': block.academic_year,
             'schedule': formatted_offerings,
-            'scheduled_courses': required_courses,
+            'scheduled_courses': list(courses_with_offerings),
             'total_valid_schedules': len(valid_schedules),
             'schedule_rating': rating
         }), HTTPStatus.CREATED
@@ -167,69 +215,3 @@ def generate_block_schedule(block_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
-
-def rate_block_schedule(block_id):
-    try:
-        block = Block.query.get_or_404(block_id)
-        block_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
-        
-        if not block_schedules:
-            return jsonify(0), HTTPStatus.OK
-            
-        offerings = [schedule.course_offering for schedule in block_schedules]
-        total_points = 0
-        
-        # Criterion 1: Time Distribution (40 points)
-        time_slots = {
-            'morning': 0,    # Before 12:00
-            'afternoon': 0,  # 12:00-17:00
-            'evening': 0     # After 17:00
-        }
-        
-        for offering in offerings:
-            hour = offering.start_time.hour
-            if hour < 12:
-                time_slots['morning'] += 1
-            elif hour < 17:
-                time_slots['afternoon'] += 1
-            else:
-                time_slots['evening'] += 1
-                
-        if len(offerings) > 0:
-            distribution_score = 40 * (1 - (max(time_slots.values()) - min(time_slots.values())) / len(offerings))
-            total_points += distribution_score
-        
-        # Criterion 2: Day Distribution (30 points)
-        days_used = len(set(o.day_of_week for o in offerings))
-        day_distribution_score = 30 * (days_used / 5)  # Assuming 5 weekdays
-        total_points += day_distribution_score
-        
-        # Criterion 3: Gap Analysis (30 points)
-        daily_schedules = {}
-        for offering in offerings:
-            if offering.day_of_week not in daily_schedules:
-                daily_schedules[offering.day_of_week] = []
-            daily_schedules[offering.day_of_week].append(offering)
-
-        gap_penalties = 0
-        for day_schedule in daily_schedules.values():
-            sorted_offerings = sorted(day_schedule, key=lambda x: x.start_time)
-            for i in range(len(sorted_offerings) - 1):
-                # Convert times to datetime for proper subtraction
-                from datetime import datetime, timedelta
-                current_date = datetime.now().date()
-                end_time = datetime.combine(current_date, sorted_offerings[i].end_time)
-                start_time = datetime.combine(current_date, sorted_offerings[i+1].start_time)
-                gap = (start_time - end_time).total_seconds() / 3600
-                if gap > 3:  # Penalize gaps longer than 3 hours
-                    gap_penalties += 1
-                        
-            gap_score = 30 * (1 - (gap_penalties / len(offerings)))
-            total_points += gap_score
-        
-        return jsonify(round(total_points, 1)), HTTPStatus.OK
-        
-    except Exception as e:
-        current_app.logger.error(f"Error rating schedule: {str(e)}")
-        return jsonify(0), HTTPStatus.OK
-

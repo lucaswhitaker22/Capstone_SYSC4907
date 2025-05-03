@@ -10,15 +10,21 @@ const OfferingConflictModal = ({ show, onHide }) => {
   const [conflict, setConflict] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingOfferings, setIsLoadingOfferings] = useState(true);
+  const [selectedTerm, setSelectedTerm] = useState('FALL');
+  const [selectedYear, setSelectedYear] = useState('2025-2026');
 
   useEffect(() => {
     if (show) {
       fetchOfferings();
-      setConflict(null);
-      setOffering1('');
-      setOffering2('');
+      resetForm();
     }
-  }, [show]);
+  }, [show, selectedTerm, selectedYear]);
+
+  const resetForm = () => {
+    setConflict(null);
+    setOffering1('');
+    setOffering2('');
+  };
 
   const fetchOfferings = async () => {
     try {
@@ -63,6 +69,11 @@ const OfferingConflictModal = ({ show, onHide }) => {
     return days[day - 1];
   };
 
+  // Filter offerings by term and year
+  const filteredOfferings = offerings.filter(
+    offering => offering.term === selectedTerm && offering.academic_year === selectedYear
+  );
+
   return (
     <Modal show={show} onHide={onHide}>
       <Modal.Header closeButton>
@@ -77,25 +88,64 @@ const OfferingConflictModal = ({ show, onHide }) => {
           </div>
         ) : (
           <Form>
+            <div className="mb-3 d-flex gap-3">
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Term</Form.Label>
+                <Form.Select
+                  value={selectedTerm}
+                  onChange={(e) => {
+                    setSelectedTerm(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="FALL">Fall</option>
+                  <option value="WINTER">Winter</option>
+                </Form.Select>
+              </Form.Group>
+
+              <Form.Group style={{ width: '200px' }}>
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Select
+                  value={selectedYear}
+                  onChange={(e) => {
+                    setSelectedYear(e.target.value);
+                    resetForm();
+                  }}
+                >
+                  <option value="2024-2025">2024-2025</option>
+                  <option value="2025-2026">2025-2026</option>
+                  <option value="2026-2027">2026-2027</option>
+                </Form.Select>
+              </Form.Group>
+            </div>
+
             <Form.Group className="mb-3">
-              <Form.Label>First Offering</Form.Label>
+              <Form.Label>First Offering ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select
                 value={offering1}
-                onChange={(e) => setOffering1(e.target.value)}
+                onChange={(e) => {
+                  setOffering1(e.target.value);
+                  setOffering2('');
+                  setConflict(null);
+                }}
               >
                 <option value="">Select an offering</option>
-                {offerings.map(renderOfferingOption)}
+                {filteredOfferings.map(renderOfferingOption)}
               </Form.Select>
             </Form.Group>
+
             <Form.Group className="mb-3">
-              <Form.Label>Second Offering</Form.Label>
+              <Form.Label>Second Offering ({selectedTerm} {selectedYear})</Form.Label>
               <Form.Select
                 value={offering2}
-                onChange={(e) => setOffering2(e.target.value)}
+                onChange={(e) => {
+                  setOffering2(e.target.value);
+                  setConflict(null);
+                }}
                 disabled={!offering1}
               >
                 <option value="">Select an offering</option>
-                {offerings
+                {filteredOfferings
                   .filter(o => o.offering_id !== offering1)
                   .map(renderOfferingOption)}
               </Form.Select>
@@ -104,10 +154,14 @@ const OfferingConflictModal = ({ show, onHide }) => {
         )}
         {conflict && (
           <Alert variant={conflict.has_conflict ? 'danger' : 'success'}>
-            {conflict.has_conflict ? 
-              `Time conflict detected between ${conflict.offering1} and ${conflict.offering2}` :
-              'No time conflicts detected between these offerings'
-            }
+            {conflict.has_conflict ? (
+              <>
+                Time conflict detected in {selectedTerm} {selectedYear}:<br/>
+                {conflict.offering1.course_id} conflicts with {conflict.offering2.course_id}
+              </>
+            ) : (
+              `No time conflicts detected between these offerings in ${selectedTerm} ${selectedYear}`
+            )}
           </Alert>
         )}
       </Modal.Body>

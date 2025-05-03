@@ -15,6 +15,7 @@ __all__ = [
     'BlockSchedule'
 ]# app/models/block.py
 from app import db
+from .enums import Term, BlockStatus
 
 class Block(db.Model):
     __tablename__ = 'block'
@@ -22,15 +23,14 @@ class Block(db.Model):
     block_id = db.Column(db.String(20), primary_key=True)
     program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), nullable=False)
     block_size = db.Column(db.Integer, nullable=False)
-    term = db.Column(db.String(10), nullable=False)
+    term = db.Column(db.Enum(Term), nullable=False)  # Change to Enum type
     academic_year = db.Column(db.String(9), nullable=False)
     schedule_rating = db.Column(db.Numeric(5,2))
     early_starts = db.Column(db.Integer)
     late_ends = db.Column(db.Integer)
     long_breaks = db.Column(db.Integer)
     consecutive_days = db.Column(db.Integer)
-    status = db.Column(db.String(20), default='DRAFT')
-
+    status = db.Column(db.Enum(BlockStatus), default=BlockStatus.DRAFT)
     # Relationships
     block_schedules = db.relationship('BlockSchedule', backref='block', lazy=True)
 
@@ -68,30 +68,32 @@ class Course(db.Model):
     def __repr__(self):
         return f'<Course {self.course_id}>'# app/models/course_offering.py
 from app import db
-
+from .enums import Term, OfferingStatus
+# app/models/course_offering.py
 class CourseOffering(db.Model):
     __tablename__ = 'course_offering'
 
     offering_id = db.Column(db.Integer, primary_key=True)
     course_id = db.Column(db.String(10), db.ForeignKey('course.course_id'), nullable=False)
-    section_type = db.Column(db.String(20), nullable=False)
+    section_type = db.Column(db.String(20), nullable=False)  # Use enum
     section_code = db.Column(db.String(5), nullable=False)
     day_of_week = db.Column(db.Integer, nullable=False)
     start_time = db.Column(db.Time, nullable=False)
     end_time = db.Column(db.Time, nullable=False)
     capacity = db.Column(db.Integer, nullable=False)
     current_enrollment = db.Column(db.Integer, default=0)
-    term = db.Column(db.String(10), nullable=False)
+    term = db.Column(db.Enum(Term), nullable=False)  # Use enum
     academic_year = db.Column(db.String(9), nullable=False)
-    status = db.Column(db.String(20), default='OPEN')
-
-    # Relationships
-    block_schedules = db.relationship('BlockSchedule', backref='course_offering', lazy=True)
+    status = db.Column(db.Enum(OfferingStatus), default=OfferingStatus.OPEN)  # Use enum
 
     __table_args__ = (
         db.UniqueConstraint('course_id', 'section_type', 'section_code', 
                           'term', 'academic_year', name='unique_section'),
+        db.Index('idx_term_year', 'term', 'academic_year')  # Add index for common queries
     )
+
+    # Relationships
+    block_schedules = db.relationship('BlockSchedule', backref='course_offering', lazy=True)
 
     def __repr__(self):
         return f'<CourseOffering {self.course_id} {self.section_code}>'# app/models/enums.py
@@ -114,7 +116,9 @@ class BlockStatus(str, Enum):
 class OfferingStatus(str, Enum):
     OPEN = 'OPEN'
     FULL = 'FULL'
-    CANCELLED = 'CANCELLED'# app/models/mixins.py
+    CANCELLED = 'CANCELLED'
+
+# app/models/mixins.py
 from datetime import datetime
 from app import db
 
@@ -129,23 +133,28 @@ class Program(db.Model):
     program_id = db.Column(db.String(10), primary_key=True)
     program_name = db.Column(db.String(100), nullable=False)
     total_enrollment = db.Column(db.Integer, nullable=False)
-    blocks_20_count = db.Column(db.Integer, nullable=False)
-    blocks_10_count = db.Column(db.Integer, nullable=False)
+    blocks_20_count_fall = db.Column(db.Integer, nullable=False, default=0)  # New field
+    blocks_10_count_fall = db.Column(db.Integer, nullable=False, default=0)  # New field
+    blocks_20_count_winter = db.Column(db.Integer, nullable=False, default=0)  # New field
+    blocks_10_count_winter = db.Column(db.Integer, nullable=False, default=0)  # New field
 
     # Relationships
     blocks = db.relationship('Block', backref='program', lazy=True)
     program_requirements = db.relationship('ProgramRequirement', backref='program', lazy=True)
-
     def __repr__(self):
         return f'<Program {self.program_id}>'# app/models/program_requirement.py
 from app import db
-
+from .enums import Term
 class ProgramRequirement(db.Model):
     __tablename__ = 'program_requirement'
-
-    program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), primary_key=True)
-    course_id = db.Column(db.String(10), db.ForeignKey('course.course_id'), primary_key=True)
-    term = db.Column(db.String(10), primary_key=True)
+    
+    requirement_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), nullable=False)
+    course_id = db.Column(db.String(10), db.ForeignKey('course.course_id'), nullable=False)
+    
+    __table_args__ = (
+        db.UniqueConstraint('program_id', 'course_id', name='unique_program_course_term'),
+    )
 
     def __repr__(self):
         return f'<ProgramRequirement {self.program_id} {self.course_id}>'

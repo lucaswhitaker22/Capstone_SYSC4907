@@ -1,6 +1,6 @@
 # app/routes/programs.py
 from flask import Blueprint, jsonify, request
-from app.models import Program, Block, ProgramRequirement, BlockSchedule
+from app.models import Program, Block, ProgramRequirement, BlockSchedule,CourseOffering
 from app import db
 from http import HTTPStatus
 
@@ -15,7 +15,8 @@ def get_programs():
             'program_name': p.program_name,
             'total_enrollment': p.total_enrollment,
             'blocks_20_count': p.blocks_20_count,
-            'blocks_10_count': p.blocks_10_count
+            'blocks_10_count': p.blocks_10_count,
+
         } for p in programs]), HTTPStatus.OK
     except Exception as e:
         return jsonify({
@@ -34,63 +35,56 @@ def get_program(program_id):
         'blocks_10_count': program.blocks_10_count
     }), HTTPStatus.OK
 
+
 @bp.route('/', methods=['POST'])
 def create_program():
     try:
         data = request.get_json()
         
-        # Validate required fields
-        required_fields = ['program_id', 'program_name', 'total_enrollment', 
-                         'blocks_20_count', 'blocks_10_count']
-        if not data or not all(field in data for field in required_fields):
+        required_fields = [
+            'program_id', 'program_name', 
+            'blocks_20_count', 'blocks_10_count', 'academic_year'
+        ]
+        if not all(field in data for field in required_fields):
             return jsonify({'error': 'Missing required fields'}), HTTPStatus.BAD_REQUEST
-            
-        # Check for existing program
-        if Program.query.get(data['program_id']):
-            return jsonify({'error': 'Program already exists'}), HTTPStatus.CONFLICT
-            
-        # Validate numeric fields
-        if not isinstance(data['total_enrollment'], int) or data['total_enrollment'] < 0:
-            return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
-            
-        if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
-            return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
-            
-        if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
-            return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
 
-        # Create program
-        program = Program(**data)
+        # Calculate total enrollment based on block counts
+        total_enrollment = (data['blocks_20_count'] * 20) + (data['blocks_10_count'] * 10)
+
+        program = Program(
+            program_id=data['program_id'],
+            program_name=data['program_name'],
+            total_enrollment=total_enrollment,  # Use calculated value
+            blocks_20_count=data['blocks_20_count'],
+            blocks_10_count=data['blocks_10_count']
+        )
         db.session.add(program)
         
-        # Generate blocks
+        # Generate identical blocks for both terms
         blocks = []
-        
-        # Generate 20-student blocks
-        for i in range(data['blocks_20_count']):
-            block = Block(
-                block_id=f"{data['program_id']}_20_{i+1}",
-                program_id=data['program_id'],
-                block_size=20,
-                term="FALL",
-                academic_year="2025-2026",
-                status="ACTIVE"
-            )
-            blocks.append(block)
+        for term, prefix in [('FALL', 'F'), ('WINTER', 'W')]:
+            # 20-student blocks
+            for i in range(data['blocks_20_count']):
+                blocks.append(Block(
+                    block_id=f"{data['program_id']}_{prefix}_20_{i+1}",
+                    program_id=data['program_id'],
+                    block_size=20,
+                    term=term,
+                    academic_year=data['academic_year'],
+                    status="DRAFT"
+                ))
             
-        # Generate 10-student blocks
-        for i in range(data['blocks_10_count']):
-            block = Block(
-                block_id=f"{data['program_id']}_10_{i+1}",
-                program_id=data['program_id'],
-                block_size=10,
-                term="FALL",
-                academic_year="2025-2026",
-                status="ACTIVE"
-            )
-            blocks.append(block)
+            # 10-student blocks
+            for i in range(data['blocks_10_count']):
+                blocks.append(Block(
+                    block_id=f"{data['program_id']}_{prefix}_10_{i+1}",
+                    program_id=data['program_id'],
+                    block_size=10,
+                    term=term,
+                    academic_year=data['academic_year'],
+                    status="DRAFT"
+                ))
         
-        # Bulk save blocks
         db.session.bulk_save_objects(blocks)
         db.session.commit()
         
@@ -102,7 +96,7 @@ def create_program():
             'blocks_10_count': program.blocks_10_count,
             'blocks_created': len(blocks)
         }), HTTPStatus.CREATED
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({
@@ -110,62 +104,6 @@ def create_program():
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-
-@bp.route('/bulk', methods=['POST'])
-def bulk_create_programs():
-    try:
-        data = request.get_json()
-        if not data or 'programs' not in data:
-            return jsonify({'error': 'No programs data provided'}), HTTPStatus.BAD_REQUEST
-            
-        programs = []
-        blocks = []
-        
-        for program_data in data['programs']:
-            if Program.query.get(program_data['program_id']):
-                continue
-                
-            program = Program(
-                program_id=program_data['program_id'],
-                program_name=program_data['program_name'],
-                total_enrollment=int(program_data['total_enrollment']),
-                blocks_20_count=int(program_data['blocks_20_count']),
-                blocks_10_count=int(program_data['blocks_10_count'])
-            )
-            programs.append(program)
-            
-            # Generate blocks for each program
-            for i in range(int(program_data['blocks_20_count'])):
-                blocks.append(Block(
-                    block_id=f"{program_data['program_id']}_20_{i+1}",
-                    program_id=program_data['program_id'],
-                    block_size=20,
-                    term="FALL",
-                    academic_year="2025-2026",
-                    status="ACTIVE"
-                ))
-                
-            for i in range(int(program_data['blocks_10_count'])):
-                blocks.append(Block(
-                    block_id=f"{program_data['program_id']}_10_{i+1}",
-                    program_id=program_data['program_id'],
-                    block_size=10,
-                    term="FALL",
-                    academic_year="2025-2026",
-                    status="ACTIVE"
-                ))
-        
-        db.session.bulk_save_objects(programs)
-        db.session.bulk_save_objects(blocks)
-        db.session.commit()
-        
-        return jsonify({
-            'message': f'{len(programs)} programs created with {len(blocks)} blocks'
-        }), HTTPStatus.CREATED
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), HTTPStatus.BAD_REQUEST
     
 @bp.route('/<program_id>', methods=['PUT'], strict_slashes=False)
 def update_program(program_id):
@@ -173,100 +111,112 @@ def update_program(program_id):
         program = Program.query.get_or_404(program_id)
         data = request.get_json()
         
-        if not data:
-            return jsonify({'error': 'No data provided'}), HTTPStatus.BAD_REQUEST
+        # Handle 20-student blocks update
+        if 'blocks_20_count' in data:
+            new_count = data['blocks_20_count']
+            current_count = program.blocks_20_count
+            
+            if new_count < current_count:
+                # Delete excess blocks for both terms
+                for term in ['FALL', 'WINTER']:
+                    # Get blocks ordered by ID to ensure consistent deletion
+                    blocks_to_delete = Block.query.filter_by(
+                        program_id=program_id,
+                        term=term,
+                        block_size=20
+                    ).order_by(Block.block_id.desc()).limit(current_count - new_count).all()
+                    
+                    for block in blocks_to_delete:
+                        # Update enrollments before deletion
+                        schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+                        for schedule in schedules:
+                            offering = CourseOffering.query.get(schedule.offering_id)
+                            offering.current_enrollment -= block.block_size
+                            if offering.current_enrollment < offering.capacity:
+                                offering.status = 'OPEN'
+                        BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+                        db.session.delete(block)
+            
+            elif new_count > current_count:
+                # Get existing block IDs to avoid conflicts
+                existing_blocks = Block.query.filter_by(
+                    program_id=program_id,
+                    block_size=20
+                ).all()
+                existing_ids = set(block.block_id for block in existing_blocks)
+                
+                # Create additional blocks
+                for i in range(current_count + 1, new_count + 1):
+                    for term, prefix in [('FALL', 'F'), ('WINTER', 'W')]:
+                        block_id = f"{program_id}_{prefix}_20_{i}"
+                        if block_id not in existing_ids:
+                            block = Block(
+                                block_id=block_id,
+                                program_id=program_id,
+                                block_size=20,
+                                term=term,
+                                academic_year=program.blocks[0].academic_year,
+                                status="DRAFT"
+                            )
+                            db.session.add(block)
+            
+            program.blocks_20_count = new_count
 
-        # Update basic program fields
+
+        # Handle 10-student blocks update
+        if 'blocks_10_count' in data:
+            new_count = data['blocks_10_count']
+            current_count = program.blocks_10_count
+            
+            if new_count < current_count:
+                # Delete excess blocks for both terms
+                for term in ['FALL', 'WINTER']:
+                    blocks_to_delete = Block.query.filter_by(
+                        program_id=program_id,
+                        term=term,
+                        block_size=10
+                    ).limit(current_count - new_count).all()
+                    
+                    for block in blocks_to_delete:
+                        schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+                        for schedule in schedules:
+                            offering = CourseOffering.query.get(schedule.offering_id)
+                            offering.current_enrollment -= block.block_size
+                            if offering.current_enrollment < offering.capacity:
+                                offering.status = 'OPEN'
+                        BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+                        db.session.delete(block)
+            
+            elif new_count > current_count:
+                # Create additional blocks for both terms
+                for term, prefix in [('FALL', 'F'), ('WINTER', 'W')]:
+                    for i in range(current_count + 1, new_count + 1):
+                        block = Block(
+                            block_id=f"{program_id}_{prefix}_10_{i}",
+                            program_id=program_id,
+                            block_size=10,
+                            term=term,
+                            academic_year=program.blocks[0].academic_year,
+                            status="DRAFT"
+                        )
+                        db.session.add(block)
+            
+            program.blocks_10_count = new_count
+
         if 'program_name' in data:
             program.program_name = data['program_name']
-            
-        if 'total_enrollment' in data:
-            if not isinstance(data['total_enrollment'], int) or data['total_enrollment'] < 0:
-                return jsonify({'error': 'Invalid total_enrollment'}), HTTPStatus.BAD_REQUEST
-            program.total_enrollment = data['total_enrollment']
 
-        new_blocks = []
-        deleted_blocks = []
-        
-        # Handle 20-student blocks
-        if 'blocks_20_count' in data:
-            if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
-                
-            current_20_blocks = Block.query.filter_by(
-                program_id=program_id, 
-                block_size=20
-            ).order_by(Block.block_id.desc()).all()
+        # Update total enrollment based on block counts
+        program.total_enrollment = (program.blocks_20_count * 20) + (program.blocks_10_count * 10)
             
-            if data['blocks_20_count'] > len(current_20_blocks):
-                # Create additional blocks
-                for i in range(len(current_20_blocks), data['blocks_20_count']):
-                    block = Block(
-                        block_id=f"{program_id}_20_{i+1}",
-                        program_id=program_id,
-                        block_size=20,
-                        term="FALL",
-                        academic_year="2025-2026",
-                        status="ACTIVE"
-                    )
-                    new_blocks.append(block)
-            elif data['blocks_20_count'] < len(current_20_blocks):
-                # Delete excess blocks
-                blocks_to_delete = current_20_blocks[data['blocks_20_count']:]
-                for block in blocks_to_delete:
-                    # Delete associated schedules first
-                    BlockSchedule.query.filter_by(block_id=block.block_id).delete()
-                    deleted_blocks.append(block.block_id)
-                    db.session.delete(block)
-            
-            program.blocks_20_count = data['blocks_20_count']
-
-        # Handle 10-student blocks
-        if 'blocks_10_count' in data:
-            if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
-                
-            current_10_blocks = Block.query.filter_by(
-                program_id=program_id, 
-                block_size=10
-            ).order_by(Block.block_id.desc()).all()
-            
-            if data['blocks_10_count'] > len(current_10_blocks):
-                # Create additional blocks
-                for i in range(len(current_10_blocks), data['blocks_10_count']):
-                    block = Block(
-                        block_id=f"{program_id}_10_{i+1}",
-                        program_id=program_id,
-                        block_size=10,
-                        term="FALL",
-                        academic_year="2025-2026",
-                        status="ACTIVE"
-                    )
-                    new_blocks.append(block)
-            elif data['blocks_10_count'] < len(current_10_blocks):
-                # Delete excess blocks
-                blocks_to_delete = current_10_blocks[data['blocks_10_count']:]
-                for block in blocks_to_delete:
-                    # Delete associated schedules first
-                    BlockSchedule.query.filter_by(block_id=block.block_id).delete()
-                    deleted_blocks.append(block.block_id)
-                    db.session.delete(block)
-            
-            program.blocks_10_count = data['blocks_10_count']
-
-        # Save all changes
-        if new_blocks:
-            db.session.bulk_save_objects(new_blocks)
         db.session.commit()
-
+        
         return jsonify({
             'program_id': program.program_id,
             'program_name': program.program_name,
             'total_enrollment': program.total_enrollment,
             'blocks_20_count': program.blocks_20_count,
-            'blocks_10_count': program.blocks_10_count,
-            'new_blocks_created': len(new_blocks),
-            'blocks_deleted': deleted_blocks
+            'blocks_10_count': program.blocks_10_count
         }), HTTPStatus.OK
         
     except Exception as e:
@@ -276,20 +226,36 @@ def update_program(program_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-
-
 @bp.route('/<program_id>', methods=['DELETE'], strict_slashes=False)
 def delete_program(program_id):
     try:
         program = Program.query.get_or_404(program_id)
         
-        # Delete associated blocks first
+        # Get all blocks for the program
+        blocks = Block.query.filter_by(program_id=program_id).all()
+        
+        # For each block, update course offering enrollments
+        for block in blocks:
+            schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+            for schedule in schedules:
+                offering = CourseOffering.query.get(schedule.offering_id)
+                # Decrease enrollment by block size
+                offering.current_enrollment -= block.block_size
+                # Update offering status if no longer full
+                if offering.current_enrollment < offering.capacity:
+                    offering.status = 'OPEN'
+        
+        # Delete all block schedules first (due to foreign key constraints)
+        for block in blocks:
+            BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+            
+        # Delete all blocks
         Block.query.filter_by(program_id=program_id).delete()
         
         # Delete program requirements
         ProgramRequirement.query.filter_by(program_id=program_id).delete()
         
-        # Delete the program
+        # Finally delete the program
         db.session.delete(program)
         db.session.commit()
         
@@ -301,6 +267,7 @@ def delete_program(program_id):
             'error': 'Internal Server Error',
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
+
 
 @bp.route('/<program_id>/enrollment', methods=['PATCH'], strict_slashes=False)
 def update_enrollment(program_id):
@@ -328,29 +295,108 @@ def update_enrollment(program_id):
             'message': str(e)
         }), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@bp.route('/<program_id>/blocks', methods=['PATCH'], strict_slashes=False)
+@bp.route('/blocks', methods=['PATCH'])
 def update_block_counts(program_id):
     try:
         program = Program.query.get_or_404(program_id)
         data = request.get_json()
         
-        if 'blocks_20_count' in data:
-            if not isinstance(data['blocks_20_count'], int) or data['blocks_20_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_20_count'}), HTTPStatus.BAD_REQUEST
-            program.blocks_20_count = data['blocks_20_count']
+        # Validate term
+        term = data.get('term')
+        if term not in ['FALL', 'WINTER']:
+            return jsonify({'error': 'Invalid term'}), HTTPStatus.BAD_REQUEST
             
-        if 'blocks_10_count' in data:
-            if not isinstance(data['blocks_10_count'], int) or data['blocks_10_count'] < 0:
-                return jsonify({'error': 'Invalid blocks_10_count'}), HTTPStatus.BAD_REQUEST
-            program.blocks_10_count = data['blocks_10_count']
+        term_suffix = term.lower()
+        term_prefix = 'F' if term == 'FALL' else 'W'
+        
+        # Get existing blocks to update enrollments
+        existing_blocks = Block.query.filter_by(
+            program_id=program_id,
+            term=term
+        ).all()
+        
+        # Update enrollments before deleting blocks
+        for block in existing_blocks:
+            schedules = BlockSchedule.query.filter_by(block_id=block.block_id).all()
+            for schedule in schedules:
+                offering = CourseOffering.query.get(schedule.offering_id)
+                offering.current_enrollment -= block.block_size
+                if offering.current_enrollment < offering.capacity:
+                    offering.status = 'OPEN'
+            BlockSchedule.query.filter_by(block_id=block.block_id).delete()
+        
+        # Update 20-student blocks
+        if f'blocks_20_count_{term_suffix}' in data:
+            new_count = data[f'blocks_20_count_{term_suffix}']
+            if not isinstance(new_count, int) or new_count < 0:
+                return jsonify({'error': f'Invalid blocks_20_count_{term_suffix}'}), HTTPStatus.BAD_REQUEST
+                
+            # Delete existing blocks
+            Block.query.filter_by(
+                program_id=program_id,
+                term=term,
+                block_size=20
+            ).delete()
             
+            # Create new blocks
+            for i in range(new_count):
+                block = Block(
+                    block_id=f"{program_id}_{term_prefix}_20_{i+1}",
+                    program_id=program_id,
+                    block_size=20,
+                    term=term,
+                    academic_year=data.get('academic_year', '2025-2026'),
+                    status="DRAFT"
+                )
+                db.session.add(block)
+            
+            setattr(program, f'blocks_20_count_{term_suffix}', new_count)
+            
+        # Update 10-student blocks
+        if f'blocks_10_count_{term_suffix}' in data:
+            new_count = data[f'blocks_10_count_{term_suffix}']
+            if not isinstance(new_count, int) or new_count < 0:
+                return jsonify({'error': f'Invalid blocks_10_count_{term_suffix}'}), HTTPStatus.BAD_REQUEST
+                
+            # Delete existing blocks
+            Block.query.filter_by(
+                program_id=program_id,
+                term=term,
+                block_size=10
+            ).delete()
+            
+            # Create new blocks
+            for i in range(new_count):
+                block = Block(
+                    block_id=f"{program_id}_{term_prefix}_10_{i+1}",
+                    program_id=program_id,
+                    block_size=10,
+                    term=term,
+                    academic_year=data.get('academic_year', '2025-2026'),
+                    status="DRAFT"
+                )
+                db.session.add(block)
+                
+            setattr(program, f'blocks_10_count_{term_suffix}', new_count)
+        
+        # Update total enrollment
+        total_20_students = (getattr(program, 'blocks_20_count_fall', 0) + 
+                           getattr(program, 'blocks_20_count_winter', 0)) * 20
+        total_10_students = (getattr(program, 'blocks_10_count_fall', 0) + 
+                           getattr(program, 'blocks_10_count_winter', 0)) * 10
+        program.total_enrollment = total_20_students + total_10_students
+        
         db.session.commit()
         
         return jsonify({
             'program_id': program.program_id,
-            'blocks_20_count': program.blocks_20_count,
-            'blocks_10_count': program.blocks_10_count
+            'blocks_20_count_fall': program.blocks_20_count_fall,
+            'blocks_10_count_fall': program.blocks_10_count_fall,
+            'blocks_20_count_winter': program.blocks_20_count_winter,
+            'blocks_10_count_winter': program.blocks_10_count_winter,
+            'total_enrollment': program.total_enrollment
         }), HTTPStatus.OK
+        
     except Exception as e:
         db.session.rollback()
         return jsonify({

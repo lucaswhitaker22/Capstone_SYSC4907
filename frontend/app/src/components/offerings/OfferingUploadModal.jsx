@@ -17,14 +17,39 @@ const OfferingUploadModal = ({ show, onHide, onSave }) => {
             setError('Error parsing CSV file');
             return;
           }
+
+          // Validate and format the data
+          const validData = results.data.filter(row => {
+            // Validate term
+            if (!row.term || !['FALL', 'WINTER'].includes(row.term.toUpperCase())) {
+              setError(`Invalid term "${row.term}" found. Must be FALL or WINTER`);
+              return false;
+            }
+
+            // Validate academic year format
+            if (!row.academic_year || !/^\d{4}-\d{4}$/.test(row.academic_year)) {
+              setError(`Invalid academic year format "${row.academic_year}". Must be YYYY-YYYY`);
+              return false;
+            }
+
+            return true;
+          });
+
+          if (validData.length === 0) {
+            return;
+          }
+
           // Convert string values to appropriate types
-          const formattedData = results.data.map(row => ({
+          const formattedData = validData.map(row => ({
             ...row,
             offering_id: parseInt(row.offering_id),
             day_of_week: parseInt(row.day_of_week),
             capacity: parseInt(row.capacity),
-            current_enrollment: parseInt(row.current_enrollment)
+            current_enrollment: parseInt(row.current_enrollment),
+            term: row.term.toUpperCase(),
+            academic_year: row.academic_year || '2025-2026'
           }));
+
           setParsedData(formattedData);
           setError(null);
         }
@@ -72,6 +97,9 @@ const OfferingUploadModal = ({ show, onHide, onSave }) => {
             onChange={handleFileUpload}
             className="form-control"
           />
+          <small className="text-muted">
+            Note: Term must be FALL or WINTER, Academic Year format: YYYY-YYYY
+          </small>
         </div>
 
         {error && (

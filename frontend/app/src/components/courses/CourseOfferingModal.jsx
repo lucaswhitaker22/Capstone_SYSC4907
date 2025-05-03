@@ -5,9 +5,13 @@ import { Modal, Table, Form, Row, Col } from 'react-bootstrap';
 const CourseOfferingsModal = ({ show, onHide, courseId }) => {
     const [offerings, setOfferings] = useState([]);
     const [filteredOfferings, setFilteredOfferings] = useState([]);
+    const [availableYears, setAvailableYears] = useState([]);
+
     const [filters, setFilters] = useState({
         sectionType: '',
-        sectionCode: ''
+        sectionCode: '',
+        term: '',
+        academic_year: ''
     });
     
     useEffect(() => {
@@ -19,6 +23,13 @@ const CourseOfferingsModal = ({ show, onHide, courseId }) => {
     useEffect(() => {
         filterOfferings();
     }, [offerings, filters]);
+    useEffect(() => {
+        // Extract unique academic years from offerings
+        if (offerings.length > 0) {
+            const years = [...new Set(offerings.map(o => o.academic_year))];
+            setAvailableYears(years.sort());
+        }
+    }, [offerings]);
     
     const fetchOfferings = async () => {
         try {
@@ -46,6 +57,18 @@ const CourseOfferingsModal = ({ show, onHide, courseId }) => {
                 offering.section_code.toLowerCase().includes(filters.sectionCode.toLowerCase())
             );
         }
+
+        if (filters.term) {
+            filtered = filtered.filter(offering => 
+                offering.term === filters.term
+            );
+        }
+
+        if (filters.academic_year) {
+            filtered = filtered.filter(offering => 
+                offering.academic_year === filters.academic_year
+            );
+        }
         
         setFilteredOfferings(filtered);
     };
@@ -65,18 +88,32 @@ const CourseOfferingsModal = ({ show, onHide, courseId }) => {
             </Modal.Header>
             <Modal.Body>
                 <Row className="mb-3">
-                    <Col md={6}>
+                <Col md={4}>
                         <Form.Group>
-                            <Form.Label>Section Type</Form.Label>
+                            <Form.Label>Term</Form.Label>
                             <Form.Select
-                                name="sectionType"
-                                value={filters.sectionType}
+                                name="term"
+                                value={filters.term}
                                 onChange={handleFilterChange}
                             >
-                                <option value="">All Types</option>
-                                <option value="LECTURE">Lecture</option>
-                                <option value="LAB">Lab</option>
-                                <option value="TUTORIAL">Tutorial</option>
+                                <option value="">All Terms</option>
+                                <option value="FALL">Fall</option>
+                                <option value="WINTER">Winter</option>
+                            </Form.Select>
+                        </Form.Group>
+                    </Col>
+                    <Col md={4}>
+                        <Form.Group>
+                            <Form.Label>Academic Year</Form.Label>
+                            <Form.Select
+                                name="academic_year"
+                                value={filters.academic_year}
+                                onChange={handleFilterChange}
+                            >
+                                <option value="">All Years</option>
+                                {availableYears.map(year => (
+                                    <option key={year} value={year}>{year}</option>
+                                ))}
                             </Form.Select>
                         </Form.Group>
                     </Col>
@@ -101,6 +138,8 @@ const CourseOfferingsModal = ({ show, onHide, courseId }) => {
                             <th>Type</th>
                             <th>Day</th>
                             <th>Time</th>
+                            <th>Term</th>
+                            <th>Academic Year</th>
                             <th>Capacity</th>
                             <th>Status</th>
                         </tr>
@@ -112,8 +151,11 @@ const CourseOfferingsModal = ({ show, onHide, courseId }) => {
                                 <td>{offering.section_type}</td>
                                 <td>{offering.day_of_week}</td>
                                 <td>{`${offering.start_time} - ${offering.end_time}`}</td>
+                                <td>{offering.term}</td>
+                                <td>{offering.academic_year}</td>
                                 <td>{`${offering.current_enrollment}/${offering.capacity}`}</td>
                                 <td>{offering.status}</td>
+
                             </tr>
                         ))}
                     </tbody>

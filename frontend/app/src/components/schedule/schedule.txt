@@ -1,0 +1,731 @@
+import React, { useState, useEffect } from 'react';
+import { Modal, Form, Button, ListGroup, Alert, Spinner } from 'react-bootstrap';
+
+const ScheduleEditModal = ({ show, blockId, offerings, onHide, onSave }) => {
+  const [blockSchedule, setBlockSchedule] = useState([]);
+  const [selectedOffering, setSelectedOffering] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (show && blockId) {
+      fetchBlockSchedule();
+    }
+  }, [show, blockId]);
+
+  const fetchBlockSchedule = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${blockId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setBlockSchedule(data);
+      }
+    } catch (error) {
+      setError('Error fetching schedule');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddOffering = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${blockId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ offering_id: selectedOffering }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        await fetchBlockSchedule();
+        setSelectedOffering('');
+      } else {
+        setError(data.message || 'Error adding offering');
+      }
+    } catch (error) {
+      setError('Error adding offering');
+    }
+  };
+
+  const handleRemoveOffering = async (offeringId) => {
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:5000/api/schedules/block/${blockId}/offering/${offeringId}`,
+        { method: 'DELETE' }
+      );
+      if (response.ok) {
+        await fetchBlockSchedule();
+      }
+    } catch (error) {
+      setError('Error removing offering');
+    }
+  };
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Edit Block Schedule</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {isLoading ? (
+          <div className="text-center p-4">
+            <Spinner animation="border" />
+          </div>
+        ) : (
+          <>
+            <Form.Group className="mb-3">
+              <Form.Label>Add Course Offering</Form.Label>
+              <Form.Select
+                value={selectedOffering}
+                onChange={(e) => setSelectedOffering(e.target.value)}
+              >
+                <option value="">Select an offering</option>
+                {offerings.map(offering => (
+                  <option key={offering.offering_id} value={offering.offering_id}>
+                    {offering.course_id} - {offering.section_type} {offering.section_code}
+                    ({getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time})
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+
+            <Button 
+              variant="primary" 
+              onClick={handleAddOffering}
+              disabled={!selectedOffering}
+              className="mb-3"
+            >
+              Add to Schedule
+            </Button>
+
+            {error && <Alert variant="danger">{error}</Alert>}
+
+            <ListGroup>
+              {blockSchedule.map(offering => (
+                <ListGroup.Item
+                  key={offering.offering_id}
+                  className="d-flex justify-content-between align-items-center"
+                >
+                  <div>
+                    {offering.course_id} - {offering.section_type} {offering.section_code}
+                    <br />
+                    <small>
+                      {getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time}
+                    </small>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleRemoveOffering(offering.offering_id)}
+                  >
+                    Remove
+                  </Button>
+                </ListGroup.Item>
+              ))}
+            </ListGroup>
+          </>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>Close</Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default ScheduleEditModal;
+import React, { useState } from 'react';
+import { Modal, Form, Button, Alert, Spinner, ListGroup } from 'react-bootstrap';
+
+const ScheduleGenerateModal = ({ show, blocks, onHide, onGenerate }) => {
+  const [selectedBlock, setSelectedBlock] = useState('');
+  const [generatedSchedule, setGeneratedSchedule] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleGenerate = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}`, {
+        method: 'GET'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setGeneratedSchedule(data);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || 'Failed to generate schedule');
+      }
+    } catch (error) {
+      setError('Error generating schedule');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${selectedBlock}/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ schedule: generatedSchedule })
+      });
+      
+      if (response.ok) {
+        await onGenerate();
+        handleClose();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || 'Failed to save schedule');
+      }
+    } catch (error) {
+      setError('Error saving schedule');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  const handleClose = () => {
+    setSelectedBlock('');
+    setGeneratedSchedule(null);
+    setError(null);
+    onHide();
+  };
+
+  return (
+    <Modal show={show} onHide={handleClose} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Generate Block Schedule</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <Form.Group className="mb-3">
+          <Form.Label>Select Block</Form.Label>
+          <Form.Select
+            value={selectedBlock}
+            onChange={(e) => setSelectedBlock(e.target.value)}
+            disabled={isLoading}
+          >
+            <option value="">Choose a block...</option>
+            {blocks
+              .filter(block => block.status !== 'LOCKED')
+              .map(block => (
+                <option key={block.block_id} value={block.block_id}>
+                  Block {block.block_id} - Program {block.program_id} 
+                  (Size: {block.block_size})
+                </option>
+              ))}
+          </Form.Select>
+        </Form.Group>
+
+        {error && (
+          <Alert variant="danger" className="mt-3">
+            {error}
+          </Alert>
+        )}
+
+        {generatedSchedule && (
+          <div className="mt-4">
+            <h5>Generated Schedule Preview:</h5>
+            <ListGroup>
+              {generatedSchedule.map((offering, index) => (
+                <ListGroup.Item key={index}>
+                  {offering.course_id} - {offering.section_type} {offering.section_code}
+                  <br />
+                  <small>
+                    {getDayName(offering.day_of_week)} {offering.start_time}-{offering.end_time}
+                  </small>
+                </ListGroup.Item>
+              ))}
+            </ListGroup>
+          </div>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={handleClose}>
+          Cancel
+        </Button>
+        {!generatedSchedule ? (
+          <Button
+            variant="primary"
+            onClick={handleGenerate}
+            disabled={!selectedBlock || isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
+                Generating...
+              </>
+            ) : (
+              'Preview Schedule'
+            )}
+          </Button>
+        ) : (
+          <Button
+            variant="success"
+            onClick={handleSave}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" role="status" className="me-2" />
+                Saving...
+              </>
+            ) : (
+              'Save Schedule'
+            )}
+          </Button>
+        )}
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default ScheduleGenerateModal;
+import React, { useState, useEffect } from 'react';
+import { Container, Button } from 'react-bootstrap';
+import ScheduleTable from './ScheduleTable';
+import ScheduleViewModal from './ScheduleViewModal';
+import ScheduleEditModal from './ScheduleEditModal';
+import ScheduleGenerateModal from './ScheduleGenerateModal';
+
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const SchedulePage = () => {
+    const [schedules, setSchedules] = useState([]);
+    const [blocks, setBlocks] = useState([]);
+    const [offerings, setOfferings] = useState([]);
+    const [selectedBlock, setSelectedBlock] = useState(null);
+    const [showViewModal, setShowViewModal] = useState(false);
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [showGenerateModal, setShowGenerateModal] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchBlocks = async () => {
+        try {
+            const response = await fetch(`${API_URL}/blocks`);
+            const data = await response.json();
+            setBlocks(data);
+        } catch (error) {
+            console.error('Error fetching blocks:', error);
+        }
+    };
+
+    const fetchOfferings = async () => {
+        try {
+            const response = await fetch(`${API_URL}/offerings`);
+            const data = await response.json();
+            setOfferings(data);
+        } catch (error) {
+            console.error('Error fetching offerings:', error);
+        }
+    };
+
+    const fetchBlockSchedule = async (blockId) => {
+        try {
+            const [scheduleResponse, validationResponse] = await Promise.all([
+                fetch(`${API_URL}/schedules/block/${blockId}`),
+                fetch(`${API_URL}/schedules/block/${blockId}/validate`)
+            ]);
+
+            const offerings = await scheduleResponse.json();
+            const validation = await validationResponse.json();
+
+            return {
+                offerings: scheduleResponse.ok ? offerings : [],
+                validation: validationResponse.ok ? validation : null
+            };
+        } catch (error) {
+            console.error('Error fetching block schedule:', error);
+            return { offerings: [], validation: null };
+        }
+    };
+
+    const fetchAllSchedules = async () => {
+        setIsLoading(true);
+        try {
+            const schedulesData = await Promise.all(
+                blocks.map(async (block) => {
+                    const { offerings, validation } = await fetchBlockSchedule(block.block_id);
+                    return {
+                        block_id: block.block_id,
+                        program_id: block.program_id,
+                        offerings: offerings,
+                        rating: block.schedule_rating,
+                        validation: validation
+                    };
+                })
+            );
+            setSchedules(schedulesData);
+        } catch (error) {
+            console.error('Error fetching schedules:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchBlocks();
+        fetchOfferings();
+    }, []);
+
+    useEffect(() => {
+        if (blocks.length > 0) {
+            fetchAllSchedules();
+        }
+    }, [blocks]);
+
+    const handleViewSchedule = (blockId) => {
+        setSelectedBlock(blockId);
+        setShowViewModal(true);
+    };
+
+    const handleEditSchedule = (blockId) => {
+        setSelectedBlock(blockId);
+        setShowEditModal(true);
+    };
+
+    const handleGenerateSchedule = async (blockId) => {
+        try {
+            const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
+                method: 'POST'
+            });
+            
+            if (response.ok) {
+                await fetchAllSchedules();
+            } else {
+                const error = await response.json();
+                alert(error.error || 'Error generating schedule');
+            }
+        } catch (error) {
+            console.error('Error generating schedule:', error);
+            alert('Error generating schedule');
+        }
+    };
+
+    const handleDeleteSchedule = async (blockId) => {
+        if (window.confirm('Are you sure you want to delete this schedule?')) {
+            try {
+                const response = await fetch(`${API_URL}/schedules/block/${blockId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    await fetchAllSchedules();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Error deleting schedule');
+                }
+            } catch (error) {
+                console.error('Error deleting schedule:', error);
+                alert('Error deleting schedule');
+            }
+        }
+    };
+
+    const handleValidateSchedule = async (blockId) => {
+        try {
+            const response = await fetch(`${API_URL}/schedules/block/${blockId}/validate`);
+            if (response.ok) {
+                const data = await response.json();
+                if (!data.is_valid) {
+                    const missingCourses = data.missing_requirements
+                        .map(r => r.course_id)
+                        .join(', ');
+                    alert(`Schedule validation failed.\nMissing courses: ${missingCourses}`);
+                } else {
+                    alert('Schedule is valid!');
+                }
+                return data;
+            }
+        } catch (error) {
+            console.error('Error validating schedule:', error);
+            alert('Error validating schedule');
+        }
+    };
+
+    return (
+        <Container className="py-4">
+            <div className="d-flex justify-content-between align-items-center mb-4">
+                <h1>Block Schedules</h1>
+                <Button variant="primary" onClick={() => setShowGenerateModal(true)}>
+                    Generate New Schedule
+                </Button>
+            </div>
+
+            <ScheduleTable 
+                schedules={schedules}
+                onView={handleViewSchedule}
+                onEdit={handleEditSchedule}
+                onValidate={handleValidateSchedule}
+                onDelete={handleDeleteSchedule}
+                onGenerate={handleGenerateSchedule}
+                isLoading={isLoading}
+            />
+
+            <ScheduleViewModal
+                show={showViewModal}
+                blockId={selectedBlock}
+                onHide={() => setShowViewModal(false)}
+            />
+
+            <ScheduleEditModal
+                show={showEditModal}
+                blockId={selectedBlock}
+                offerings={offerings}
+                onHide={() => setShowEditModal(false)}
+                onSave={fetchAllSchedules}
+            />
+
+            <ScheduleGenerateModal
+                show={showGenerateModal}
+                blocks={blocks}
+                offerings={offerings}
+                onHide={() => setShowGenerateModal(false)}
+                onGenerate={fetchAllSchedules}
+            />
+        </Container>
+    );
+};
+
+export default SchedulePage;
+import React from 'react';
+import { Table, Button, Badge, Spinner } from 'react-bootstrap';
+
+const ScheduleTable = ({   schedules = [], 
+    onView, 
+    onEdit, 
+    onValidate, 
+    onDelete, 
+    isLoading,
+onGenerate }) => {
+  if (isLoading) {
+    return (
+      <div className="text-center p-4">
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading schedules...</span>
+        </Spinner>
+      </div>
+    );
+  }
+
+  if (!schedules.length) {
+    return <div className="text-center p-4">No schedules available</div>;
+  }
+
+  const getRatingBadge = (rating) => {
+    if (!rating) return <Badge bg="secondary">Not Rated</Badge>;
+    
+    let variant;
+    if (rating >= 80) variant = 'success';
+    else if (rating >= 60) variant = 'warning';
+    else variant = 'danger';
+
+    return (
+      <Badge bg={variant}>
+        {rating.toFixed(1)}%
+      </Badge>
+    );
+  };
+
+  const getCoursesCount = (offerings) => {
+    if (!offerings) return 0;
+    return offerings.length;
+  };
+
+  const getDaysString = (offerings) => {
+    if (!offerings || !offerings.length) return 'No days scheduled';
+    
+    const days = [...new Set(offerings.map(o => o.day_of_week))].sort();
+    const dayNames = days.map(day => {
+      const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      return daysOfWeek[day - 1];
+    });
+    
+    return dayNames.join(', ');
+  };
+
+  return (
+    <Table striped bordered hover responsive>
+      <thead>
+        <tr>
+          <th>Block ID</th>
+          <th>Program</th>
+          <th>Courses</th>
+          <th>Days</th>
+          <th>Rating</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {schedules.map((schedule) => (
+          <tr key={schedule.block_id}>
+            <td>Block {schedule.block_id}</td>
+            <td>{schedule.program_id}</td>
+            <td>
+              <Badge bg="info">
+                {getCoursesCount(schedule.offerings)} courses
+              </Badge>
+            </td>
+            <td>{getDaysString(schedule.offerings)}</td>
+            <td>{getRatingBadge(schedule.rating)}</td>
+            <td>
+              <div className="d-flex gap-2">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => onView(schedule.block_id)}
+                >
+                  View
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onEdit(schedule.block_id)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="success"
+                  size="sm"
+                  onClick={() => onGenerate(schedule.block_id)}
+                >
+                  Generate
+                </Button>
+                <Button
+                  variant="info"
+                  size="sm"
+                  onClick={() => onValidate(schedule.block_id)}
+                >
+                  Validate
+                </Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => onDelete(schedule.block_id)}
+                >
+                  Clear
+                </Button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+};
+
+export default ScheduleTable;
+import React, { useState, useEffect } from 'react';
+import { Modal, Table, Badge, Spinner } from 'react-bootstrap';
+
+const ScheduleViewModal = ({ show, blockId, onHide }) => {
+  const [schedule, setSchedule] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    if (show && blockId) {
+      fetchSchedule();
+    }
+  }, [show, blockId]);
+
+  const fetchSchedule = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${blockId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSchedule(data);
+      }
+    } catch (error) {
+      console.error('Error fetching schedule:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day];
+  };
+
+  const renderTimeSlot = (offering) => {
+    return (
+      <div className="p-2 border rounded mb-2" key={offering.offering_id}>
+        <Badge bg="primary" className="me-2">{offering.section_type}</Badge>
+        <strong>{offering.course_id}</strong> - {offering.section_code}
+        <br />
+        <small>{offering.start_time} - {offering.end_time}</small>
+      </div>
+    );
+  };
+
+  const renderScheduleTable = () => {
+    const days = [1, 2, 3, 4, 5]; // Monday to Friday
+    const scheduleByDay = days.map(day => ({
+      day,
+      offerings: schedule.filter(offering => offering.day_of_week === day)
+    }));
+
+    return (
+      <Table bordered responsive>
+        <thead>
+          <tr>
+            {days.map(day => (
+              <th key={day} className="text-center">{getDayName(day)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            {scheduleByDay.map(({ day, offerings }) => (
+              <td key={day} className="align-top" style={{ minWidth: '200px' }}>
+                {offerings.sort((a, b) => a.start_time.localeCompare(b.start_time))
+                  .map(offering => renderTimeSlot(offering))}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </Table>
+    );
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="xl">
+      <Modal.Header closeButton>
+        <Modal.Title>Block Schedule View</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {isLoading ? (
+          <div className="text-center p-4">
+            <Spinner animation="border" role="status">
+              <span className="visually-hidden">Loading schedule...</span>
+            </Spinner>
+          </div>
+        ) : schedule.length === 0 ? (
+          <div className="text-center p-4">No courses scheduled for this block</div>
+        ) : (
+          renderScheduleTable()
+        )}
+      </Modal.Body>
+    </Modal>
+  );
+};
+
+export default ScheduleViewModal;

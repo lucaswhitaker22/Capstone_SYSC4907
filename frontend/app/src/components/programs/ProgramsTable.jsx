@@ -1,19 +1,15 @@
 import React from 'react';
 import { Table, Button, Badge, Spinner } from 'react-bootstrap';
 
-const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements,onViewSchedules  }) => {
+const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequirements }) => {
   if (isLoading) {
     return (
-      <div className="text-center p-4">
+      <div className="text-center p-3">
         <Spinner animation="border" role="status">
           <span className="visually-hidden">Loading...</span>
         </Spinner>
       </div>
     );
-  }
-
-  if (!programs.length) {
-    return <div className="text-center p-4">No programs available</div>;
   }
 
   return (
@@ -33,21 +29,9 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
           <tr key={program.program_id}>
             <td>{program.program_id}</td>
             <td>{program.program_name}</td>
-            <td>
-              <Badge bg="info">
-                {program.total_enrollment} students
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="primary">
-                {program.blocks_20_count} blocks
-              </Badge>
-            </td>
-            <td>
-              <Badge bg="secondary">
-                {program.blocks_10_count} blocks
-              </Badge>
-            </td>
+            <td>{program.total_enrollment}</td>
+            <td>{program.blocks_20_count}</td>
+            <td>{program.blocks_10_count}</td>
             <td>
               <Button
                 variant="primary"
@@ -60,6 +44,7 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
               <Button
                 variant="danger"
                 size="sm"
+                className="me-2"
                 onClick={() => onDelete(program.program_id)}
               >
                 Delete
@@ -67,18 +52,10 @@ const ProgramsTable = ({ programs = [], onEdit, onDelete, isLoading, onViewRequi
               <Button
                 variant="info"
                 size="sm"
-                className="ms-2"
+                className="me-2"
                 onClick={() => onViewRequirements(program.program_id)}
               >
                 Requirements
-              </Button>
-              <Button
-                variant="success"
-                size="sm"
-                className="ms-2"
-                onClick={() => onViewSchedules(program.program_id)}
-              >
-                View Schedules
               </Button>
             </td>
           </tr>

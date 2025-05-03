@@ -3,17 +3,22 @@ from app.models import BlockSchedule, Block, CourseOffering, ProgramRequirement,
 from app.database import db
 from http import HTTPStatus
 import logging
-
 def validate_block_schedule(block_id):
     try:
         # Get block and its schedules
         block = Block.query.get_or_404(block_id)
-        block_schedules = BlockSchedule.query.filter_by(block_id=block_id).all()
+        block_schedules = BlockSchedule.query.join(CourseOffering).filter(
+            BlockSchedule.block_id == block_id,
+            CourseOffering.term == block.term,
+            CourseOffering.academic_year == block.academic_year
+        ).all()
         
         if not block_schedules:
             return jsonify({
                 'is_valid': False,
-                'error': 'No schedule found for block'
+                'error': f'No schedule found for block in {block.term} {block.academic_year}',
+                'term': block.term,
+                'academic_year': block.academic_year
             }), HTTPStatus.NOT_FOUND
 
         # Get all offerings in the block
@@ -36,7 +41,7 @@ def validate_block_schedule(block_id):
             else:
                 course_schedules[offering.course_id][offering.section_type].append(offering)
 
-        # Get program requirements
+        # Get term-specific program requirements
         requirements = ProgramRequirement.query.filter_by(
             program_id=block.program_id
         ).all()
@@ -49,13 +54,16 @@ def validate_block_schedule(block_id):
             if course_id not in course_schedules:
                 missing_requirements.append({
                     'course_id': course_id,
-                    'error': 'Course not scheduled'
+                    'error': f'Course not scheduled in {block.term}',
+                    'term': block.term
                 })
                 continue
 
-            # Get all available sections for this course
+            # Get all available sections for this course in the same term/year
             available_sections = CourseOffering.query.filter_by(
-                course_id=course_id
+                course_id=course_id,
+                term=block.term,
+                academic_year=block.academic_year
             ).all()
 
             # Group available lectures by prefix
@@ -76,7 +84,8 @@ def validate_block_schedule(block_id):
                     if scheduled_sections != required_sections:
                         missing_requirements.append({
                             'course_id': course_id,
-                            'error': f'Missing lecture sections for group {prefix}'
+                            'error': f'Missing lecture sections for group {prefix} in {block.term}',
+                            'term': block.term
                         })
 
             # Check if lab is required and present
@@ -84,19 +93,22 @@ def validate_block_schedule(block_id):
             if has_labs and not course_schedules[course_id]['LAB']:
                 missing_requirements.append({
                     'course_id': course_id,
-                    'error': 'Missing lab section'
+                    'error': f'Missing lab section in {block.term}',
+                    'term': block.term
                 })
 
         return jsonify({
             'block_id': block_id,
+            'term': block.term,
+            'academic_year': block.academic_year,
             'is_valid': len(missing_requirements) == 0,
             'missing_requirements': missing_requirements
         }), HTTPStatus.OK
 
     except Exception as e:
+        current_app.logger.error(f"Error validating block {block_id}: {str(e)}")
         return jsonify({
             'error': 'Internal Server Error',
-            'message': str(e)
+            'message': str(e),
+            'block_id': block_id
         }), HTTPStatus.INTERNAL_SERVER_ERROR
-    
-

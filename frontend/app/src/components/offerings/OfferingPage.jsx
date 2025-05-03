@@ -15,7 +15,12 @@ const OfferingsPage = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const fetchOfferings = async () => {
     try {
-      const response = await fetch(`${API_URL}/offerings/`);
+      // Add default term and year to the request
+      const params = new URLSearchParams({
+        term: '',  // Default term
+        academic_year: ''  // Default year
+      });
+      const response = await fetch(`${API_URL}/offerings?${params}`);
       const data = await response.json();
       setOfferings(data);
     } catch (error) {
@@ -23,7 +28,7 @@ const OfferingsPage = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+};
 
   useEffect(() => {
     fetchOfferings();

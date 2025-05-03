@@ -3,14 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@fullcalendar/bootstrap5": "^6.1.15",
+    "@fullcalendar/react": "^6.1.15",
+    "@fullcalendar/timegrid": "^6.1.15",
+    "@syncfusion/ej2-react-dropdowns": "^28.2.7",
+    "@syncfusion/ej2-react-inputs": "^28.2.3",
     "bootstrap": "^5.3.3",
     "cra-template": "1.2.0",
+    "html2canvas": "^1.4.1",
     "papaparse": "^5.4.1",
     "react": "^19.0.0",
     "react-bootstrap": "^2.10.7",
+    "react-bootstrap-icons": "^1.11.5",
     "react-dom": "^19.0.0",
+    "react-loading-icons": "^1.1.0",
     "react-router-dom": "^7.1.1",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "react-to-pdf": "^1.0.1"
   },
   "scripts": {
     "start": "react-scripts start",

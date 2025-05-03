@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Button } from 'react-bootstrap';
+import { Container, Button, Form, Tab, Tabs} from 'react-bootstrap';
 import ScheduleTable from './ScheduleTable';
 import ScheduleViewModal from './ScheduleViewModal';
 import ScheduleEditModal from './ScheduleEditModal';
-import ScheduleGenerateModal from './ScheduleGenerateModal';
+import ExportSchedule from './ExportSchedule.tsx'; // Fix the import
+
+import { Bars } from 'react-loading-icons';
 
 const API_URL = 'http://127.0.0.1:5000/api';
 
@@ -12,20 +14,32 @@ const SchedulePage = () => {
     const [blocks, setBlocks] = useState([]);
     const [offerings, setOfferings] = useState([]);
     const [selectedBlock, setSelectedBlock] = useState(null);
+    const [selectedTerm, setSelectedTerm] = useState('FALL');
+    const [selectedYear, setSelectedYear] = useState('2025-2026');
     const [showViewModal, setShowViewModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showGenerateModal, setShowGenerateModal] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [selectedFallBlocks, setSelectedFallBlocks] = useState([]);
+    const [selectedWinterBlocks, setSelectedWinterBlocks] = useState([]);
+    const [isBulkGenerating, setIsBulkGenerating] = useState(false);
+    const [isBulkClearing, setIsBulkClearing] = useState(false);
+    const [activeTab, setActiveTab] = useState('FALL');
+    const [sortOrder, setSortOrder] = useState('desc');
 
     const fetchBlocks = async () => {
         try {
-            const response = await fetch(`${API_URL}/blocks`);
-            const data = await response.json();
-            setBlocks(data);
+          const response = await fetch(`${API_URL}/blocks?academic_year=${selectedYear}`);
+          const data = await response.json();
+          setBlocks(data);
         } catch (error) {
-            console.error('Error fetching blocks:', error);
+          console.error('Error fetching blocks:', error);
         }
-    };
+      };
+      useEffect(() => {
+        fetchBlocks();
+        fetchOfferings();
+      }, [selectedTerm, selectedYear]);
 
     const fetchOfferings = async () => {
         try {
@@ -39,57 +53,66 @@ const SchedulePage = () => {
 
     const fetchBlockSchedule = async (blockId) => {
         try {
-            const [scheduleResponse, validationResponse] = await Promise.all([
+            const [scheduleResponse, validationResponse, ratingResponse] = await Promise.all([
                 fetch(`${API_URL}/schedules/block/${blockId}`),
-                fetch(`${API_URL}/schedules/block/${blockId}/validate`)
+                fetch(`${API_URL}/schedules/block/${blockId}/validate`),
+                fetch(`${API_URL}/schedules/block/${blockId}/rate`)
             ]);
-
+    
             const offerings = await scheduleResponse.json();
             const validation = await validationResponse.json();
-
+            const rating = await ratingResponse.json();
+    
             return {
                 offerings: scheduleResponse.ok ? offerings : [],
-                validation: validationResponse.ok ? validation : null
+                validation: validationResponse.ok ? validation : null,
+                rating: ratingResponse.ok ? rating.rating : null
             };
         } catch (error) {
             console.error('Error fetching block schedule:', error);
-            return { offerings: [], validation: null };
+            return { offerings: [], validation: null, rating: null };
         }
     };
-
+    
     const fetchAllSchedules = async () => {
-        setIsLoading(true);
-        try {
-            const schedulesData = await Promise.all(
-                blocks.map(async (block) => {
-                    const { offerings, validation } = await fetchBlockSchedule(block.block_id);
-                    return {
-                        block_id: block.block_id,
-                        program_id: block.program_id,
-                        offerings: offerings,
-                        rating: block.schedule_rating,
-                        validation: validation
-                    };
-                })
-            );
-            setSchedules(schedulesData);
-        } catch (error) {
-            console.error('Error fetching schedules:', error);
-        } finally {
-            setIsLoading(false);
-        }
+      setIsLoading(true);
+      try {
+        const schedulesData = await Promise.all(
+          blocks
+            .filter(block => (block.term === 'FALL' || block.term === 'WINTER') && block.academic_year === selectedYear)
+            .map(async (block) => {
+              const { offerings, validation, rating } = await fetchBlockSchedule(block.block_id);
+              return {
+                block_id: block.block_id,
+                program_id: block.program_id,
+                term: block.term,
+                academic_year: block.academic_year,
+                status: block.status, // Add this line to include block status
+                offerings: offerings,
+                rating: offerings.length === 0 ? 0 : (rating || block.schedule_rating),
+                validation: validation
+              };
+            })
+        );
+        setSchedules(schedulesData);
+      } catch (error) {
+        console.error('Error fetching schedules:', error);
+      } finally {
+        setIsLoading(false);
+      }
     };
-
-    useEffect(() => {
+      
+      useEffect(() => {
         fetchBlocks();
         fetchOfferings();
-    }, []);
-
-    useEffect(() => {
+      }, [selectedYear]);
+      
+      useEffect(() => {
         if (blocks.length > 0) {
-            fetchAllSchedules();
+          fetchAllSchedules();
         }
-    }, [blocks]);
+      }, [blocks, selectedYear]);
+
 
     const handleViewSchedule = (blockId) => {
         setSelectedBlock(blockId);
@@ -101,32 +124,108 @@ const SchedulePage = () => {
         setShowEditModal(true);
     };
 
-    const handleGenerateSchedule = async (blockId) => {
-        try {
-            const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
-                method: 'POST'
-            });
-            
-            if (response.ok) {
-                await fetchAllSchedules();
-            } else {
-                const error = await response.json();
-                alert(error.error || 'Error generating schedule');
-            }
-        } catch (error) {
-            console.error('Error generating schedule:', error);
-            alert('Error generating schedule');
+    
+    const handleStatusUpdate = async (blockId, status) => {
+      try {
+        const response = await fetch(`${API_URL}/blocks/${blockId}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status }),
+        });
+        
+        if (response.ok) {
+          // Update blocks and schedules in state without requiring a full refresh
+          setBlocks(prevBlocks =>
+            prevBlocks.map(block =>
+              block.block_id === blockId ? { ...block, status: status } : block
+            )
+          );
+          
+          setSchedules(prevSchedules =>
+            prevSchedules.map(schedule =>
+              schedule.block_id === blockId ? { ...schedule, status: status } : schedule
+            )
+          );
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error updating status');
         }
+      } catch (error) {
+        console.error('Error updating status:', error);
+        alert('Error updating status');
+      }
     };
+    const handleGenerateSchedule = async (blockId) => {
+      // Find the block to check its status
+      const block = blocks.find(b => b.block_id === blockId);
+      
+      // Check if status is DRAFT
+      if (!block || block.status !== 'DRAFT') {
+        alert('Schedule can only be generated when the block is in Draft status.');
+        return;
+      }
+      
+      try {
+        const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
+          method: 'POST'
+        });
+        
+        // Rest of the function remains the same
+        if (response.ok) {
+          const generatedData = await response.json();
+          // Update the specific block's rating in the blocks array
+          setBlocks(prevBlocks =>
+            prevBlocks.map(block =>
+              block.block_id === blockId
+                ? { ...block, schedule_rating: generatedData.schedule_rating }
+                : block
+            )
+          );
+          // Fetch updated schedules to reflect new changes
+          await fetchAllSchedules();
+        } else {
+          // If generation fails, clear the schedule and reset rating
+          await handleDeleteSchedule(blockId);
+          alert('Failed to generate schedule. The schedule has been cleared.');
+        }
+      } catch (error) {
+        console.error('Error generating schedule:', error);
+        // If an error occurs, also clear the schedule and reset rating
+        await handleDeleteSchedule(blockId);
+        alert('Error generating schedule. The schedule has been cleared.');
+      }
+    };
+    
 
     const handleDeleteSchedule = async (blockId) => {
-        if (window.confirm('Are you sure you want to delete this schedule?')) {
+    
             try {
                 const response = await fetch(`${API_URL}/schedules/block/${blockId}`, {
                     method: 'DELETE'
                 });
                 
                 if (response.ok) {
+                    // Update the blocks array to reset the rating to 0
+                    setBlocks(prevBlocks =>
+                        prevBlocks.map(block =>
+                            block.block_id === blockId
+                                ? { ...block, schedule_rating: 0 }
+                                : block
+                        )
+                    );
+                    
+                    // Update the schedules array
+                    setSchedules(prevSchedules =>
+                        prevSchedules.map(schedule =>
+                            schedule.block_id === blockId
+                                ? { ...schedule, rating: 0, offerings: [] }
+                                : schedule
+                        )
+                    );
+                    
+                    // Fetch updated schedules to reflect new changes
                     await fetchAllSchedules();
                 } else {
                     const error = await response.json();
@@ -136,9 +235,156 @@ const SchedulePage = () => {
                 console.error('Error deleting schedule:', error);
                 alert('Error deleting schedule');
             }
-        }
+        
     };
-
+    
+    const handleSelectionChange = (selectedRows) => {
+        if (activeTab === 'FALL') {
+          setSelectedFallBlocks(prevSelected => {
+            if (Array.isArray(selectedRows)) {
+              return selectedRows;
+            } else {
+              return prevSelected.includes(selectedRows)
+                ? prevSelected.filter(id => id !== selectedRows)
+                : [...prevSelected, selectedRows];
+            }
+          });
+        } else {
+          setSelectedWinterBlocks(prevSelected => {
+            if (Array.isArray(selectedRows)) {
+              return selectedRows;
+            } else {
+              return prevSelected.includes(selectedRows)
+                ? prevSelected.filter(id => id !== selectedRows)
+                : [...prevSelected, selectedRows];
+            }
+          });
+        }
+      };
+      
+      const handleBulkGenerate = async () => {
+        setIsBulkGenerating(true);
+        const selectedBlocks = [...selectedFallBlocks, ...selectedWinterBlocks];
+        const totalBlocks = selectedBlocks.length;
+        let successCount = 0;
+        let errorCount = 0;
+        let skippedCount = 0;
+      
+        try {
+          for (const blockId of selectedBlocks) {
+            // Find the block to check its status
+            const block = blocks.find(b => b.block_id === blockId);
+            
+            // Skip blocks that are not in DRAFT status
+            if (!block || block.status !== 'DRAFT') {
+              console.log(`Skipping block ${blockId} - not in Draft status`);
+              skippedCount++;
+              continue;
+            }
+            
+            // Rest of the code for generating each block's schedule
+            try {
+              const response = await fetch(`${API_URL}/schedules/block/${blockId}/generate`, {
+                method: 'POST'
+              });
+              if (response.ok) {
+                const generatedData = await response.json();
+                setBlocks(prevBlocks =>
+                  prevBlocks.map(block =>
+                    block.block_id === blockId
+                      ? { ...block, schedule_rating: generatedData.schedule_rating }
+                      : block
+                  )
+                );
+                successCount++;
+              } else {
+                errorCount++;
+                await handleDeleteSchedule(blockId);
+              }
+            } catch (error) {
+              errorCount++;
+              await handleDeleteSchedule(blockId);
+            }
+          }
+          
+          // Fetch updated schedules to reflect new changes
+          await fetchAllSchedules();
+          
+          // Display results to the user, including skipped blocks
+          alert(`Bulk generation complete.\nSuccessful: ${successCount}\nFailed: ${errorCount}\nSkipped (not in Draft status): ${skippedCount}`);
+          
+          setSelectedFallBlocks([]);
+          setSelectedWinterBlocks([]);
+        } catch (error) {
+          console.error('Error in bulk generation:', error);
+          alert('An unexpected error occurred during bulk generation. Please try again.');
+        } finally {
+          setIsBulkGenerating(false);
+        }
+      };
+      
+      
+      
+      const handleBulkClear = async () => {
+        setIsBulkClearing(true);
+        const selectedBlocks = [...selectedFallBlocks, ...selectedWinterBlocks];
+        const totalBlocks = selectedBlocks.length;
+        let successCount = 0;
+        let errorCount = 0;
+      
+        try {
+          await Promise.all(selectedBlocks.map(async (blockId) => {
+            try {
+              const response = await fetch(`${API_URL}/schedules/block/${blockId}`, {
+                method: 'DELETE'
+              });
+              
+              if (response.ok) {
+                setBlocks(prevBlocks =>
+                  prevBlocks.map(block =>
+                    block.block_id === blockId
+                      ? { ...block, schedule_rating: 0 }
+                      : block
+                  )
+                );
+                successCount++;
+              } else {
+                const error = await response.json();
+                console.error(`Error clearing schedule for block ${blockId}:`, error.error);
+                errorCount++;
+              }
+            } catch (error) {
+              console.error(`Error clearing schedule for block ${blockId}:`, error);
+              errorCount++;
+            }
+          }));
+      
+          // Fetch updated schedules to reflect new changes
+          await fetchAllSchedules();
+      
+          // Display results to the user
+          alert(`Bulk clearing complete.\nSuccessful: ${successCount}\nFailed: ${errorCount}`);
+          setSelectedFallBlocks([]);
+          setSelectedWinterBlocks([]);
+        } catch (error) {
+          console.error('Error in bulk clearing:', error);
+          alert('An unexpected error occurred during bulk clearing. Please try again.');
+        } finally {
+          setIsBulkClearing(false);
+        }
+      };
+      
+      const handleSort = (newSortOrder) => {
+        setSortOrder(newSortOrder);
+        const sortedSchedules = [...schedules].sort((a, b) => {
+          if (newSortOrder === 'asc') {
+            return (a.rating || 0) - (b.rating || 0);
+          } else {
+            return (b.rating || 0) - (a.rating || 0);
+          }
+        });
+        setSchedules(sortedSchedules);
+      };
     const handleValidateSchedule = async (blockId) => {
         try {
             const response = await fetch(`${API_URL}/schedules/block/${blockId}/validate`);
@@ -164,44 +410,110 @@ const SchedulePage = () => {
         <Container className="py-4">
             <div className="d-flex justify-content-between align-items-center mb-4">
                 <h1>Block Schedules</h1>
-                <Button variant="primary" onClick={() => setShowGenerateModal(true)}>
-                    Generate New Schedule
-                </Button>
+                <div className="d-flex gap-3">
+                    <Form.Select 
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(e.target.value)}
+                        style={{ width: '150px' }}
+                    >
+                        <option value="2024-2025">2024-2025</option>
+                        <option value="2025-2026">2025-2026</option>
+                        <option value="2026-2027">2026-2027</option>
+                    </Form.Select>
+                </div>
+                <ExportSchedule 
+                        schedules={schedules}
+                        activeTab={activeTab}
+                        academicYear={selectedYear}
+                        isLoading={isLoading}
+                    />
             </div>
+            <Tabs
+  activeKey={activeTab}
+  onSelect={(k) => setActiveTab(k)}
+  className="mb-3"
+>
+  <Tab eventKey="FALL" title="Fall">
+    <ScheduleTable
+      schedules={schedules.filter(s => s.term === 'FALL')}
+      onView={handleViewSchedule}
+      onEdit={handleEditSchedule}
+      onDelete={handleDeleteSchedule}
+      isLoading={isLoading}
+      onGenerate={handleGenerateSchedule}
+      onSelectionChange={handleSelectionChange}
+      selectedBlocks={selectedFallBlocks} // Add this prop
+      onSort={handleSort}
+        onStatusUpdate={handleStatusUpdate} // Add this prop
 
-            <ScheduleTable 
-                schedules={schedules}
-                onView={handleViewSchedule}
-                onEdit={handleEditSchedule}
-                onValidate={handleValidateSchedule}
-                onDelete={handleDeleteSchedule}
-                onGenerate={handleGenerateSchedule}
-                isLoading={isLoading}
-            />
 
+    />
+  </Tab>
+  <Tab eventKey="WINTER" title="Winter">
+    <ScheduleTable
+      schedules={schedules.filter(s => s.term === 'WINTER')}
+      onView={handleViewSchedule}
+      onEdit={handleEditSchedule}
+      onDelete={handleDeleteSchedule}
+      isLoading={isLoading}
+      onGenerate={handleGenerateSchedule}
+      onSelectionChange={handleSelectionChange}
+      selectedBlocks={selectedWinterBlocks} // Add this prop
+      onSort={handleSort}
+      onStatusUpdate={handleStatusUpdate} // Add this prop
+
+    />
+  </Tab>
+</Tabs>
+
+<div className="mt-3 d-flex align-items-center">
+  <span className="me-3">Selected: {selectedFallBlocks.length + selectedWinterBlocks.length}</span>
+  <Button 
+    onClick={handleBulkGenerate} 
+    disabled={(selectedFallBlocks.length + selectedWinterBlocks.length) === 0 || isBulkGenerating}
+  >
+    {isBulkGenerating ? (
+      <>
+        <Bars height="1em" stroke="#ffffff" style={{marginRight: '0.5em'}} />
+        Generating...
+      </>
+    ) : (
+      'Bulk Generate'
+    )}
+  </Button>
+  <Button 
+    onClick={handleBulkClear} 
+    disabled={(selectedFallBlocks.length + selectedWinterBlocks.length) === 0 || isBulkClearing}
+    className="ms-2"
+  >
+    {isBulkClearing ? (
+      <>
+        <Bars height="1em" stroke="#ffffff" style={{marginRight: '0.5em'}} />
+        Clearing...
+      </>
+    ) : (
+      'Bulk Clear'
+    )}
+  </Button>
+</div>
             <ScheduleViewModal
                 show={showViewModal}
                 blockId={selectedBlock}
+                term={selectedTerm}
+                academicYear={selectedYear}
                 onHide={() => setShowViewModal(false)}
             />
 
             <ScheduleEditModal
                 show={showEditModal}
                 blockId={selectedBlock}
+                term={selectedTerm}
+                academicYear={selectedYear}
                 offerings={offerings}
                 onHide={() => setShowEditModal(false)}
                 onSave={fetchAllSchedules}
             />
-
-            <ScheduleGenerateModal
-                show={showGenerateModal}
-                blocks={blocks}
-                offerings={offerings}
-                onHide={() => setShowGenerateModal(false)}
-                onGenerate={fetchAllSchedules}
-            />
         </Container>
     );
 };
-
 export default SchedulePage;

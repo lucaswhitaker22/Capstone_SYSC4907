@@ -1,0 +1,595 @@
+import React, { useEffect, useState } from 'react';
+import { Modal, Table, Button, Spinner } from 'react-bootstrap';
+
+const BlockScheduleModal = ({ show, blockId, onHide }) => {
+  const [schedule, setSchedule] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchSchedule = async () => {
+    try {
+      const response = await fetch(`http://127.0.0.1:5000/api/schedules/block/${blockId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setSchedule(data);
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Error fetching schedule');
+      }
+    } catch (error) {
+      console.error('Error fetching schedule:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (show && blockId) {
+      fetchSchedule();
+    }
+  }, [show, blockId]);
+
+  const getDayName = (day) => {
+    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    return days[day - 1];
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>Block Schedule</Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {isLoading ? (
+          <div className="text-center p-4">
+            <Spinner animation="border" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </Spinner>
+          </div>
+        ) : schedule.length === 0 ? (
+          <div className="text-center p-4">No courses scheduled for this block</div>
+        ) : (
+          <Table striped bordered hover>
+            <thead>
+              <tr>
+                <th>Course ID</th>
+                <th>Section Type</th>
+                <th>Section Code</th>
+                <th>Day</th>
+                <th>Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedule.map((offering) => (
+                <tr key={offering.offering_id}>
+                  <td>{offering.course_id}</td>
+                  <td>{offering.section_type}</td>
+                  <td>{offering.section_code}</td>
+                  <td>{getDayName(offering.day_of_week)}</td>
+                  <td>{`${offering.start_time}-${offering.end_time}`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="secondary" onClick={onHide}>
+          Close
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
+};
+
+export default BlockScheduleModal;
+import React, { useEffect, useState } from 'react';
+import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
+
+const BlocksModal = ({ show, block, onHide, onSave }) => {
+  const initialFormData = {
+    block_id: '',
+    program_id: '',
+    block_size: '10',
+    term: '',
+    academic_year: '',
+    status: 'DRAFT'
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
+  const [validated, setValidated] = useState(false);
+  const [programs, setPrograms] = useState([]);
+
+  useEffect(() => {
+    if (show) {
+      fetchPrograms();
+    }
+  }, [show]);
+
+  useEffect(() => {
+    if (block) {
+      setFormData({
+        block_id: block.block_id,
+        program_id: block.program_id,
+        block_size: block.block_size.toString(),
+        term: block.term,
+        academic_year: block.academic_year,
+        status: block.status
+      });
+    } else {
+      setFormData(initialFormData);
+    }
+    setValidated(false);
+  }, [block, show]);
+
+  const API_URL = 'http://127.0.0.1:5000/api';
+
+  const fetchPrograms = async () => {
+    try {
+      const response = await fetch(`${API_URL}/programs`);
+      const data = await response.json();
+      setPrograms(data);
+    } catch (error) {
+      console.error('Error fetching programs:', error);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    
+    if (form.checkValidity()) {
+      onSave({
+        ...formData,
+        block_size: parseInt(formData.block_size)
+      });
+    }
+    setValidated(true);
+  };
+
+  return (
+    <Modal show={show} onHide={onHide} size="lg">
+      <Modal.Header closeButton>
+        <Modal.Title>
+          {block ? 'Edit Block' : 'Create New Block'}
+        </Modal.Title>
+      </Modal.Header>
+      <Form noValidate validated={validated} onSubmit={handleSubmit}>
+        <Modal.Body>
+          <Row>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Block ID</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="block_id"
+                  value={formData.block_id}
+                  onChange={handleChange}
+                  required
+                  disabled={block}
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a block ID.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Program</Form.Label>
+                <Form.Select
+                  name="program_id"
+                  value={formData.program_id}
+                  onChange={handleChange}
+                  required
+                  disabled={block}
+                >
+                  <option value="">Select a program</option>
+                  {programs.map(program => (
+                    <option key={program.program_id} value={program.program_id}>
+                      {program.program_id} - {program.program_name}
+                    </option>
+                  ))}
+                </Form.Select>
+                <Form.Control.Feedback type="invalid">
+                  Please select a program.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          <Row>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Block Size</Form.Label>
+                <Form.Select
+                  name="block_size"
+                  value={formData.block_size}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Term</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="term"
+                  value={formData.term}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide a term.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Academic Year</Form.Label>
+                <Form.Control
+                  type="text"
+                  name="academic_year"
+                  value={formData.academic_year}
+                  onChange={handleChange}
+                  required
+                />
+                <Form.Control.Feedback type="invalid">
+                  Please provide an academic year.
+                </Form.Control.Feedback>
+              </Form.Group>
+            </Col>
+          </Row>
+
+          {block && (
+            <Row>
+              <Col md={4}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Status</Form.Label>
+                  <Form.Select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleChange}
+                    required
+                  >
+                    <option value="DRAFT">Draft</option>
+                    <option value="PUBLISHED">Published</option>
+                    <option value="LOCKED">Locked</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onHide}>
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit">
+            Save
+          </Button>
+        </Modal.Footer>
+      </Form>
+    </Modal>
+  );
+};
+
+export default BlocksModal;
+import React, { useState, useEffect } from 'react';
+import { Container, Button } from 'react-bootstrap';
+import BlocksTable from './BlocksTable';
+import BlocksModal from './BlocksModal';
+import BlockScheduleModal from './BlockScheduleModal';
+const API_URL = 'http://127.0.0.1:5000/api';
+
+const BlocksPage = () => {
+    const [blocks, setBlocks] = useState([]);
+    const [showModal, setShowModal] = useState(false);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
+    const [selectedBlock, setSelectedBlock] = useState(null);
+    const [selectedBlockId, setSelectedBlockId] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+  
+
+  const fetchBlocks = async () => {
+    try {
+      const response = await fetch(`${API_URL}/blocks`);
+      const data = await response.json();
+      setBlocks(data);
+    } catch (error) {
+      console.error('Error fetching blocks:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBlocks();
+  }, []);
+
+  const handleAddNew = () => {
+    setSelectedBlock(null);
+    setShowModal(true);
+  };
+
+  const handleEdit = (block) => {
+    setSelectedBlock(block);
+    setShowModal(true);
+  };
+
+  const handleDelete = async (blockId) => {
+    if (window.confirm('Are you sure you want to delete this block?')) {
+      try {
+        const response = await fetch(`${API_URL}/blocks/${blockId}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          await fetchBlocks();
+        } else {
+          const error = await response.json();
+          alert(error.error || 'Error deleting block');
+        }
+      } catch (error) {
+        console.error('Error deleting block:', error);
+      }
+    }
+  };
+
+  const handleCalculateRating = async (blockId) => {
+    try {
+        const response = await fetch(`${API_URL}/schedules/block/${blockId}/rate`, {
+            method: 'GET'
+        });
+        
+        if (response.ok) {
+            const rating = await response.json();
+            // Update the blocks with the new rating
+            setBlocks(blocks.map(block => 
+                block.block_id === blockId 
+                    ? { ...block, schedule_rating: rating } 
+                    : block
+            ));
+        } else {
+            const error = await response.json();
+            alert(error.error || 'Error calculating rating');
+        }
+    } catch (error) {
+        console.error('Error calculating rating:', error);
+        alert('Error calculating schedule rating');
+    }
+};
+
+
+  const handleViewSchedule = (blockId) => {
+    setSelectedBlockId(blockId);
+    setShowScheduleModal(true);
+  };
+
+  const handleSave = async (formData) => {
+    try {
+      const method = selectedBlock ? 'PUT' : 'POST';
+      const url = selectedBlock 
+        ? `${API_URL}/blocks/${selectedBlock.block_id}`
+        : `${API_URL}/blocks`;
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      if (response.ok) {
+        setShowModal(false);
+        await fetchBlocks();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Error saving block');
+      }
+    } catch (error) {
+      console.error('Error saving block:', error);
+    }
+  };
+
+  const handleStatusUpdate = async (blockId, status) => {
+    try {
+      const response = await fetch(`${API_URL}/blocks/${blockId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status }),
+      });
+
+      if (response.ok) {
+        await fetchBlocks();
+      } else {
+        const error = await response.json();
+        alert(error.error || 'Error updating status');
+      }
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
+  };
+
+  return (
+    <Container className="py-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1>Block Management</h1>
+        <Button variant="primary" onClick={handleAddNew}>
+          Create New Block
+        </Button>
+      </div>
+
+      <BlocksTable 
+        blocks={blocks}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onViewSchedule={handleViewSchedule}
+        onCalculateRating={handleCalculateRating}
+        onStatusUpdate={handleStatusUpdate}
+        isLoading={isLoading}
+      />
+
+      <BlocksModal
+        show={showModal}
+        block={selectedBlock}
+        onHide={() => setShowModal(false)}
+        onSave={handleSave}
+      />
+            <BlockScheduleModal
+        show={showScheduleModal}
+        blockId={selectedBlockId}
+        onHide={() => setShowScheduleModal(false)}
+      />
+    </Container>
+  );
+};
+
+export default BlocksPage;
+import React from 'react';
+import { Table, Button, Badge, Spinner } from 'react-bootstrap';
+
+const BlocksTable = ({ 
+    blocks = [], 
+    onEdit, 
+    onDelete, 
+    onViewSchedule, 
+    onCalculateRating, 
+    isLoading 
+  }) => {
+  if (isLoading) {
+    return (
+      <div className="text-center p-4">
+        <Spinner animation="border" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </Spinner>
+      </div>
+    );
+  }
+
+  const getStatusBadge = (status) => {
+    const variants = {
+      'DRAFT': 'secondary',
+      'PUBLISHED': 'success',
+      'LOCKED': 'danger'
+    };
+    return (
+      <Badge bg={variants[status] || 'secondary'}>
+        {status}
+      </Badge>
+    );
+  };
+
+  const getValidationBadge = (block) => {
+    if (!block.validation_status) return null;
+    
+    return (
+      <Badge 
+        bg={block.validation_status.is_valid ? 'success' : 'danger'}
+        className="ms-2"
+      >
+        {block.validation_status.is_valid ? 'Valid' : 'Invalid'}
+      </Badge>
+    );
+  };
+
+  const getRatingColor = (rating) => {
+    if (rating >= 80) return 'text-success';
+    if (rating >= 60) return 'text-warning';
+    return 'text-danger';
+  };
+
+  return (
+    <Table striped bordered hover responsive>
+      <thead>
+        <tr>
+          <th>Block ID</th>
+          <th>Program ID</th>
+          <th>Block Size</th>
+          <th>Term</th>
+          <th>Academic Year</th>
+          <th>Schedule Rating</th>
+          <th>Status</th>
+          <th>Validation</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {blocks.map((block) => (
+          <tr key={block.block_id}>
+            <td>{block.block_id}</td>
+            <td>{block.program_id}</td>
+            <td>{block.block_size}</td>
+            <td>{block.term}</td>
+            <td>{block.academic_year}</td>
+            <td className={getRatingColor(block.schedule_rating)}>
+              {block.schedule_rating ? `${block.schedule_rating.toFixed(1)}%` : 'N/A'}
+            </td>
+            <td>
+              {getStatusBadge(block.status)}
+              {getValidationBadge(block)}
+            </td>
+            <td>
+              {block.validation_status?.missing_requirements?.length > 0 && (
+                <div className="text-danger small">
+                  Missing courses: {block.validation_status.missing_requirements.map(r => r.course_id).join(', ')}
+                </div>
+              )}
+            </td>
+            <td>
+              <Button
+                variant="primary"
+                size="sm"
+                className="me-2"
+                onClick={() => onEdit(block)}
+                disabled={block.status === 'LOCKED'}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => onDelete(block.block_id)}
+                disabled={block.status === 'LOCKED'}
+              >
+                Delete
+              </Button>
+              <Button
+                variant="info"
+                size="sm"
+                className="ms-2"
+                onClick={() => onViewSchedule(block.block_id)}
+              >
+                View Schedule
+              </Button>
+              {block.status !== 'LOCKED' && (
+                <Button
+                  variant="success"
+                  size="sm"
+                  className="ms-2"
+                  onClick={() => onCalculateRating(block.block_id)}
+                >
+                  Calculate Rating
+                </Button>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+};
+
+export default BlocksTable;

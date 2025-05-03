@@ -1,5 +1,6 @@
 # app/models/block.py
 from app import db
+from .enums import Term, BlockStatus
 
 class Block(db.Model):
     __tablename__ = 'block'
@@ -7,15 +8,14 @@ class Block(db.Model):
     block_id = db.Column(db.String(20), primary_key=True)
     program_id = db.Column(db.String(10), db.ForeignKey('program.program_id'), nullable=False)
     block_size = db.Column(db.Integer, nullable=False)
-    term = db.Column(db.String(10), nullable=False)
+    term = db.Column(db.Enum(Term), nullable=False)  # Change to Enum type
     academic_year = db.Column(db.String(9), nullable=False)
     schedule_rating = db.Column(db.Numeric(5,2))
     early_starts = db.Column(db.Integer)
     late_ends = db.Column(db.Integer)
     long_breaks = db.Column(db.Integer)
     consecutive_days = db.Column(db.Integer)
-    status = db.Column(db.String(20), default='DRAFT')
-
+    status = db.Column(db.Enum(BlockStatus), default=BlockStatus.DRAFT)
     # Relationships
     block_schedules = db.relationship('BlockSchedule', backref='block', lazy=True)
 

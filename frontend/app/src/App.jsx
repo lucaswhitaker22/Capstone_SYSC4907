@@ -9,6 +9,8 @@ import ProgramsPage from './components/programs/ProgramsPage';
 import ConflictsPage from './components/conflicts/ConflictsPage';
 import SchedulePage from './components/schedule/SchedulePage';
 import CoursesPage from './components/courses/CoursesPage';
+import HelpPage from './components/help/HelpPage';
+
 const HomePage = () => {
   const navigate = useNavigate();
 
@@ -32,12 +34,6 @@ const HomePage = () => {
       variant: "info"
     },
     {
-      title: "Blocks",
-      description: "Manage blocks and manage their schedules",
-      path: "/blocks",
-      variant: "warning"
-    },
-    {
       title: "Conflicts",
       description: "Detect conflicts between courses/schedules",
       path: "/conflicts",
@@ -47,14 +43,40 @@ const HomePage = () => {
       title: "Schedule",
       description: "View and manage block schedules",
       path: "/schedule",
-      variant: "secondary"
-    }
+      variant: "warning"
+    },
   ];
 
   return (
     <Container className="py-5">
       <h1 className="text-center mb-4">Course Management System</h1>
-      <Row xs={1} md={2} lg={3} className="g-4">
+      <p className="text-center mb-4">
+        A comprehensive solution for managing academic schedules, courses, and programs
+      </p>
+      
+      {/* Getting Started Card - Top Row */}
+      <Row className="mb-4">
+        <Col>
+          <Card className="bg-light">
+            <Card.Body>
+              <Card.Title>Getting Started</Card.Title>
+              <Card.Text>
+                To generate schedules, start by adding course offerings and setting up programs with requirements. Then use the Schedule page to generate optimized schedules.
+              </Card.Text>
+              <Button 
+                variant="outline-primary" 
+                onClick={() => navigate('/help')}
+                className="mt-2"
+              >
+                View Complete Guide
+              </Button>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
+      
+      {/* Main Navigation Cards - Bottom Row */}
+      <Row xs={1} md={2} lg={4} className="g-4">
         {pages.map((page, idx) => (
           <Col key={idx}>
             <Card className="h-100 shadow-sm">
@@ -82,7 +104,9 @@ const App = () => {
     <div className="d-flex flex-column min-vh-100">
       <BrowserRouter>
         <Navigation />
+        
         <Container fluid className="flex-grow-1">
+          
           <Routes>
             <Route path="/offerings" element={<OfferingsPage />} />
             <Route path="/blocks" element={<BlocksPage />} />
@@ -90,6 +114,7 @@ const App = () => {
             <Route path="/programs" element={<ProgramsPage />} />
             <Route path="/conflicts" element={<ConflictsPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
+            <Route path="/help" element={<HelpPage />} />
             <Route path="/" element={<HomePage />} />
           </Routes>
         </Container>
@@ -118,27 +143,20 @@ const App = () => {
               <Col md={4} className="text-center h-100 d-flex align-items-center justify-content-center">
                 <div>
                   <span className="small">SYSC4907A Engineering Capstone Project</span>
-                  
                 </div>
               </Col>
               <Col md={4} className="text-center text-md-end h-100 d-flex align-items-center justify-content-end">
                 <div>
-                <b className="small me-2"> &copy; 2025 Lucas Whitaker</b> 
-                <small className="text-muted small">Version 1.0.0</small>
+                  <b className="small me-2"> &copy; 2025 Lucas Whitaker</b> 
+                  <small className="text-muted small">Version 1.0.0</small>
                 </div>
               </Col>
             </Row>
           </Container>
         </footer>
-
-
-
-
-
       </BrowserRouter>
     </div>
   );
 };
-
 
 export default App;

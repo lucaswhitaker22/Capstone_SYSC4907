@@ -1,37 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Button } from 'react-bootstrap';
+import { Container, Button, Form } from 'react-bootstrap';
 import ProgramsTable from './ProgramsTable';
 import ProgramsModal from './ProgramsModal';
 import ProgramRequirementsModal from './ProgramRequirementsModal';
-import ProgramUploadModal from './ProgramUploadModal';
-import Papa from 'papaparse';
+import ExportPrograms from './ExportPrograms';
 
 const API_URL = 'http://127.0.0.1:5000/api';
 
 const ProgramsPage = () => {
-    const [programs, setPrograms] = useState([]);
-    const [showModal, setShowModal] = useState(false);
-    const [showRequirementsModal, setShowRequirementsModal] = useState(false);
-    const [selectedProgram, setSelectedProgram] = useState(null);
-    const [selectedProgramId, setSelectedProgramId] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [showUploadModal, setShowUploadModal] = useState(false);
+  const [programs, setPrograms] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [showRequirementsModal, setShowRequirementsModal] = useState(false);
+  const [selectedProgram, setSelectedProgram] = useState(null);
+  const [selectedProgramId, setSelectedProgramId] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [currentYear, setCurrentYear] = useState('2025-2026');
 
   const fetchPrograms = async () => {
-    try {
-      const response = await fetch(`${API_URL}/programs/`);
-      const data = await response.json();
-      setPrograms(data);
-    } catch (error) {
-      console.error('Error fetching programs:', error);
-    } finally {
-      setIsLoading(false);
-    }
+      try {
+          const params = new URLSearchParams({
+              academic_year: currentYear
+          });
+          const response = await fetch(`${API_URL}/programs/?${params}`);
+          const data = await response.json();
+          setPrograms(data);
+      } catch (error) {
+          console.error('Error fetching programs:', error);
+      } finally {
+          setIsLoading(false);
+      }
   };
 
   useEffect(() => {
-    fetchPrograms();
-  }, []);
+      fetchPrograms();
+  }, [currentYear]);
+
 
   const handleAddNew = () => {
     setSelectedProgram(null);
@@ -93,84 +96,58 @@ const handleViewRequirements = (programId) => {
     setShowRequirementsModal(true);
   };
 
-// Add export function
-const handleExportCSV = () => {
-  const csv = Papa.unparse(programs.map(program => ({
-      program_id: program.program_id,
-      program_name: program.program_name,
-      total_enrollment: program.total_enrollment,
-      blocks_20_count: program.blocks_20_count,
-      blocks_10_count: program.blocks_10_count
-  })));
-  
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.href = url;
-  link.setAttribute('download', 'programs.csv');
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-const handleViewSchedules = async (programId) => {
-  try {
-      const response = await fetch(`${API_URL}/schedules/program/${programId}/schedules`);
-      if (response.ok) {
-          const data = await response.json();
-          alert(`Found ${data.total_schedules} possible schedules for this program!`);
-          // You might want to show these in a modal instead of an alert
-      } else {
-          const error = await response.json();
-          alert(error.error || 'Error fetching schedules');
-      }
-  } catch (error) {
-      console.error('Error fetching schedules:', error);
-      alert('Error fetching schedules');
-  }
-};
-  return (
-    <Container className="py-4">
+
+return (
+  <Container className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1>Program Management</h1>
-        {/* <Button variant="secondary" className="me-2" onClick={() => setShowUploadModal(true)}>
-            Upload CSV
-        </Button>
-        <Button variant="success" className="me-2" onClick={handleExportCSV}>
-            Export CSV
-        </Button> */}
-        <Button variant="primary" onClick={handleAddNew}>
-          Create New Program
-        </Button>
+          <h1>Program Management</h1>
+          <div>
+              <Form.Control
+                  type="text"
+                  className="me-2 d-inline-block"
+                  style={{width: 'auto'}}
+                  value={currentYear}
+                  onChange={(e) => setCurrentYear(e.target.value)}
+                  pattern="\d{4}-\d{4}"
+                  placeholder="2025-2026"
+              />
+              <Button variant="primary" onClick={handleAddNew}>
+                  Create New Program
+              </Button>
+              
+          </div>
+          <ExportPrograms 
+            programs={programs}
+            academicYear={currentYear}
+            isLoading={isLoading}
+          />
       </div>
 
       <ProgramsTable 
-                programs={programs}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onViewRequirements={handleViewRequirements}
-                onViewSchedules={handleViewSchedules}
-                isLoading={isLoading}
-            />
+          programs={programs}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+          onViewRequirements={handleViewRequirements}
+          isLoading={isLoading}
+          academicYear={currentYear}
+      />
 
       <ProgramsModal
-        show={showModal}
-        program={selectedProgram}
-        onHide={() => setShowModal(false)}
-        onSave={handleSave}
+          show={showModal}
+          program={selectedProgram}
+          onHide={() => setShowModal(false)}
+          onSave={handleSave}
+          academicYear={currentYear}
       />
 
-        <ProgramRequirementsModal
-        show={showRequirementsModal}
-        programId={selectedProgramId}
-        onHide={() => setShowRequirementsModal(false)}
+      <ProgramRequirementsModal
+          show={showRequirementsModal}
+          programId={selectedProgramId}
+          onHide={() => setShowRequirementsModal(false)}
+          academicYear={currentYear}
       />
-      <ProgramUploadModal
-    show={showUploadModal}
-    onHide={() => setShowUploadModal(false)}
-    onSave={fetchPrograms}
-/>
-    </Container>
-  );
+  </Container>
+);
 };
 
 export default ProgramsPage;

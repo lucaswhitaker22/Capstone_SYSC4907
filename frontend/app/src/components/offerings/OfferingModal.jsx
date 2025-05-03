@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Button, Row, Col } from 'react-bootstrap';
+import { Modal, Form, Button, Row, Col, OverlayTrigger, Tooltip } from 'react-bootstrap';
+import { InfoCircle } from 'react-bootstrap-icons';
 
 const OfferingModal = ({ show, offering, onHide, onSave }) => {
   const initialFormData = {
@@ -74,105 +75,119 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
     setValidated(true);
   };
 
+  // Helper function to create tooltips
+  const renderTooltip = (text) => (
+    <OverlayTrigger
+      placement="right"
+      overlay={<Tooltip>{text}</Tooltip>}
+    >
+      <InfoCircle className="ms-2" />
+    </OverlayTrigger>
+  );
+
   return (
     <Modal show={show} onHide={onHide} size="lg">
       <Modal.Header closeButton>
-        <Modal.Title>
-          {offering ? 'Edit Course Offering' : 'Add Course Offering'}
-        </Modal.Title>
+        <Modal.Title>{offering ? 'Edit Course Offering' : 'Add Course Offering'}</Modal.Title>
       </Modal.Header>
-      <Form noValidate validated={validated} onSubmit={handleSubmit}>
-        <Modal.Body>
-          <Row>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Course</Form.Label>
-                <Form.Select
-                  name="course_id"
-                  value={formData.course_id}
-                  onChange={handleChange}
-                  required
-                  disabled={offering}
-                >
-                  <option value="">Select a course...</option>
-                  {courses.map(course => (
-                    <option key={course.course_id} value={course.course_id}>
-                      {course.course_id} - {course.course_name}
-                    </option>
-                  ))}
-                </Form.Select>
-                <Form.Control.Feedback type="invalid">
-                  Please select a course.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Section Type</Form.Label>
-                <Form.Select
-                  name="section_type"
-                  value={formData.section_type}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="LECTURE">Lecture</option>
-                  <option value="LAB">Lab</option>
-                  <option value="TUTORIAL">Tutorial</option>
-                </Form.Select>
-              </Form.Group>
-            </Col>
-          </Row>
-          <Row>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Section Code</Form.Label>
-                <Form.Select
-                  name="section_code"
-                  value={formData.section_code}
-                  onChange={handleChange}
-                  required
-                  disabled={!formData.course_id}
-                >
-                  <option value="">Select a section code...</option>
-                  {['A', 'B', 'C', 'D', 'E', 'F'].map(code => (
-                    <option key={code} value={code}>
-                      {code}
-                    </option>
-                  ))}
-                </Form.Select>
-                <Form.Control.Feedback type="invalid">
-                  Please select a section code.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group className="mb-3">
-                <Form.Label>Day</Form.Label>
-                <Form.Select
-                  name="day_of_week"
-                  value={formData.day_of_week}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="1">Monday</option>
-                  <option value="2">Tuesday</option>
-                  <option value="3">Wednesday</option>
-                  <option value="4">Thursday</option>
-                  <option value="5">Friday</option>
-                </Form.Select>
-              </Form.Group>
-            </Col>
-          </Row>
+      <Modal.Body>
+        <Form noValidate validated={validated} onSubmit={handleSubmit}>
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Course
+              {renderTooltip("Select the course for which you're creating an offering")}
+            </Form.Label>
+            <Form.Select 
+              name="course_id" 
+              value={formData.course_id} 
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select a course...</option>
+              {courses.map(course => (
+                <option key={course.course_id} value={course.course_id}>
+                  {course.course_id} - {course.course_name}
+                </option>
+              ))}
+            </Form.Select>
+            <Form.Control.Feedback type="invalid">
+              Please select a course.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Section Type
+              {renderTooltip("Specify whether this is a lecture, lab, or tutorial component")}
+            </Form.Label>
+            <Form.Select 
+              name="section_type" 
+              value={formData.section_type} 
+              onChange={handleChange}
+              required
+            >
+              <option value="LECTURE">Lecture</option>
+              <option value="LAB">Lab</option>
+              <option value="TUTORIAL">Tutorial</option>
+            </Form.Select>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Section Code
+              {renderTooltip("A unique letter (A-F) to identify different sections of the same course")}
+            </Form.Label>
+            <Form.Select 
+              name="section_code" 
+              value={formData.section_code} 
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select a section code...</option>
+              {['A', 'B', 'C', 'D', 'E', 'F'].map(code => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </Form.Select>
+            <Form.Control.Feedback type="invalid">
+              Please select a section code.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Day
+              {renderTooltip("The day of the week when this section meets")}
+            </Form.Label>
+            <Form.Select 
+              name="day_of_week" 
+              value={formData.day_of_week} 
+              onChange={handleChange}
+              required
+            >
+              <option value="1">Monday</option>
+              <option value="2">Tuesday</option>
+              <option value="3">Wednesday</option>
+              <option value="4">Thursday</option>
+              <option value="5">Friday</option>
+            </Form.Select>
+          </Form.Group>
 
           <Row>
-            <Col md={6}>
+            <Col>
               <Form.Group className="mb-3">
-                <Form.Label>Start Time (HH:MM)</Form.Label>
+                <Form.Label>
+                  Start Time (HH:MM)
+                  {renderTooltip("Enter the start time in 24-hour format (e.g., 14:30 for 2:30 PM)")}
+                </Form.Label>
                 <Form.Control
-                  type="time"
+                  type="text"
                   name="start_time"
                   value={formData.start_time}
                   onChange={handleChange}
+                  placeholder="HH:MM"
+                  pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
                   required
                 />
                 <Form.Control.Feedback type="invalid">
@@ -180,14 +195,19 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
                 </Form.Control.Feedback>
               </Form.Group>
             </Col>
-            <Col md={6}>
+            <Col>
               <Form.Group className="mb-3">
-                <Form.Label>End Time (HH:MM)</Form.Label>
+                <Form.Label>
+                  End Time (HH:MM)
+                  {renderTooltip("Enter the end time in 24-hour format (e.g., 16:00 for 4:00 PM)")}
+                </Form.Label>
                 <Form.Control
-                  type="time"
+                  type="text"
                   name="end_time"
                   value={formData.end_time}
                   onChange={handleChange}
+                  placeholder="HH:MM"
+                  pattern="^([01]?[0-9]|2[0-3]):[0-5][0-9]$"
                   required
                 />
                 <Form.Control.Feedback type="invalid">
@@ -197,84 +217,92 @@ const OfferingModal = ({ show, offering, onHide, onSave }) => {
             </Col>
           </Row>
 
-          <Row>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Capacity</Form.Label>
-                <Form.Control
-                  type="number"
-                  name="capacity"
-                  value={formData.capacity}
-                  onChange={handleChange}
-                  required
-                  min="1"
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a valid capacity.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Term</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="term"
-                  value={formData.term}
-                  onChange={handleChange}
-                  required
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide a term.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group className="mb-3">
-                <Form.Label>Academic Year</Form.Label>
-                <Form.Control
-                  type="text"
-                  name="academic_year"
-                  value={formData.academic_year}
-                  onChange={handleChange}
-                  required
-                />
-                <Form.Control.Feedback type="invalid">
-                  Please provide an academic year.
-                </Form.Control.Feedback>
-              </Form.Group>
-            </Col>
-          </Row>
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Capacity
+              {renderTooltip("Maximum number of students that can enroll in this section")}
+            </Form.Label>
+            <Form.Control
+              type="number"
+              name="capacity"
+              value={formData.capacity}
+              onChange={handleChange}
+              min="1"
+              required
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a valid capacity.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Term
+              {renderTooltip("The academic term when this course is offered")}
+            </Form.Label>
+            <Form.Select 
+              name="term" 
+              value={formData.term} 
+              onChange={handleChange}
+              required
+            >
+              <option value="">Select a term</option>
+              <option value="Fall">Fall</option>
+              <option value="Winter">Winter</option>
+            </Form.Select>
+            <Form.Control.Feedback type="invalid">
+              Please select a term.
+            </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Academic Year
+              {renderTooltip("Enter in YYYY-YYYY format (e.g., 2025-2026)")}
+            </Form.Label>
+            <Form.Control
+              type="text"
+              name="academic_year"
+              value={formData.academic_year}
+              onChange={handleChange}
+              placeholder="YYYY-YYYY"
+              pattern="^\d{4}-\d{4}$"
+              required
+            />
+            <Form.Control.Feedback type="invalid">
+              Please provide a valid academic year (YYYY-YYYY).
+            </Form.Control.Feedback>
+          </Form.Group>
 
           {offering && (
-            <Row>
-              <Col md={4}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Status</Form.Label>
-                  <Form.Select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleChange}
-                    required
-                  >
-                    <option value="OPEN">Open</option>
-                    <option value="FULL">Full</option>
-                    <option value="CANCELLED">Cancelled</option>
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-            </Row>
+            <Form.Group className="mb-3">
+              <Form.Label>
+                Status
+                {renderTooltip("Current enrollment status of this section")}
+              </Form.Label>
+              <Form.Select 
+                name="status" 
+                value={formData.status} 
+                onChange={handleChange}
+                required
+              >
+                <option value="OPEN">Open</option>
+                <option value="FULL">Full</option>
+                <option value="CANCELLED">Cancelled</option>
+              </Form.Select>
+            </Form.Group>
           )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={onHide}>
-            Cancel
-          </Button>
-          <Button variant="primary" type="submit">
-            Save
-          </Button>
-        </Modal.Footer>
-      </Form>
+
+          <div className="d-flex justify-content-end gap-2">
+            <Button variant="secondary" onClick={onHide}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit">
+              Save
+            </Button>
+          </div>
+        </Form>
+      </Modal.Body>
     </Modal>
   );
 };
